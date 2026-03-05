@@ -1,0 +1,474 @@
+[
+  {
+    "deviceType": "tablet",
+    "name": "Samsung Galaxy Tab S10 Ultra",
+    "slug": "samsung-galaxy-tab-s10-ultra",
+    "brand": "Samsung",
+    "price": 109999,
+    "status": "published",
+    "shortDescription": "Flagship Android tablet with large AMOLED display and S Pen support.",
+    "images": [
+      "https://placehold.co/900x900?text=Tab+S10+Ultra+Front",
+      "https://placehold.co/900x900?text=Tab+S10+Ultra+Back"
+    ],
+    "specs": {
+      "processor": "Snapdragon 8 Gen 3",
+      "ram": "12 GB",
+      "storage": "512 GB",
+      "battery": "11200 mAh",
+      "display": "14.6 inch Dynamic AMOLED 2X 120Hz",
+      "rearCamera": "13MP + 8MP",
+      "frontCamera": "12MP + 12MP",
+      "camera": "13MP + 8MP",
+      "os": "Android 15, One UI 7"
+    },
+    "general": {
+      "launchDate": "2026-01-15",
+      "modelNumber": "SM-X920",
+      "variants": [
+        { "ram": "12GB", "storage": "256GB", "launchPrice": 99999 },
+        { "ram": "12GB", "storage": "512GB", "launchPrice": 109999 }
+      ],
+      "packageContents": ["Tablet", "USB-C Cable", "S Pen", "Manual"],
+      "multimedia": ["Dolby Atmos", "Widevine L1"]
+    },
+    "network": {
+      "supported": ["5G", "4G"],
+      "wifi": { "version": "Wi-Fi 7", "standards": ["a", "b", "g", "n", "ac", "ax", "be"], "dualBand": true },
+      "bluetooth": "5.4",
+      "gps": ["GPS", "GLONASS", "Galileo", "NavIC"],
+      "nfc": false,
+      "infrared": false
+    },
+    "battery": {
+      "capacity": "11200 mAh",
+      "type": "Li-Po",
+      "maxChargingSupport": "45W",
+      "chargerInBox": { "available": false, "power": "" },
+      "wireless": { "supported": false, "maxPower": "", "speed": {} },
+      "features": ["PD Charging"]
+    },
+    "software": {
+      "os": { "name": "Android", "version": "15" },
+      "ui": "One UI 7",
+      "updates": { "os": 4, "security": 5 }
+    },
+    "ratings": { "performance": 9.2, "camera": 8.2, "battery": 8.9, "display": 9.5, "overall": 9.1 },
+    "compareSuggestions": ["apple-ipad-pro-13-2024", "oneplus-pad-2", "xiaomi-pad-7-pro"],
+    "affiliateLinks": { "amazon": "https://www.amazon.in/example-tab-s10-ultra", "flipkart": "" },
+    "pros": ["Excellent AMOLED display", "Great productivity features"],
+    "cons": ["No charger in box"],
+    "tags": ["premium", "stylus", "amoled"],
+    "trending": true
+  },
+  {
+    "deviceType": "tablet",
+    "name": "Apple iPad Pro 13 (2024)",
+    "slug": "apple-ipad-pro-13-2024",
+    "brand": "Apple",
+    "price": 129900,
+    "status": "published",
+    "shortDescription": "High-end iPad with tandem OLED and top-tier Apple silicon.",
+    "images": [
+      "https://placehold.co/900x900?text=iPad+Pro+13+Front",
+      "https://placehold.co/900x900?text=iPad+Pro+13+Back"
+    ],
+    "specs": {
+      "processor": "Apple M4",
+      "ram": "8 GB",
+      "storage": "256 GB",
+      "battery": "10290 mAh",
+      "display": "13 inch Ultra Retina XDR OLED 120Hz",
+      "rearCamera": "12MP",
+      "frontCamera": "12MP",
+      "camera": "12MP",
+      "os": "iPadOS 18"
+    },
+    "general": {
+      "launchDate": "2025-12-10",
+      "modelNumber": "MVX53HN/A",
+      "variants": [
+        { "ram": "8GB", "storage": "256GB", "launchPrice": 129900 }
+      ],
+      "packageContents": ["Tablet", "USB-C Cable", "Manual"],
+      "multimedia": ["Dolby Vision", "Widevine L1"]
+    },
+    "network": {
+      "supported": ["5G", "4G"],
+      "wifi": { "version": "Wi-Fi 6E", "standards": ["a", "b", "g", "n", "ac", "ax"], "dualBand": true },
+      "bluetooth": "5.3",
+      "gps": ["GPS", "GLONASS", "Galileo"],
+      "nfc": false,
+      "infrared": false
+    },
+    "software": {
+      "os": { "name": "iOS", "version": "18" },
+      "ui": null,
+      "updates": { "os": 6, "security": 6 }
+    },
+    "ratings": { "performance": 9.6, "camera": 8.1, "battery": 8.3, "display": 9.7, "overall": 9.3 },
+    "compareSuggestions": ["samsung-galaxy-tab-s10-ultra", "xiaomi-pad-7-pro", "oneplus-pad-2"],
+    "affiliateLinks": { "amazon": "", "flipkart": "https://www.flipkart.com/example-ipad-pro-13" },
+    "pros": ["Class-leading performance", "Superb display"],
+    "cons": ["Expensive accessories"],
+    "tags": ["ipad", "oled", "premium"],
+    "trending": true
+  },
+  {
+    "deviceType": "tablet",
+    "name": "Xiaomi Pad 7 Pro",
+    "slug": "xiaomi-pad-7-pro",
+    "brand": "Xiaomi",
+    "price": 42999,
+    "status": "published",
+    "shortDescription": "Balanced premium tablet with strong multimedia performance.",
+    "images": [
+      "https://placehold.co/900x900?text=Xiaomi+Pad+7+Pro+Front",
+      "https://placehold.co/900x900?text=Xiaomi+Pad+7+Pro+Back"
+    ],
+    "specs": {
+      "processor": "Snapdragon 8s Gen 3",
+      "ram": "12 GB",
+      "storage": "256 GB",
+      "battery": "10000 mAh",
+      "display": "12.1 inch IPS LCD 144Hz",
+      "rearCamera": "50MP",
+      "frontCamera": "32MP",
+      "camera": "50MP",
+      "os": "Android 15, HyperOS 2"
+    },
+    "general": {
+      "launchDate": "2026-02-02",
+      "modelNumber": "24091RPAD",
+      "variants": [
+        { "ram": "8GB", "storage": "128GB", "launchPrice": 36999 },
+        { "ram": "12GB", "storage": "256GB", "launchPrice": 42999 }
+      ],
+      "packageContents": ["Tablet", "USB-C Cable", "Manual"],
+      "multimedia": ["Dolby Atmos", "Widevine L1"]
+    },
+    "network": {
+      "supported": ["5G", "4G"],
+      "wifi": { "version": "Wi-Fi 7", "standards": ["a", "b", "g", "n", "ac", "ax", "be"], "dualBand": true },
+      "bluetooth": "5.4",
+      "gps": ["GPS", "GLONASS", "Galileo"],
+      "nfc": false,
+      "infrared": true
+    },
+    "software": {
+      "os": { "name": "Android", "version": "15" },
+      "ui": "HyperOS 2",
+      "updates": { "os": 3, "security": 4 }
+    },
+    "ratings": { "performance": 8.8, "camera": 7.9, "battery": 8.7, "display": 8.6, "overall": 8.7 },
+    "compareSuggestions": ["oneplus-pad-2", "samsung-galaxy-tab-s10-plus", "lenovo-tab-p12-pro-2nd-gen"],
+    "affiliateLinks": { "amazon": "https://www.amazon.in/example-xiaomi-pad-7-pro", "flipkart": "" },
+    "tags": ["value", "xiaomi", "tablet"],
+    "trending": true
+  },
+  {
+    "deviceType": "tablet",
+    "name": "OnePlus Pad 2",
+    "slug": "oneplus-pad-2",
+    "brand": "OnePlus",
+    "price": 39999,
+    "status": "published",
+    "shortDescription": "Large-screen Android tablet with fast charging and clean software.",
+    "images": [
+      "https://placehold.co/900x900?text=OnePlus+Pad+2+Front",
+      "https://placehold.co/900x900?text=OnePlus+Pad+2+Back"
+    ],
+    "specs": {
+      "processor": "Snapdragon 8 Gen 3",
+      "ram": "8 GB",
+      "storage": "256 GB",
+      "battery": "9510 mAh",
+      "display": "12.1 inch IPS LCD 144Hz",
+      "rearCamera": "13MP",
+      "frontCamera": "8MP",
+      "camera": "13MP",
+      "os": "Android 15, OxygenOS 15"
+    },
+    "general": {
+      "launchDate": "2026-01-30",
+      "modelNumber": "OPD2402",
+      "variants": [
+        { "ram": "8GB", "storage": "128GB", "launchPrice": 35999 },
+        { "ram": "8GB", "storage": "256GB", "launchPrice": 39999 }
+      ],
+      "packageContents": ["Tablet", "USB-C Cable", "Manual"],
+      "multimedia": ["Dolby Atmos"]
+    },
+    "software": {
+      "os": { "name": "Android", "version": "15" },
+      "ui": "OxygenOS 15",
+      "updates": { "os": 4, "security": 5 }
+    },
+    "ratings": { "performance": 8.9, "camera": 7.3, "battery": 8.5, "display": 8.5, "overall": 8.5 },
+    "compareSuggestions": ["xiaomi-pad-7-pro", "samsung-galaxy-tab-s10-plus", "realme-pad-x2-pro"],
+    "affiliateLinks": { "amazon": "", "flipkart": "https://www.flipkart.com/example-oneplus-pad-2" },
+    "tags": ["oneplus", "performance"],
+    "trending": false
+  },
+  {
+    "deviceType": "tablet",
+    "name": "Samsung Galaxy Tab S10 Plus",
+    "slug": "samsung-galaxy-tab-s10-plus",
+    "brand": "Samsung",
+    "price": 85999,
+    "status": "published",
+    "shortDescription": "Premium AMOLED tablet focused on productivity and media.",
+    "images": [
+      "https://placehold.co/900x900?text=Tab+S10+Plus+Front",
+      "https://placehold.co/900x900?text=Tab+S10+Plus+Back"
+    ],
+    "specs": {
+      "processor": "Exynos 2500",
+      "ram": "12 GB",
+      "storage": "256 GB",
+      "battery": "10090 mAh",
+      "display": "12.4 inch Dynamic AMOLED 2X 120Hz",
+      "rearCamera": "13MP + 8MP",
+      "frontCamera": "12MP",
+      "camera": "13MP + 8MP",
+      "os": "Android 15, One UI 7"
+    },
+    "general": {
+      "launchDate": "2026-02-18",
+      "modelNumber": "SM-X820",
+      "variants": [
+        { "ram": "12GB", "storage": "256GB", "launchPrice": 85999 }
+      ],
+      "packageContents": ["Tablet", "USB-C Cable", "S Pen"],
+      "multimedia": ["AKG Speakers", "Widevine L1"]
+    },
+    "software": {
+      "os": { "name": "Android", "version": "15" },
+      "ui": "One UI 7",
+      "updates": { "os": 4, "security": 5 }
+    },
+    "ratings": { "performance": 8.6, "camera": 7.8, "battery": 8.4, "display": 9.2, "overall": 8.8 },
+    "compareSuggestions": ["xiaomi-pad-7-pro", "oneplus-pad-2", "apple-ipad-air-13-2025"],
+    "affiliateLinks": { "amazon": "https://www.amazon.in/example-tab-s10-plus", "flipkart": "" },
+    "tags": ["samsung", "amoled", "stylus"],
+    "trending": false
+  },
+  {
+    "deviceType": "tablet",
+    "name": "Apple iPad Air 13 (2025)",
+    "slug": "apple-ipad-air-13-2025",
+    "brand": "Apple",
+    "price": 79900,
+    "status": "published",
+    "shortDescription": "Lightweight large-screen iPad for creators and students.",
+    "images": [
+      "https://placehold.co/900x900?text=iPad+Air+13+Front",
+      "https://placehold.co/900x900?text=iPad+Air+13+Back"
+    ],
+    "specs": {
+      "processor": "Apple M3",
+      "ram": "8 GB",
+      "storage": "256 GB",
+      "battery": "9705 mAh",
+      "display": "13 inch Liquid Retina 60Hz",
+      "rearCamera": "12MP",
+      "frontCamera": "12MP",
+      "camera": "12MP",
+      "os": "iPadOS 18"
+    },
+    "general": {
+      "launchDate": "2026-01-22",
+      "modelNumber": "MU7K3HN/A",
+      "variants": [
+        { "ram": "8GB", "storage": "128GB", "launchPrice": 69900 },
+        { "ram": "8GB", "storage": "256GB", "launchPrice": 79900 }
+      ],
+      "packageContents": ["Tablet", "USB-C Cable"],
+      "multimedia": ["Widevine L1"]
+    },
+    "software": {
+      "os": { "name": "iOS", "version": "18" },
+      "ui": null,
+      "updates": { "os": 6, "security": 6 }
+    },
+    "ratings": { "performance": 9.1, "camera": 7.6, "battery": 8.1, "display": 8.2, "overall": 8.6 },
+    "compareSuggestions": ["samsung-galaxy-tab-s10-plus", "xiaomi-pad-7-pro"],
+    "affiliateLinks": { "amazon": "", "flipkart": "https://www.flipkart.com/example-ipad-air-13" },
+    "tags": ["ipad", "thin-light"],
+    "trending": false
+  },
+  {
+    "deviceType": "tablet",
+    "name": "Lenovo Tab P12 Pro 2nd Gen",
+    "slug": "lenovo-tab-p12-pro-2nd-gen",
+    "brand": "Lenovo",
+    "price": 49999,
+    "status": "published",
+    "shortDescription": "High-resolution multimedia tablet with pen-ready display.",
+    "images": [
+      "https://placehold.co/900x900?text=Lenovo+Tab+P12+Pro+Front",
+      "https://placehold.co/900x900?text=Lenovo+Tab+P12+Pro+Back"
+    ],
+    "specs": {
+      "processor": "Snapdragon 8 Gen 2",
+      "ram": "8 GB",
+      "storage": "256 GB",
+      "battery": "10200 mAh",
+      "display": "12.6 inch AMOLED 120Hz",
+      "rearCamera": "13MP + 5MP",
+      "frontCamera": "13MP",
+      "camera": "13MP + 5MP",
+      "os": "Android 15, ZUI"
+    },
+    "general": {
+      "launchDate": "2026-03-01",
+      "modelNumber": "TB-Q729",
+      "variants": [
+        { "ram": "8GB", "storage": "256GB", "launchPrice": 49999 }
+      ],
+      "packageContents": ["Tablet", "USB-C Cable", "Manual"],
+      "multimedia": ["Dolby Vision", "Dolby Atmos"]
+    },
+    "software": {
+      "os": { "name": "Android", "version": "15" },
+      "ui": "ZUI",
+      "updates": { "os": 3, "security": 4 }
+    },
+    "ratings": { "performance": 8.4, "camera": 7.2, "battery": 8.4, "display": 8.9, "overall": 8.4 },
+    "compareSuggestions": ["xiaomi-pad-7-pro", "oneplus-pad-2", "samsung-galaxy-tab-s10-plus"],
+    "affiliateLinks": { "amazon": "https://www.amazon.in/example-lenovo-p12-pro", "flipkart": "" },
+    "tags": ["lenovo", "amoled", "productivity"],
+    "trending": false
+  },
+  {
+    "deviceType": "tablet",
+    "name": "HONOR Pad V9",
+    "slug": "honor-pad-v9",
+    "brand": "HONOR",
+    "price": 32999,
+    "status": "published",
+    "shortDescription": "Slim mid-range tablet with large battery and quad speakers.",
+    "images": [
+      "https://placehold.co/900x900?text=HONOR+Pad+V9+Front",
+      "https://placehold.co/900x900?text=HONOR+Pad+V9+Back"
+    ],
+    "specs": {
+      "processor": "Dimensity 9300E",
+      "ram": "8 GB",
+      "storage": "256 GB",
+      "battery": "10100 mAh",
+      "display": "12.1 inch IPS LCD 120Hz",
+      "rearCamera": "13MP",
+      "frontCamera": "8MP",
+      "camera": "13MP",
+      "os": "Android 15, MagicOS"
+    },
+    "general": {
+      "launchDate": "2026-03-20",
+      "modelNumber": "HEY-W09",
+      "variants": [
+        { "ram": "8GB", "storage": "128GB", "launchPrice": 29999 },
+        { "ram": "8GB", "storage": "256GB", "launchPrice": 32999 }
+      ],
+      "packageContents": ["Tablet", "USB-C Cable"],
+      "multimedia": ["Hi-Res Audio", "Widevine L1"]
+    },
+    "software": {
+      "os": { "name": "Android", "version": "15" },
+      "ui": "MagicOS",
+      "updates": { "os": 2, "security": 3 }
+    },
+    "ratings": { "performance": 8.1, "camera": 6.9, "battery": 8.8, "display": 8.0, "overall": 8.0 },
+    "compareSuggestions": ["realme-pad-x2-pro", "oppo-pad-3", "xiaomi-pad-7-pro"],
+    "affiliateLinks": { "amazon": "", "flipkart": "https://www.flipkart.com/example-honor-pad-v9" },
+    "tags": ["value", "battery"],
+    "trending": true
+  },
+  {
+    "deviceType": "tablet",
+    "name": "realme Pad X2 Pro",
+    "slug": "realme-pad-x2-pro",
+    "brand": "Realme",
+    "price": 28999,
+    "status": "published",
+    "shortDescription": "Affordable performance tablet for media and gaming.",
+    "images": [
+      "https://placehold.co/900x900?text=realme+Pad+X2+Pro+Front",
+      "https://placehold.co/900x900?text=realme+Pad+X2+Pro+Back"
+    ],
+    "specs": {
+      "processor": "Snapdragon 7+ Gen 3",
+      "ram": "8 GB",
+      "storage": "128 GB",
+      "battery": "10000 mAh",
+      "display": "11.6 inch IPS LCD 144Hz",
+      "rearCamera": "13MP",
+      "frontCamera": "8MP",
+      "camera": "13MP",
+      "os": "Android 15, realme UI for Pad"
+    },
+    "general": {
+      "launchDate": "2026-02-25",
+      "modelNumber": "RMP2302",
+      "variants": [
+        { "ram": "6GB", "storage": "128GB", "launchPrice": 24999 },
+        { "ram": "8GB", "storage": "128GB", "launchPrice": 28999 }
+      ],
+      "packageContents": ["Tablet", "USB-C Cable", "Manual"],
+      "multimedia": ["Dolby Atmos", "Widevine L1"]
+    },
+    "software": {
+      "os": { "name": "Android", "version": "15" },
+      "ui": "realme UI for Pad",
+      "updates": { "os": 2, "security": 3 }
+    },
+    "ratings": { "performance": 7.9, "camera": 6.7, "battery": 8.5, "display": 8.1, "overall": 7.9 },
+    "compareSuggestions": ["honor-pad-v9", "oppo-pad-3", "lenovo-tab-p12-pro-2nd-gen"],
+    "affiliateLinks": { "amazon": "https://www.amazon.in/example-realme-pad-x2-pro", "flipkart": "" },
+    "tags": ["budget", "gaming"],
+    "trending": false
+  },
+  {
+    "deviceType": "tablet",
+    "name": "OPPO Pad 3",
+    "slug": "oppo-pad-3",
+    "brand": "OPPO",
+    "price": 36999,
+    "status": "published",
+    "shortDescription": "Sleek Android tablet focused on display quality and battery life.",
+    "images": [
+      "https://placehold.co/900x900?text=OPPO+Pad+3+Front",
+      "https://placehold.co/900x900?text=OPPO+Pad+3+Back"
+    ],
+    "specs": {
+      "processor": "Dimensity 9300",
+      "ram": "8 GB",
+      "storage": "256 GB",
+      "battery": "9510 mAh",
+      "display": "12.1 inch IPS LCD 144Hz",
+      "rearCamera": "13MP",
+      "frontCamera": "8MP",
+      "camera": "13MP",
+      "os": "Android 15, ColorOS Pad"
+    },
+    "general": {
+      "launchDate": "2026-04-05",
+      "modelNumber": "OPD312",
+      "variants": [
+        { "ram": "8GB", "storage": "256GB", "launchPrice": 36999 }
+      ],
+      "packageContents": ["Tablet", "USB-C Cable"],
+      "multimedia": ["Dolby Atmos"]
+    },
+    "software": {
+      "os": { "name": "Android", "version": "15" },
+      "ui": "ColorOS Pad",
+      "updates": { "os": 3, "security": 4 }
+    },
+    "ratings": { "performance": 8.3, "camera": 6.8, "battery": 8.2, "display": 8.3, "overall": 8.1 },
+    "compareSuggestions": ["honor-pad-v9", "realme-pad-x2-pro", "xiaomi-pad-7-pro"],
+    "affiliateLinks": { "amazon": "", "flipkart": "https://www.flipkart.com/example-oppo-pad-3" },
+    "tags": ["oppo", "display"],
+    "trending": false
+  }
+]

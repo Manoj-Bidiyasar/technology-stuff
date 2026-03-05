@@ -1,0 +1,209 @@
+[
+  {
+    "name": "Samsung Galaxy Z Fold 6",
+    "slug": "samsung-galaxy-z-fold-6",
+    "brand": "Samsung",
+    "price": 164999,
+    "status": "published",
+    "shortDescription": "Premium foldable phone with dual adaptive AMOLED displays.",
+    "images": [
+      "https://images.samsung.com/is/image/samsung/p6pim/in/2407/gallery/in-galaxy-z-fold6-f956-sm-f956bdbbinu-thumb-542329822",
+      "https://images.samsung.com/is/image/samsung/p6pim/in/2407/gallery/in-galaxy-z-fold6-f956-sm-f956bdbbinu-thumb-542329833"
+    ],
+    "specs": {
+      "processor": "Snapdragon 8 Gen 3 for Galaxy",
+      "chipsetScore": 2700000,
+      "ram": "12 GB",
+      "storage": "512 GB",
+      "battery": "4400 mAh",
+      "charging": "25W wired, 15W wireless",
+      "display": "Dual AMOLED",
+      "camera": "50MP + 12MP + 10MP",
+      "rearCamera": "50MP + 12MP + 10MP",
+      "frontCamera": "10MP cover + 4MP under-display",
+      "os": "Android 14, One UI"
+    },
+    "performance": {
+      "chipset": "Snapdragon 8 Gen 3 for Galaxy",
+      "additionalChips": ["NPU Accelerator"],
+      "fabrication": "4nm",
+      "architecture": "64-bit Octa-core",
+      "cpu": [
+        "1x Cortex-X4 @ 3.39GHz",
+        "3x Cortex-A720 @ 3.1GHz",
+        "2x Cortex-A720 @ 2.9GHz",
+        "2x Cortex-A520 @ 2.2GHz"
+      ],
+      "gpu": "Adreno 750",
+      "gpuFrequency": "1000 MHz",
+      "coolingSystem": "Vapor Chamber Cooling",
+      "otherFeatures": ["AI Performance Engine", "Game Frame Stabilization"],
+      "antutu": {
+        "total": 2700000,
+        "cpu": 620000,
+        "gpu": 960000,
+        "memory": 560000,
+        "ux": 560000
+      }
+    },
+    "display": {
+      "primary": {
+        "type": "7.6-inch Foldable Dynamic AMOLED 2X",
+        "size": "7.6",
+        "resolution": "2160 x 1856",
+        "refreshRate": "1-120",
+        "adaptive": true,
+        "peakBrightness": "2600",
+        "protection": "Ultra Thin Glass",
+        "hdr": ["HDR10+", "Vision Booster"],
+        "pixelDensity": "374",
+        "screenToBody": "91.0",
+        "aspectRatio": "20.9:18",
+        "touchSamplingRate": "240",
+        "curved": false,
+        "certifications": ["Widevine L1"],
+        "others": ["Foldable inner panel", "S Pen support"]
+      },
+      "secondary": {
+        "type": "6.3-inch Dynamic AMOLED 2X (Cover Display)",
+        "size": "6.3",
+        "resolution": "2376 x 968",
+        "refreshRate": "1-120",
+        "adaptive": true,
+        "peakBrightness": "2600",
+        "protection": "Gorilla Glass Victus 2",
+        "hdr": ["HDR10+"],
+        "pixelDensity": "410",
+        "screenToBody": "90.5",
+        "aspectRatio": "22.1:9",
+        "touchSamplingRate": "240",
+        "curved": false,
+        "certifications": ["Widevine L1"],
+        "others": ["Cover display", "Always-on Display"]
+      }
+    },
+    "network": {
+      "supported": ["5G", "4G"],
+      "bands": {
+        "5G": {
+          "fdd": ["n1", "n3", "n5", "n7", "n8", "n28"],
+          "tdd": ["n38", "n40", "n41", "n77", "n78"]
+        },
+        "4G": {
+          "fdd": ["B1", "B2", "B3", "B4", "B5", "B7", "B8", "B12", "B17", "B20", "B28", "B66"],
+          "tdd": ["B38", "B40", "B41"]
+        }
+      },
+      "sim": {
+        "type": "Dual SIM",
+        "config": "Nano + eSIM",
+        "hybrid": false
+      },
+      "wifi": {
+        "version": "Wi-Fi 6E",
+        "standards": ["a", "b", "g", "n", "ac", "ax"],
+        "dualBand": true
+      },
+      "bluetooth": "5.3",
+      "gps": ["GPS", "GLONASS", "Galileo", "BDS", "QZSS", "NavIC"],
+      "nfc": true,
+      "infrared": false
+    },
+    "security": {
+      "fingerprint": {
+        "available": true,
+        "locations": ["Side-mounted"],
+        "type": ["Capacitive"]
+      },
+      "faceUnlock": {
+        "type": "2D"
+      }
+    },
+    "sensors": [
+      "Accelerometer",
+      "Gyroscope",
+      "Proximity",
+      "Ambient Light",
+      "Compass",
+      "Barometer"
+    ],
+    "software": {
+      "os": {
+        "name": "Android",
+        "version": "14"
+      },
+      "ui": "One UI 6.1.1",
+      "updates": {
+        "os": 7,
+        "security": 7
+      }
+    },
+    "design": {
+      "type": "foldable",
+      "dimensions": {
+        "folded": {
+          "height": 153.5,
+          "width": 68.1,
+          "depth": 12.1
+        },
+        "unfolded": {
+          "height": 153.5,
+          "width": 132.6,
+          "depth": 5.6
+        }
+      },
+      "weight": [
+        { "color": "Navy", "value": 239 },
+        { "color": "Silver Shadow", "value": 239 }
+      ],
+      "colors": ["Navy", "Silver Shadow", "Pink", "Crafted Black"],
+      "designType": "Center Punch Hole",
+      "build": {
+        "back": {
+          "material": "Glass",
+          "protection": "Gorilla Glass Victus 2"
+        },
+        "frame": "Aluminum"
+      },
+      "ipRating": ["IP48"],
+      "audioJack": {
+        "available": false,
+        "type": "USB Type-C"
+      },
+      "otherFeatures": ["Armor FlexHinge", "Slim Foldable Body"]
+    },
+    "general": {
+      "launchDate": "2024-07-10",
+      "modelNumber": "SM-F956B",
+      "packageContents": ["Handset", "USB Type-C Cable", "SIM Ejector Tool", "Quick Start Guide"],
+      "variants": [
+        { "ram": "12GB", "storage": "256GB", "launchPrice": 164999 },
+        { "ram": "12GB", "storage": "512GB", "launchPrice": 176999 },
+        { "ram": "12GB", "storage": "1TB", "launchPrice": 200999 }
+      ],
+      "multimedia": ["Widevine L1", "No 3.5mm Jack (USB Type-C Audio)"]
+    },
+    "ratings": {
+      "performance": 9.2,
+      "camera": 8.7,
+      "battery": 8.1,
+      "display": 9.4,
+      "overall": 8.9
+    },
+    "affiliateLinks": {
+      "amazon": "https://www.amazon.in/",
+      "flipkart": "https://www.flipkart.com/"
+    },
+    "pros": [
+      "Excellent foldable main display",
+      "Powerful flagship performance",
+      "Strong multitasking experience"
+    ],
+    "cons": [
+      "Very expensive",
+      "Average charging speed"
+    ],
+    "tags": ["foldable", "flagship", "dual-display"],
+    "trending": true
+  }
+]

@@ -6,9 +6,20 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "import:products": "node scripts/import-products.mjs --file data/products.sample.json",
+    "import:tablets": "node scripts/import-products.mjs --file data/tablets.dummy.json",
+    "seed:firestore": "node scripts/seed-firestore.mjs",
+    "seed:firestore:dry": "node scripts/seed-firestore.mjs --dry-run",
+    "seed:tablets": "node scripts/seed-firestore.mjs --products data/tablets.dummy.json --blogs data/blogs.empty.json",
+    "seed:tablets:dry": "node scripts/seed-firestore.mjs --products data/tablets.dummy.json --blogs data/blogs.empty.json --dry-run",
+    "check:duplicates": "node scripts/check-duplicate-slugs.mjs",
+    "migrate:product-ids": "node scripts/migrate-product-docids.mjs",
+    "migrate:product-ids:dry": "node scripts/migrate-product-docids.mjs --dry-run"
   },
   "dependencies": {
+    "firebase": "^12.9.0",
+    "firebase-admin": "^12.7.0",
     "next": "16.1.6",
     "react": "19.2.3",
     "react-dom": "19.2.3"

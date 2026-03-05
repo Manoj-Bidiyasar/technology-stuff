@@ -1,0 +1,22 @@
+[
+  {
+    "title": "Best Phones Under 30,000 in India (2026)",
+    "slug": "best-phones-under-30000-india-2026",
+    "excerpt": "Shortlist of top value phones under Rs. 30,000 with pros/cons.",
+    "content": "<h2>Top Picks</h2><p>We evaluated performance, camera and battery value.</p><ul><li>iQOO Neo 10</li><li>Nothing Phone 3a</li><li>OnePlus Nord 5</li></ul>",
+    "featuredImage": "https://res.cloudinary.com/demo/image/upload/v1/blog/best-phones-under-30000.jpg",
+    "tags": ["buying-guide", "budget"],
+    "categories": ["Buying Guide"],
+    "status": "published"
+  },
+  {
+    "title": "Galaxy A76 vs Pixel 9a: Camera Comparison",
+    "slug": "galaxy-a76-vs-pixel-9a-camera-comparison",
+    "excerpt": "How the new Samsung and Pixel mid-rangers compare for photos and video.",
+    "content": "<p>Both phones deliver reliable daylight images. Pixel leads in low-light consistency.</p>",
+    "featuredImage": "https://res.cloudinary.com/demo/image/upload/v1/blog/a76-vs-pixel9a.jpg",
+    "tags": ["comparison", "camera"],
+    "categories": ["Comparisons"],
+    "status": "draft"
+  }
+]

@@ -1,0 +1,63 @@
+[
+  {
+    "name": "Samsung Galaxy S24",
+    "brand": "Samsung",
+    "price": 74999,
+    "image": "/mock-phones/xiaomi-14-civi-blue.jpg",
+    "processor": "Snapdragon 8 Gen 3",
+    "ram": "8GB",
+    "storage": "256GB",
+    "battery": "4000mAh",
+    "display": "6.2-inch AMOLED",
+    "os": "Android 14"
+  },
+  {
+    "name": "OnePlus Nord CE 5 Lite",
+    "brand": "OnePlus",
+    "price": 21999,
+    "image": "/mock-phones/realme-blue.png",
+    "processor": "Snapdragon 7 Gen 3",
+    "ram": "8GB",
+    "storage": "128GB",
+    "battery": "5000mAh",
+    "display": "6.7-inch AMOLED",
+    "os": "Android 14"
+  },
+  {
+    "name": "Xiaomi 14 Civi",
+    "brand": "Xiaomi",
+    "price": 42999,
+    "image": "/mock-phones/xiaomi-14-civi-black.jpg",
+    "processor": "Snapdragon 8s Gen 3",
+    "ram": "12GB",
+    "storage": "256GB",
+    "battery": "4700mAh",
+    "display": "6.55-inch AMOLED",
+    "os": "Android 14"
+  },
+  {
+    "name": "iQOO Neo 7",
+    "brand": "iQOO",
+    "price": 29999,
+    "image": "/mock-phones/iqoo-neo-7.png",
+    "processor": "Dimensity 8200",
+    "ram": "8GB",
+    "storage": "128GB",
+    "battery": "5000mAh",
+    "display": "6.78-inch AMOLED",
+    "os": "Android 14"
+  },
+  {
+    "name": "Nothing Phone 2a Plus",
+    "brand": "Nothing",
+    "price": 27999,
+    "image": "/mock-phones/xiaomi-14.jpg",
+    "processor": "Dimensity 7200 Pro",
+    "ram": "8GB",
+    "storage": "256GB",
+    "battery": "5000mAh",
+    "display": "6.7-inch AMOLED",
+    "os": "Android 14"
+  }
+]
+
