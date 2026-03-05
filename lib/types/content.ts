@@ -30,6 +30,8 @@ export type ProductSpecs = {
   frontCamera?: string;
   camera?: string;
   os?: string;
+  network?: string;
+  sim?: string;
 };
 
 export type ProductDisplayPanel = {

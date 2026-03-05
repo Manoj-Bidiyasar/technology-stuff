@@ -23,6 +23,7 @@ export function getMockProductBySlug(slug: string): (Product & { id?: string }) 
   if (!match) return null;
   return {
     id: `mock-${match.slug}`,
+    deviceType: "smartphone",
     name: match.name,
     slug: match.slug,
     brand: match.brand,
@@ -38,7 +39,13 @@ export function getMockProductBySlug(slug: string): (Product & { id?: string }) 
       display: "Spec coming soon",
       os: "Spec coming soon",
     },
+    ratings: {
+      overall: 0,
+      performance: 0,
+      camera: 0,
+      battery: 0,
+      display: 0,
+    },
     affiliateLinks: {},
   };
 }
-

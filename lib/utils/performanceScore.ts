@@ -162,7 +162,7 @@ export function fallbackPerformanceFromProduct(product: Pick<Product, "performan
   );
 
   if (p && (hasText || hasCpu || hasAntutu)) {
-    return product.performance;
+    return p;
   }
 
   return {
