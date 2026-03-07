@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import type { ReactNode } from "react";
+import { isValidElement, type ReactNode } from "react";
 import ProcessorCompareMoreSection from "@/components/ProcessorCompareMoreSection";
 import { getProcessorDetailBySlug } from "@/lib/processors/details";
 import { listProcessorProfiles, type ProcessorProfile } from "@/lib/processors/profiles";
@@ -23,6 +23,22 @@ type SpecSection = {
   title: string;
   rows: SpecRow[];
 };
+
+function hasValueNode(value: ReactNode): boolean {
+  if (value === null || value === undefined || value === false) return false;
+  if (typeof value === "string") {
+    const t = value.trim();
+    return t !== "" && t !== "-" && t.toLowerCase() !== "n/a";
+  }
+  if (typeof value === "number") return Number.isFinite(value);
+  if (Array.isArray(value)) return value.some((item) => hasValueNode(item));
+  if (isValidElement(value)) {
+    const props = (value.props as { children?: ReactNode } | null) || {};
+    if (typeof props.children !== "undefined") return hasValueNode(props.children);
+    return true;
+  }
+  return true;
+}
 
 function renderTitleIcon(kind: "bench" | "cpu" | "memory" | "graphics" | "display" | "connectivity" | "camera" | "power" | "chip") {
   switch (kind) {
@@ -892,7 +908,22 @@ function buildSections(
     },
   ];
 
-  return sections;
+  const normalized = sections
+    .map((section) => {
+      const rows = section.rows
+        .filter((row) => hasValueNode(row.left) || hasValueNode(row.right))
+        .map((row) => ({
+          ...row,
+          left: hasValueNode(row.left) ? row.left : "-",
+          right: hasValueNode(row.right) ? row.right : "-",
+          leftNum: hasValueNode(row.left) ? row.leftNum : undefined,
+          rightNum: hasValueNode(row.right) ? row.rightNum : undefined,
+        }));
+      return { ...section, rows };
+    })
+    .filter((section) => section.rows.length > 0);
+
+  return normalized;
 }
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {

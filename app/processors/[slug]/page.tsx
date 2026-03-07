@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import type { ReactNode } from "react";
+import { isValidElement, type ReactNode } from "react";
 import ProcessorComments from "@/components/ProcessorComments";
 import SectionChipNav from "@/components/SectionChipNav";
 import SimilarProcessorsGrid from "@/components/SimilarProcessorsGrid";
@@ -161,6 +161,9 @@ function ModernSpecCards({
   titleIcon?: "bench" | "cpu" | "memory" | "graphics" | "display" | "connectivity" | "camera" | "power" | "chip";
   rows: Array<{ label: string; value: ReactNode; valueAlign?: "left" | "center"; labelAlign?: "top" | "center" }>;
 }) {
+  const visibleRows = rows.filter((row) => hasValueNode(row.value));
+  if (!visibleRows.length) return null;
+
   return (
     <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
       {title ? (
@@ -171,11 +174,11 @@ function ModernSpecCards({
           <h3 className="text-[13px] font-extrabold uppercase tracking-wide text-blue-700">{title}</h3>
         </div>
       ) : null}
-      {rows.map((row, idx) => (
+      {visibleRows.map((row, idx) => (
         <div
           key={`${row.label}-${idx}`}
           className={`grid grid-cols-2 items-stretch gap-0 sm:grid-cols-[230px_minmax(0,1fr)] ${
-            idx !== rows.length - 1 ? "border-b border-slate-200" : ""
+            idx !== visibleRows.length - 1 ? "border-b border-slate-200" : ""
           }`}
         >
           <div className="flex items-center justify-start bg-slate-100 px-3 py-2 text-left text-sm font-medium leading-6 text-slate-600 sm:px-4">{row.label}</div>
@@ -208,9 +211,25 @@ function chipClassBadgeTone(chipClass: string): string {
   return "border-slate-300/80 bg-gradient-to-r from-slate-400/15 to-slate-300/20 text-slate-700 ring-1 ring-slate-200/80 shadow-slate-200/70";
 }
 
+function hasValueNode(value: ReactNode): boolean {
+  if (value === null || value === undefined || value === false) return false;
+  if (typeof value === "string") {
+    const t = value.trim();
+    return t !== "" && t !== "-" && t.toLowerCase() !== "n/a";
+  }
+  if (typeof value === "number") return Number.isFinite(value);
+  if (Array.isArray(value)) return value.some((item) => hasValueNode(item));
+  if (isValidElement(value)) {
+    const props = (value.props as { children?: ReactNode } | null) || {};
+    if (typeof props.children !== "undefined") return hasValueNode(props.children);
+    return true;
+  }
+  return true;
+}
+
 function toMonthYear(value?: string): string {
   const raw = String(value || "").trim();
-  if (!raw) return "Upcoming";
+  if (!raw) return "-";
   const date = new Date(raw);
   if (!Number.isNaN(date.getTime())) {
     return date.toLocaleDateString("en-US", { month: "long", year: "numeric" });
@@ -898,6 +917,66 @@ export default async function ProcessorDetailPage({ params }: Props) {
   const singlePct = Math.max(1, Math.min(100, Math.round((benchSingle / 3500) * 100)));
   const multiPct = Math.max(1, Math.min(100, Math.round((benchMulti / 14000) * 100)));
   const markPct = Math.max(1, Math.min(100, Math.round((bench3d / 10000) * 100)));
+  const benchmarkRows: Array<{ label: string; value: ReactNode }> = [
+    {
+      label: `AnTuTu ${benchAntutuVersion || "-"}`,
+      value: (
+        <div>
+          <div>{String(benchAntutu)}</div>
+          <div className="mt-1.5 h-2 rounded-full bg-slate-200">
+            <div className="h-2 rounded-full bg-blue-500" style={{ width: `${antutuPct}%` }} />
+          </div>
+        </div>
+      ),
+      score: benchAntutu,
+    } as { label: string; value: ReactNode; score: number },
+    {
+      label: `Geekbench ${benchGeekbenchVersion || "-"} Single-Core`,
+      value: (
+        <div>
+          <div>{String(benchSingle)}</div>
+          <div className="mt-1.5 h-2 rounded-full bg-slate-200">
+            <div className="h-2 rounded-full bg-emerald-500" style={{ width: `${singlePct}%` }} />
+          </div>
+        </div>
+      ),
+      score: benchSingle,
+    } as { label: string; value: ReactNode; score: number },
+    {
+      label: `Geekbench ${benchGeekbenchVersion || "-"} Multi-Core`,
+      value: (
+        <div>
+          <div>{String(benchMulti)}</div>
+          <div className="mt-1.5 h-2 rounded-full bg-slate-200">
+            <div className="h-2 rounded-full bg-amber-500" style={{ width: `${multiPct}%` }} />
+          </div>
+        </div>
+      ),
+      score: benchMulti,
+    } as { label: string; value: ReactNode; score: number },
+    {
+      label: `3DMark ${bench3dName || "-"}`,
+      value: (
+        <div>
+          <div>{String(bench3d)}</div>
+          <div className="mt-1.5 h-2 rounded-full bg-slate-200">
+            <div className="h-2 rounded-full bg-violet-500" style={{ width: `${markPct}%` }} />
+          </div>
+        </div>
+      ),
+      score: bench3d,
+    } as { label: string; value: ReactNode; score: number },
+  ]
+    .filter((row) => Number.isFinite((row as { score: number }).score) && (row as { score: number }).score > 0)
+    .map((row) => ({ label: row.label, value: row.value }));
+  const antutuBreakdownRows = [
+    { label: "CPU", value: benchAntutuCpu },
+    { label: "GPU", value: benchAntutuGpu },
+    { label: "Memory", value: benchAntutuMemory },
+    { label: "UX", value: benchAntutuUx },
+    { label: "Total Score", value: benchAntutu },
+  ].filter((row) => Number.isFinite(row.value) && row.value > 0);
+  const hasBenchmarksSection = benchmarkRows.length > 0 || antutuBreakdownRows.length > 0;
   const coreCount = inferCoreCount(detail);
   const coreConfig = inferCoreConfig(detail);
   const coreConfigRows = coreConfig
@@ -1001,6 +1080,62 @@ export default async function ProcessorDetailPage({ params }: Props) {
   ]
     .filter((row) => String(row.value || "").trim().length > 0)
     .slice(0, 5);
+  const announcedValue = toMonthYear(detail?.announced);
+  const modelValue = String(detail?.model || "").trim() || "-";
+  const manufacturerValue = String(detail?.manufacturer || p.vendor || "").trim() || "-";
+  const infoRows = [
+    {
+      key: "announced",
+      label: "Announced",
+      value: announcedValue,
+      iconBg: "bg-blue-50",
+      iconColor: "text-blue-700",
+      icon: (
+        <svg viewBox="0 0 24 24" fill="none" className="h-3.5 w-3.5" aria-hidden="true">
+          <path d="M8 3v3M16 3v3M4 9h16M6 5h12a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Z" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      ),
+    },
+    {
+      key: "class",
+      label: "Class",
+      value: chipClass,
+      hideOnDesktop: true,
+      iconBg: "bg-indigo-50",
+      iconColor: "text-indigo-700",
+      icon: (
+        <svg viewBox="0 0 24 24" fill="none" className="h-3.5 w-3.5" aria-hidden="true">
+          <path d="M6 7h12M6 12h12M6 17h8" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+        </svg>
+      ),
+    },
+    {
+      key: "model",
+      label: "Model Number",
+      value: modelValue,
+      iconBg: "bg-emerald-50",
+      iconColor: "text-emerald-700",
+      icon: (
+        <svg viewBox="0 0 24 24" fill="none" className="h-3.5 w-3.5" aria-hidden="true">
+          <rect x="4" y="6" width="16" height="12" rx="2" stroke="currentColor" strokeWidth="1.8" />
+          <path d="M8 10h8M8 14h5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+        </svg>
+      ),
+    },
+    {
+      key: "manufacturer",
+      label: "Manufacturer",
+      value: manufacturerValue,
+      iconBg: "bg-violet-50",
+      iconColor: "text-violet-700",
+      icon: (
+        <svg viewBox="0 0 24 24" fill="none" className="h-3.5 w-3.5" aria-hidden="true">
+          <path d="M7 7h10v10H7z" stroke="currentColor" strokeWidth="1.8" />
+          <path d="M4 10h3M17 10h3M4 14h3M17 14h3" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+        </svg>
+      ),
+    },
+  ].filter((row) => hasValueNode(row.value));
   const competitorRows = similar.slice(0, 6);
   const similarCards = similar.map((item) => ({
     slug: item.slug,
@@ -1107,56 +1242,23 @@ export default async function ProcessorDetailPage({ params }: Props) {
               </div>
             </div>
 
-            <aside className="rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
-              <div className="divide-y divide-slate-100">
-                <div className="flex items-center justify-between gap-3 py-2">
-                  <div className="inline-flex items-center gap-2 text-slate-500">
-                    <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-blue-50 text-blue-700">
-                      <svg viewBox="0 0 24 24" fill="none" className="h-3.5 w-3.5" aria-hidden="true">
-                        <path d="M8 3v3M16 3v3M4 9h16M6 5h12a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Z" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-                      </svg>
-                    </span>
-                    <span className="text-[11px] font-bold uppercase tracking-wide">Announced</span>
-                  </div>
-                  <span className="text-sm font-semibold text-slate-900">{toMonthYear(detail?.announced)}</span>
+            {infoRows.length ? (
+              <aside className="rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
+                <div className="divide-y divide-slate-100">
+                  {infoRows.map((row) => (
+                    <div key={row.key} className={`flex items-center justify-between gap-3 py-2 ${row.hideOnDesktop ? "sm:hidden" : ""}`}>
+                      <div className="inline-flex items-center gap-2 text-slate-500">
+                        <span className={`inline-flex h-6 w-6 items-center justify-center rounded-full ${row.iconBg} ${row.iconColor}`}>
+                          {row.icon}
+                        </span>
+                        <span className="text-[11px] font-bold uppercase tracking-wide">{row.label}</span>
+                      </div>
+                      <span className="text-sm font-semibold text-slate-900">{row.value}</span>
+                    </div>
+                  ))}
                 </div>
-                <div className="flex items-center justify-between gap-3 py-2 sm:hidden">
-                  <div className="inline-flex items-center gap-2 text-slate-500">
-                    <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-indigo-50 text-indigo-700">
-                      <svg viewBox="0 0 24 24" fill="none" className="h-3.5 w-3.5" aria-hidden="true">
-                        <path d="M6 7h12M6 12h12M6 17h8" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-                      </svg>
-                    </span>
-                    <span className="text-[11px] font-bold uppercase tracking-wide">Class</span>
-                  </div>
-                  <span className="text-sm font-semibold text-slate-900">{chipClass}</span>
-                </div>
-                <div className="flex items-center justify-between gap-3 py-2">
-                  <div className="inline-flex items-center gap-2 text-slate-500">
-                    <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-emerald-50 text-emerald-700">
-                      <svg viewBox="0 0 24 24" fill="none" className="h-3.5 w-3.5" aria-hidden="true">
-                        <rect x="4" y="6" width="16" height="12" rx="2" stroke="currentColor" strokeWidth="1.8" />
-                        <path d="M8 10h8M8 14h5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-                      </svg>
-                    </span>
-                    <span className="text-[11px] font-bold uppercase tracking-wide">Model Number</span>
-                  </div>
-                  <span className="text-sm font-semibold text-slate-900">{detail?.model || "-"}</span>
-                </div>
-                <div className="flex items-center justify-between gap-3 py-2">
-                  <div className="inline-flex items-center gap-2 text-slate-500">
-                    <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-violet-50 text-violet-700">
-                      <svg viewBox="0 0 24 24" fill="none" className="h-3.5 w-3.5" aria-hidden="true">
-                        <path d="M7 7h10v10H7z" stroke="currentColor" strokeWidth="1.8" />
-                        <path d="M4 10h3M17 10h3M4 14h3M17 14h3" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
-                      </svg>
-                    </span>
-                    <span className="text-[11px] font-bold uppercase tracking-wide">Manufacturer</span>
-                  </div>
-                  <span className="text-sm font-semibold text-slate-900">{detail?.manufacturer || p.vendor || "-"}</span>
-                </div>
-              </div>
-            </aside>
+              </aside>
+            ) : null}
           </div>
         </div>
         <div className="border-t border-slate-200 bg-slate-50 px-4 py-3 text-xs leading-6 text-slate-700 sm:px-5 sm:text-sm">
@@ -1168,7 +1270,7 @@ export default async function ProcessorDetailPage({ params }: Props) {
       <SectionChipNav
         className="top-[6.5rem] sm:top-14"
         items={[
-          { id: "benchmarks", label: "Benchmarks" },
+          ...(hasBenchmarksSection ? [{ id: "benchmarks", label: "Benchmarks" }] : []),
           { id: "cpu-memory", label: "CPU & Memory" },
           { id: "graphics", label: "Graphics & Gaming" },
           { id: "ai", label: "AI" },
@@ -1183,82 +1285,43 @@ export default async function ProcessorDetailPage({ params }: Props) {
 
       <section className="mt-5 grid gap-5 lg:grid-cols-[minmax(0,1fr)_320px]">
         <div className="space-y-5">
-          <article id="benchmarks" className="scroll-mt-28">
-            <ModernSpecCards
-              title="Benchmarks"
-              titleIcon="bench"
-              rows={[
-                {
-                  label: `AnTuTu ${benchAntutuVersion || "-"}`,
-                  value: (
-                    <div>
-                      <div>{benchAntutu ? String(benchAntutu) : "-"}</div>
-                      <div className="mt-1.5 h-2 rounded-full bg-slate-200">
-                        <div className="h-2 rounded-full bg-blue-500" style={{ width: `${antutuPct}%` }} />
-                      </div>
-                    </div>
-                  ),
-                },
-                {
-                  label: `Geekbench ${benchGeekbenchVersion || "-"} Single-Core`,
-                  value: (
-                    <div>
-                      <div>{benchSingle ? String(benchSingle) : "-"}</div>
-                      <div className="mt-1.5 h-2 rounded-full bg-slate-200">
-                        <div className="h-2 rounded-full bg-emerald-500" style={{ width: `${singlePct}%` }} />
-                      </div>
-                    </div>
-                  ),
-                },
-                {
-                  label: `Geekbench ${benchGeekbenchVersion || "-"} Multi-Core`,
-                  value: (
-                    <div>
-                      <div>{benchMulti ? String(benchMulti) : "-"}</div>
-                      <div className="mt-1.5 h-2 rounded-full bg-slate-200">
-                        <div className="h-2 rounded-full bg-amber-500" style={{ width: `${multiPct}%` }} />
-                      </div>
-                    </div>
-                  ),
-                },
-                {
-                  label: `3DMark ${bench3dName || "-"}`,
-                  value: (
-                    <div>
-                      <div>{bench3d ? String(bench3d) : "-"}</div>
-                      <div className="mt-1.5 h-2 rounded-full bg-slate-200">
-                        <div className="h-2 rounded-full bg-violet-500" style={{ width: `${markPct}%` }} />
-                      </div>
-                    </div>
-                  ),
-                },
-              ]}
-            />
+          {hasBenchmarksSection ? (
+            <article id="benchmarks" className="scroll-mt-28">
+              <ModernSpecCards
+                title="Benchmarks"
+                titleIcon="bench"
+                rows={benchmarkRows}
+              />
 
-            <div className="mt-3 overflow-hidden rounded-xl border border-slate-200 bg-white">
+            {antutuBreakdownRows.length > 0 ? (
+              <div className="mt-3 overflow-hidden rounded-xl border border-slate-200 bg-white">
               <div className="border-b border-slate-200 bg-slate-50 px-4 py-2">
                 <div className="flex items-center gap-2">
                   <span className="inline-flex h-4 w-4 items-center justify-center rounded bg-blue-50 text-blue-700">
                     {renderTitleIcon("bench")}
                   </span>
-                  <h3 className="text-[13px] font-extrabold uppercase tracking-wide text-blue-700">{`AnTuTu ${benchAntutuVersion || "-"}`}</h3>
+                  <h3 className="text-[13px] font-extrabold uppercase tracking-wide text-blue-700">AnTuTu Score</h3>
                 </div>
-                <p className="mt-1 text-xs text-slate-600">Detailed AnTuTu score breakdown</p>
+                <p className="mt-1 text-xs text-slate-600">
+                  {benchAntutuVersion ? `Detailed AnTuTu ${benchAntutuVersion} score breakdown` : "Detailed AnTuTu score breakdown"}
+                </p>
               </div>
               <div className="grid grid-cols-2 text-sm sm:grid-cols-[230px_minmax(0,1fr)]">
-                <div className="border-b border-r border-slate-200 bg-slate-100 px-3 py-2 text-slate-700 sm:px-4">CPU</div>
-                <div className="border-b border-slate-200 px-3 py-2 text-center font-semibold text-slate-900 sm:px-4 sm:text-left">{benchAntutuCpu ? String(benchAntutuCpu) : "-"}</div>
-                <div className="border-b border-r border-slate-200 bg-slate-100 px-3 py-2 text-slate-700 sm:px-4">GPU</div>
-                <div className="border-b border-slate-200 px-3 py-2 text-center font-semibold text-slate-900 sm:px-4 sm:text-left">{benchAntutuGpu ? String(benchAntutuGpu) : "-"}</div>
-                <div className="border-b border-r border-slate-200 bg-slate-100 px-3 py-2 text-slate-700 sm:px-4">Memory</div>
-                <div className="border-b border-slate-200 px-3 py-2 text-center font-semibold text-slate-900 sm:px-4 sm:text-left">{benchAntutuMemory ? String(benchAntutuMemory) : "-"}</div>
-                <div className="border-b border-r border-slate-200 bg-slate-100 px-3 py-2 text-slate-700 sm:px-4">UX</div>
-                <div className="border-b border-slate-200 px-3 py-2 text-center font-semibold text-slate-900 sm:px-4 sm:text-left">{benchAntutuUx ? String(benchAntutuUx) : "-"}</div>
-                <div className="border-r border-slate-200 bg-slate-100 px-3 py-2 font-semibold text-slate-700 sm:px-4">Total Score</div>
-                <div className="px-3 py-2 text-center font-semibold text-slate-900 sm:px-4 sm:text-left">{benchAntutu ? String(benchAntutu) : "-"}</div>
+                {antutuBreakdownRows.map((row, idx) => (
+                  <div key={row.label} className="contents">
+                    <div className={`border-r border-slate-200 bg-slate-100 px-3 py-2 text-slate-700 sm:px-4 ${idx !== antutuBreakdownRows.length - 1 ? "border-b" : ""}`}>
+                      {row.label}
+                    </div>
+                    <div className={`px-3 py-2 text-center font-semibold text-slate-900 sm:px-4 sm:text-left ${idx !== antutuBreakdownRows.length - 1 ? "border-b border-slate-200" : ""}`}>
+                      {String(row.value)}
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
-          </article>
+            ) : null}
+            </article>
+          ) : null}
 
           <article id="cpu-memory" className="scroll-mt-28">
             <ModernSpecCards

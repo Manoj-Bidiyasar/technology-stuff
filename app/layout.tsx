@@ -27,10 +27,27 @@ export const metadata: Metadata = {
     "Mobile phone reviews, complete specifications, side-by-side comparisons, and buying guides.",
 };
 
+function isQuotaExceededError(error: unknown): boolean {
+  const code = String((error as { code?: string | number } | null)?.code ?? "").toLowerCase();
+  const message = String((error as { message?: string } | null)?.message ?? "").toLowerCase();
+  return (
+    code === "8" ||
+    code.includes("resource-exhausted") ||
+    message.includes("resource_exhausted") ||
+    message.includes("quota exceeded")
+  );
+}
+
 export default async function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   const [latestMobiles, latestTablets] = await Promise.all([
-    listLatestProducts(12, "smartphone"),
-    listLatestProducts(12, "tablet"),
+    listLatestProducts(12, "smartphone").catch((error) => {
+      if (isQuotaExceededError(error)) return [];
+      throw error;
+    }),
+    listLatestProducts(12, "tablet").catch((error) => {
+      if (isQuotaExceededError(error)) return [];
+      throw error;
+    }),
   ]);
   const headerSuggestions = [
     ...latestMobiles.map((item) => ({ name: item.name, slug: item.slug, brand: item.brand, deviceType: "smartphone" as const })),

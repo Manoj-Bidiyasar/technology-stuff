@@ -11,11 +11,31 @@ export const metadata: Metadata = {
   description: "Discover latest mobiles, trending devices, comparisons, and blog updates.",
 };
 
+function isQuotaExceededError(error: unknown): boolean {
+  const code = String((error as { code?: string | number } | null)?.code ?? "").toLowerCase();
+  const message = String((error as { message?: string } | null)?.message ?? "").toLowerCase();
+  return (
+    code === "8" ||
+    code.includes("resource-exhausted") ||
+    message.includes("resource_exhausted") ||
+    message.includes("quota exceeded")
+  );
+}
+
 export default async function Home() {
   const [latestMobiles, trendingMobiles, latestBlogs] = await Promise.all([
-    listLatestProducts(8),
-    listTrendingProducts(8),
-    listLatestBlogs(4),
+    listLatestProducts(8).catch((error) => {
+      if (isQuotaExceededError(error)) return [];
+      throw error;
+    }),
+    listTrendingProducts(8).catch((error) => {
+      if (isQuotaExceededError(error)) return [];
+      throw error;
+    }),
+    listLatestBlogs(4).catch((error) => {
+      if (isQuotaExceededError(error)) return [];
+      throw error;
+    }),
   ]);
 
   const comparePairs = trendingMobiles.slice(0, 3).map((item, index) => {
