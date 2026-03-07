@@ -122,22 +122,22 @@ export default function ProcessorCompareMoreSection({ items }: { items: MatchupI
       <div className="bg-slate-50 px-4 py-3">
         <h2 className="text-xl font-bold text-slate-900">Head-to-Head Matchups</h2>
       </div>
-      <ol className="grid grid-cols-1 gap-3 px-4 py-4 md:grid-cols-2">
+      <ol className="grid grid-cols-1 gap-3 px-4 pt-4 pb-1 md:grid-cols-2">
         {visible.map((item, idx) => (
           <li key={`${item.slug}-${idx}`}>
             <Link
               href={`/processors/compare/${item.slug}`}
-              className="block rounded-xl border border-slate-200 bg-white p-3 hover:border-blue-300"
+              className="block rounded-xl border border-slate-200 bg-white px-3 pt-3 pb-0.5 hover:border-blue-300"
             >
-              <div className="grid grid-cols-[minmax(0,1fr)_60px_minmax(0,1fr)] items-center gap-2">
+              <div className="grid grid-cols-[minmax(0,1fr)_60px_minmax(0,1fr)] items-start gap-2">
                 <div className="flex flex-col items-center text-center">
                   {miniVisual(item.leftName, item.leftVendor)}
-                  <span className="mt-2 text-sm font-extrabold text-slate-900">{item.leftName}</span>
+                  <span className="mt-2 block min-h-[2.3rem] text-xs font-extrabold leading-tight text-slate-900 sm:min-h-0 sm:text-sm">{item.leftName}</span>
                 </div>
                 <span className="mx-auto inline-flex h-9 w-9 items-center justify-center rounded-full border border-blue-200 bg-blue-50 text-sm font-black text-blue-700">VS</span>
                 <div className="flex flex-col items-center text-center">
                   {miniVisual(item.rightName, item.rightVendor)}
-                  <span className="mt-2 text-sm font-extrabold text-slate-900">{item.rightName}</span>
+                  <span className="mt-2 block min-h-[2.3rem] text-xs font-extrabold leading-tight text-slate-900 sm:min-h-0 sm:text-sm">{item.rightName}</span>
                 </div>
               </div>
             </Link>

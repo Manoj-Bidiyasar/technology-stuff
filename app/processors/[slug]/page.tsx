@@ -930,9 +930,9 @@ export default async function ProcessorDetailPage({ params }: Props) {
     <main className="mobile-container py-6 sm:py-8">
       <section className="mb-3">
         <div className="inline-flex items-center gap-2 text-sm font-semibold text-slate-500">
-          <Link href="/" className="text-slate-600 hover:text-blue-700">Home</Link>
+          <Link href="/" className="rounded px-1 py-0.5 text-slate-600 transition-colors hover:bg-blue-50 hover:text-blue-700 active:bg-blue-100">Home</Link>
           <span className="text-slate-300">/</span>
-          <Link href="/processors" className="text-slate-600 hover:text-blue-700">Processors</Link>
+          <Link href="/processors" className="rounded px-1 py-0.5 text-slate-600 transition-colors hover:bg-blue-50 hover:text-blue-700 active:bg-blue-100">Processors</Link>
           <span className="text-slate-300">/</span>
           <span className="text-slate-900">{displayName}</span>
         </div>

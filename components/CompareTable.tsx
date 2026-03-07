@@ -309,7 +309,10 @@ export default function CompareTable({
   const [replaceLoading, setReplaceLoading] = useState(false);
   const [replaceResults, setReplaceResults] = useState<Array<{ slug: string; name: string; brand: string; image?: string }>>([]);
 
-  const slots = [products[0] || null, products[1] || null, products[2] || null];
+  const slots =
+    products.length === 2 && !showAddSlotPicker
+      ? [products[0] || null, null, products[1] || null]
+      : [products[0] || null, products[1] || null, products[2] || null];
   const titleSlug = buildCompareSlug(products);
   const twoPhoneIdle = products.length === 2 && !showAddSlotPicker;
   const showThirdSpecsColumn = products.length === 3 || showAddSlotPicker;
@@ -829,9 +832,18 @@ export default function CompareTable({
           </div>
         )}
 
-        <div className={`grid grid-cols-1 md:grid-cols-3 ${twoPhoneIdle ? "" : "border-b border-slate-200"}`}>
+        <div className={`grid ${twoPhoneIdle ? "grid-cols-[1fr_52px_1fr]" : "grid-cols-1 md:grid-cols-3"} ${twoPhoneIdle ? "" : "border-b border-slate-200"}`}>
         {slots.map((product, slotIndex) => {
           if (!product) {
+            if (twoPhoneIdle && slotIndex === 1) {
+              return (
+                <article key="mobile-vs-center" className="flex items-center justify-center bg-slate-50">
+                  <span className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-slate-900 text-sm font-extrabold text-white">
+                    VS
+                  </span>
+                </article>
+              );
+            }
             const plainThirdSlot = twoPhoneIdle;
             return (
             <article
@@ -916,7 +928,7 @@ export default function CompareTable({
           const currentIndex = products.findIndex((item) => item.slug === product.slug);
           const canMoveLeft = currentIndex > 0;
           const canMoveRight = currentIndex >= 0 && currentIndex < products.length - 1;
-          const addBottomBorder = twoPhoneIdle && slotIndex < 2;
+          const addBottomBorder = false;
 
           return (
             <article

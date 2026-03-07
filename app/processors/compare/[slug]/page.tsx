@@ -244,6 +244,34 @@ function getChipSeriesInfo(name: string, vendor: string): { line1: string; line2
   return null;
 }
 
+function compareNameLines(name: string, vendor: string): { line1: string; line2: string } {
+  const raw = String(name || "").trim();
+  const v = String(vendor || "").trim().toLowerCase();
+  if (/qualcomm/i.test(v) || /snapdragon/i.test(raw)) {
+    const stripped = raw.replace(/^qualcomm\s+/i, "").trim();
+    return { line1: "Qualcomm", line2: stripped || "Snapdragon" };
+  }
+  if (/mediatek/i.test(v) || /dimensity|helio/i.test(raw)) {
+    const stripped = raw.replace(/^mediatek\s+/i, "").trim();
+    return { line1: "MediaTek", line2: stripped || "Dimensity" };
+  }
+  if (/samsung/i.test(v) || /exynos/i.test(raw)) {
+    const stripped = raw.replace(/^samsung\s+/i, "").trim();
+    return { line1: "Samsung", line2: stripped || "Exynos" };
+  }
+  if (/apple/i.test(v) || /^apple\s+/i.test(raw)) {
+    const stripped = raw.replace(/^apple\s+/i, "").trim();
+    return { line1: "Apple", line2: stripped || raw };
+  }
+  if (/unisoc/i.test(v) || /unisoc/i.test(raw)) {
+    const stripped = raw.replace(/^unisoc\s+/i, "").trim();
+    return { line1: "Unisoc", line2: stripped || raw };
+  }
+  const line1 = raw.split(/\s+/)[0] || raw;
+  const line2 = raw.replace(new RegExp(`^${line1}\\s+`, "i"), "").trim() || raw;
+  return { line1, line2 };
+}
+
 function inferCoreCount(detail?: Awaited<ReturnType<typeof getProcessorDetailBySlug>>): string {
   if (Number.isFinite(detail?.coreCount)) return String(detail?.coreCount);
   const raw = String(detail?.cores || "");
@@ -303,6 +331,24 @@ function rowBest(left: number, right: number, lowerIsBetter = false): "left" | "
 
 function tone(win: "left" | "right" | "tie", side: "left" | "right"): string {
   return win === side ? "bg-emerald-50 font-bold text-emerald-700" : "bg-white text-slate-800";
+}
+
+function mobileListLines(value: ReactNode): ReactNode {
+  if (typeof value !== "string") return value;
+  const raw = value.trim();
+  const wifiLike = raw.match(/^([A-Za-z0-9.+-]+)\s*(\([^)]*\))$/);
+  if (wifiLike) {
+    return (
+      <span className="inline-flex flex-col items-center leading-tight">
+        <span>{wifiLike[1]}</span>
+        <span className="whitespace-nowrap text-[11px]">{wifiLike[2]}</span>
+      </span>
+    );
+  }
+  if (!raw.includes(",")) return value;
+  // Keep values like Wi-Fi standards with parenthesized comma lists in one line.
+  if (/\([^)]*,[^)]*\)/.test(raw)) return value;
+  return raw.split(/\s*,\s*/).filter(Boolean).join("\n");
 }
 
 function parseCompareSlug(slug: string) {
@@ -901,9 +947,9 @@ export default async function ProcessorCompareSlugPage({ params }: Props) {
     <main className="mobile-container py-6 sm:py-8">
       <section className="mb-3">
         <div className="inline-flex items-center gap-2 text-sm font-semibold text-slate-500">
-          <Link href="/" className="text-slate-600 hover:text-blue-700">Home</Link>
+          <Link href="/" className="rounded px-1 py-0.5 text-slate-600 transition-colors hover:bg-blue-50 hover:text-blue-700 active:bg-blue-100">Home</Link>
           <span className="text-slate-300">/</span>
-          <Link href="/processors" className="text-slate-600 hover:text-blue-700">Processors</Link>
+          <Link href="/processors" className="rounded px-1 py-0.5 text-slate-600 transition-colors hover:bg-blue-50 hover:text-blue-700 active:bg-blue-100">Processors</Link>
           <span className="text-slate-300">/</span>
           <span className="text-slate-900">Compare</span>
         </div>
@@ -911,12 +957,12 @@ export default async function ProcessorCompareSlugPage({ params }: Props) {
 
       <section className="panel">
         <div className="border-b border-slate-200 bg-slate-50 px-4 py-3">
-          <h1 className="text-xl font-extrabold text-slate-900 sm:text-2xl">{`${left.name} vs ${right.name}`}</h1>
+          <h1 className="text-base font-extrabold text-slate-900 sm:text-2xl">{`${left.name} vs ${right.name}`}</h1>
           <p className="mt-1 text-sm text-slate-600">Processor specification comparison</p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 md:border-b md:border-slate-200">
-          <div className="border-b border-slate-200 bg-white px-4 py-3 md:border-b-0">
+        <div className="grid grid-cols-[1fr_48px_1fr] border-b border-slate-200 sm:grid-cols-[1fr_72px_1fr]">
+          <div className="bg-white px-2 py-3 sm:px-4">
             <div className="mb-2 flex justify-end">
               <Link
                 href={`/processors?left=${encodeURIComponent(right.slug)}`}
@@ -928,29 +974,40 @@ export default async function ProcessorCompareSlugPage({ params }: Props) {
               </Link>
             </div>
             <Link href={`/processors/${left.slug}`} className="mx-auto flex w-fit flex-col items-center text-center hover:opacity-95">
-              <div className={`relative h-24 w-24 overflow-hidden rounded-md border border-white/10 sm:h-28 sm:w-28 ${leftTile.tone} ${leftTile.edge}`}>
+              <div className={`relative h-16 w-16 overflow-hidden rounded-md border border-white/10 sm:h-24 sm:w-24 md:h-28 md:w-28 ${leftTile.tone} ${leftTile.edge}`}>
                 <div className="absolute inset-0 bg-[radial-gradient(circle_at_18%_15%,rgba(255,255,255,0.15),transparent_36%)]" />
                 <div className="absolute inset-0 bg-[linear-gradient(135deg,transparent_15%,rgba(255,255,255,0.06)_35%,transparent_60%)]" />
                 <div className="absolute inset-0 opacity-20 [background-image:linear-gradient(120deg,transparent_0%,transparent_42%,rgba(255,255,255,0.12)_42%,rgba(255,255,255,0.12)_48%,transparent_48%,transparent_100%)]" />
-                <div className="relative h-full p-3">
-                  <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 bg-gradient-to-r from-[#ffe6a7] via-[#ffd37a] to-[#f5b35c] bg-clip-text text-[13px] font-black uppercase leading-none tracking-[0.05em] text-transparent drop-shadow-[0_0_6px_rgba(255,210,120,0.35)] sm:text-[14px]">
+                <div className="relative h-full p-2 sm:p-3">
+                  <div className={`absolute left-1/2 top-1/2 w-[88%] -translate-x-1/2 -translate-y-1/2 text-center bg-gradient-to-r from-[#ffe6a7] via-[#ffd37a] to-[#f5b35c] bg-clip-text ${leftTile.brand === "MEDIATEK" ? "text-[9px]" : "text-[7px]"} font-black uppercase leading-none tracking-[0.005em] text-transparent drop-shadow-[0_0_6px_rgba(255,210,120,0.35)] sm:text-[10px] md:text-[14px] md:tracking-[0.05em]`}>
                     {leftTile.brand}
                   </div>
                   {leftSeries ? (
-                    <div className="absolute bottom-2.5 right-2.5 max-w-[60%] text-right leading-tight">
-                      <div className={`truncate text-[9px] ${leftSeries.isPremium ? "font-bold uppercase tracking-[0.08em] text-[#f6c874]" : "font-semibold tracking-[0.02em] text-slate-100"}`}>{leftSeries.line1}</div>
-                      {leftSeries.line2 ? <div className={`text-[10px] ${leftSeries.isPremium ? "font-black uppercase tracking-[0.04em] text-[#ffe3a9]" : "font-semibold tracking-[0.02em] text-slate-200"}`}>{leftSeries.line2}</div> : null}
+                    <div className="absolute bottom-1.5 right-1.5 max-w-[70%] text-right leading-tight sm:bottom-2.5 sm:right-2.5 sm:max-w-[62%]">
+                      <div className={`text-[6px] sm:text-[8px] md:text-[9px] ${leftSeries.isPremium ? "font-bold uppercase tracking-[0.04em] md:tracking-[0.08em] text-[#f6c874]" : "font-semibold tracking-[0.02em] text-slate-100"}`}>{leftSeries.line1}</div>
+                      {leftSeries.line2 ? <div className={`text-[7px] sm:text-[9px] md:text-[10px] ${leftSeries.isPremium ? "font-black uppercase tracking-[0.02em] md:tracking-[0.04em] text-[#ffe3a9]" : "font-semibold tracking-[0.02em] text-slate-200"}`}>{leftSeries.line2}</div> : null}
                     </div>
                   ) : null}
                 </div>
               </div>
-              <span className="mt-2 block text-lg font-extrabold text-slate-900">{left.name}</span>
+              {(() => {
+                const n = compareNameLines(left.name, left.vendor);
+                return (
+                  <>
+                    <span className="mt-2 block max-w-[130px] text-center leading-tight text-slate-900 md:hidden">
+                      <span className="block text-xs font-extrabold sm:text-sm">{n.line1}</span>
+                      <span className="block text-xs font-extrabold sm:text-sm">{n.line2}</span>
+                    </span>
+                    <span className="mt-2 hidden text-lg font-extrabold text-slate-900 md:block">{left.name}</span>
+                  </>
+                );
+              })()}
             </Link>
           </div>
-          <div className="hidden items-center justify-center bg-slate-50 md:flex">
-            <span className="inline-flex h-11 w-11 items-center justify-center rounded-full bg-slate-900 text-sm font-extrabold text-white">VS</span>
+          <div className="flex items-center justify-center bg-slate-50">
+            <span className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-slate-900 text-sm font-extrabold text-white sm:h-11 sm:w-11">VS</span>
           </div>
-          <div className="bg-white px-4 py-3">
+          <div className="bg-white px-2 py-3 sm:px-4">
             <div className="mb-2 flex justify-end">
               <Link
                 href={`/processors?left=${encodeURIComponent(left.slug)}`}
@@ -962,30 +1019,65 @@ export default async function ProcessorCompareSlugPage({ params }: Props) {
               </Link>
             </div>
             <Link href={`/processors/${right.slug}`} className="mx-auto flex w-fit flex-col items-center text-center hover:opacity-95">
-              <div className={`relative h-24 w-24 overflow-hidden rounded-md border border-white/10 sm:h-28 sm:w-28 ${rightTile.tone} ${rightTile.edge}`}>
+              <div className={`relative h-16 w-16 overflow-hidden rounded-md border border-white/10 sm:h-24 sm:w-24 md:h-28 md:w-28 ${rightTile.tone} ${rightTile.edge}`}>
                 <div className="absolute inset-0 bg-[radial-gradient(circle_at_18%_15%,rgba(255,255,255,0.15),transparent_36%)]" />
                 <div className="absolute inset-0 bg-[linear-gradient(135deg,transparent_15%,rgba(255,255,255,0.06)_35%,transparent_60%)]" />
                 <div className="absolute inset-0 opacity-20 [background-image:linear-gradient(120deg,transparent_0%,transparent_42%,rgba(255,255,255,0.12)_42%,rgba(255,255,255,0.12)_48%,transparent_48%,transparent_100%)]" />
-                <div className="relative h-full p-3">
-                  <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 bg-gradient-to-r from-[#ffe6a7] via-[#ffd37a] to-[#f5b35c] bg-clip-text text-[13px] font-black uppercase leading-none tracking-[0.05em] text-transparent drop-shadow-[0_0_6px_rgba(255,210,120,0.35)] sm:text-[14px]">
+                <div className="relative h-full p-2 sm:p-3">
+                  <div className={`absolute left-1/2 top-1/2 w-[88%] -translate-x-1/2 -translate-y-1/2 text-center bg-gradient-to-r from-[#ffe6a7] via-[#ffd37a] to-[#f5b35c] bg-clip-text ${rightTile.brand === "MEDIATEK" ? "text-[9px]" : "text-[7px]"} font-black uppercase leading-none tracking-[0.005em] text-transparent drop-shadow-[0_0_6px_rgba(255,210,120,0.35)] sm:text-[10px] md:text-[14px] md:tracking-[0.05em]`}>
                     {rightTile.brand}
                   </div>
                   {rightSeries ? (
-                    <div className="absolute bottom-2.5 right-2.5 max-w-[60%] text-right leading-tight">
-                      <div className={`truncate text-[9px] ${rightSeries.isPremium ? "font-bold uppercase tracking-[0.08em] text-[#f6c874]" : "font-semibold tracking-[0.02em] text-slate-100"}`}>{rightSeries.line1}</div>
-                      {rightSeries.line2 ? <div className={`text-[10px] ${rightSeries.isPremium ? "font-black uppercase tracking-[0.04em] text-[#ffe3a9]" : "font-semibold tracking-[0.02em] text-slate-200"}`}>{rightSeries.line2}</div> : null}
+                    <div className="absolute bottom-1.5 right-1.5 max-w-[70%] text-right leading-tight sm:bottom-2.5 sm:right-2.5 sm:max-w-[62%]">
+                      <div className={`text-[6px] sm:text-[8px] md:text-[9px] ${rightSeries.isPremium ? "font-bold uppercase tracking-[0.04em] md:tracking-[0.08em] text-[#f6c874]" : "font-semibold tracking-[0.02em] text-slate-100"}`}>{rightSeries.line1}</div>
+                      {rightSeries.line2 ? <div className={`text-[7px] sm:text-[9px] md:text-[10px] ${rightSeries.isPremium ? "font-black uppercase tracking-[0.02em] md:tracking-[0.04em] text-[#ffe3a9]" : "font-semibold tracking-[0.02em] text-slate-200"}`}>{rightSeries.line2}</div> : null}
                     </div>
                   ) : null}
                 </div>
               </div>
-              <span className="mt-2 block text-lg font-extrabold text-slate-900">{right.name}</span>
+              {(() => {
+                const n = compareNameLines(right.name, right.vendor);
+                return (
+                  <>
+                    <span className="mt-2 block max-w-[130px] text-center leading-tight text-slate-900 md:hidden">
+                      <span className="block text-xs font-extrabold sm:text-sm">{n.line1}</span>
+                      <span className="block text-xs font-extrabold sm:text-sm">{n.line2}</span>
+                    </span>
+                    <span className="mt-2 hidden text-lg font-extrabold text-slate-900 md:block">{right.name}</span>
+                  </>
+                );
+              })()}
             </Link>
           </div>
         </div>
 
         <div className="p-3 sm:p-4">
-          <div className="sticky top-14 z-30 mb-0 overflow-hidden border-y border-slate-200 bg-white shadow-sm">
-            <div className="grid min-w-[720px] grid-cols-3 text-sm">
+          <div className="sticky top-[6.5rem] z-30 mb-0 overflow-hidden border-y border-slate-200 bg-white shadow-sm sm:top-14">
+            <div className="grid grid-cols-2 text-sm md:hidden">
+              <div className="border-r border-slate-200 bg-white px-3 py-2 text-center font-bold text-slate-900">
+                {(() => {
+                  const n = compareNameLines(left.name, left.vendor);
+                  return (
+                    <span className="block leading-tight">
+                      <span className="block">{n.line1}</span>
+                      <span className="block">{n.line2}</span>
+                    </span>
+                  );
+                })()}
+              </div>
+              <div className="bg-white px-3 py-2 text-center font-bold text-slate-900">
+                {(() => {
+                  const n = compareNameLines(right.name, right.vendor);
+                  return (
+                    <span className="block leading-tight">
+                      <span className="block">{n.line1}</span>
+                      <span className="block">{n.line2}</span>
+                    </span>
+                  );
+                })()}
+              </div>
+            </div>
+            <div className="hidden min-w-[720px] grid-cols-3 text-sm md:grid">
               <div className="border-r border-slate-200 bg-slate-100 px-3 py-2 font-bold text-slate-800">Specification</div>
               <div className="border-r border-slate-200 bg-white px-3 py-2 font-bold text-slate-900">{left.name}</div>
               <div className="bg-white px-3 py-2 font-bold text-slate-900">{right.name}</div>
@@ -993,8 +1085,17 @@ export default async function ProcessorCompareSlugPage({ params }: Props) {
           </div>
           <div className="space-y-3 pt-3">
           {sections.map((section) => (
-            <details key={section.title} open className="rounded-lg border border-slate-200 bg-white">
-              <summary className="cursor-pointer list-none border-b border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-900">
+            <div key={section.title}>
+              <div className="mb-1 px-1 md:hidden">
+                <span className="inline-flex items-center gap-2">
+                  <span className="inline-flex h-4 w-4 items-center justify-center rounded bg-blue-50 text-blue-700">
+                    {renderTitleIcon(iconForSection(section.title))}
+                  </span>
+                  <span className="text-[13px] font-extrabold uppercase tracking-wide text-blue-700">{section.title}</span>
+                </span>
+              </div>
+            <details open className="rounded-lg border border-slate-200 bg-white">
+              <summary className="hidden cursor-pointer list-none border-b border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-900 md:block">
                 <span className="inline-flex items-center gap-2">
                   <span className="inline-flex h-4 w-4 items-center justify-center rounded bg-blue-50 text-blue-700">
                     {renderTitleIcon(iconForSection(section.title))}
@@ -1002,7 +1103,25 @@ export default async function ProcessorCompareSlugPage({ params }: Props) {
                   <span className="text-[13px] font-extrabold uppercase tracking-wide text-blue-700">{section.title}</span>
                 </span>
               </summary>
-              <div className="overflow-x-auto">
+              <div className="md:hidden">
+                {section.rows.map((row) => {
+                  const win = rowBest(Number(row.leftNum), Number(row.rightNum), row.lowerIsBetter === true);
+                  return (
+                    <div key={`${section.title}-${row.label}`} className="border-b border-slate-200 last:border-b-0">
+                      <div className="bg-slate-100 px-3 py-2 text-sm font-semibold text-slate-700">{row.label}</div>
+                      <div className="grid grid-cols-2 text-sm">
+                        <div className={`border-r border-slate-200 px-3 py-2 text-center whitespace-pre-line ${row.leftNum !== undefined && row.rightNum !== undefined ? tone(win, "left") : "bg-white text-slate-800"}`}>
+                          {mobileListLines(row.left)}
+                        </div>
+                        <div className={`px-3 py-2 text-center whitespace-pre-line ${row.leftNum !== undefined && row.rightNum !== undefined ? tone(win, "right") : "bg-white text-slate-800"}`}>
+                          {mobileListLines(row.right)}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+              <div className="hidden overflow-x-auto md:block">
                 <div className="min-w-[720px]">
                   <div className="grid grid-cols-3 text-sm">
                     {section.rows.map((row) => {
@@ -1023,6 +1142,7 @@ export default async function ProcessorCompareSlugPage({ params }: Props) {
                 </div>
               </div>
             </details>
+            </div>
           ))}
           </div>
         </div>
