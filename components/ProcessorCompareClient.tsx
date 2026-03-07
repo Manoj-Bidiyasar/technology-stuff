@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
 import type { ProcessorProfile } from "@/lib/processors/profiles";
 
 type Props = {
@@ -34,9 +35,30 @@ function scoreTone(score: number): string {
 }
 
 export default function ProcessorCompareClient({ processors }: Props) {
+  const searchParams = useSearchParams();
+  const router = useRouter();
+
+  const preselectedNames = useMemo(() => {
+    const bySlug = new Map(processors.map((item) => [item.slug, item.name]));
+    const leftSlug = String(searchParams.get("left") || "").trim();
+    const rightSlug = String(searchParams.get("right") || "").trim();
+    const names: string[] = [];
+
+    if (leftSlug && bySlug.has(leftSlug)) names.push(bySlug.get(leftSlug) as string);
+    if (rightSlug && bySlug.has(rightSlug)) {
+      const rightName = bySlug.get(rightSlug) as string;
+      if (!names.includes(rightName)) names.push(rightName);
+    }
+
+    return names.slice(0, 2);
+  }, [processors, searchParams]);
+
   const [q, setQ] = useState("");
-  const [selected, setSelected] = useState<string[]>([]);
-  const [compared, setCompared] = useState(false);
+  const [selected, setSelected] = useState<string[]>(preselectedNames);
+  const [quickLeftText, setQuickLeftText] = useState(preselectedNames[0] || "");
+  const [quickRightText, setQuickRightText] = useState(preselectedNames[1] || "");
+
+  const byName = useMemo(() => new Map(processors.map((p) => [p.name.toLowerCase(), p])), [processors]);
 
   const selectedProfiles = useMemo(() => {
     const map = new Map(processors.map((p) => [p.name.toLowerCase(), p]));
@@ -60,23 +82,26 @@ export default function ProcessorCompareClient({ processors }: Props) {
   function addProcessor(name: string) {
     setSelected((prev) => {
       if (prev.includes(name) || prev.length >= 2) return prev;
-      setCompared(false);
       return [...prev, name];
     });
   }
 
-  function removeProcessor(name: string) {
-    setCompared(false);
-    setSelected((prev) => prev.filter((item) => item !== name));
-  }
-
-  const left = selectedProfiles[0];
-  const right = selectedProfiles[1];
+  const quickLeft = byName.get(quickLeftText.trim().toLowerCase());
+  const quickRight = byName.get(quickRightText.trim().toLowerCase());
+  const left = quickLeft || selectedProfiles[0];
+  const right = quickRight || selectedProfiles[1];
+  const compared = Boolean(left && right);
 
   const antutuWin = rowBest(Number(left?.antutu || 0), Number(right?.antutu || 0));
   const fabWin = rowBest(Number(left?.fabricationNm || NaN), Number(right?.fabricationNm || NaN), true);
   const cpuWin = rowBest(Number(left?.maxCpuGhz || 0), Number(right?.maxCpuGhz || 0));
   const scoreWin = rowBest(Number(left?.avgPhoneScore || 0), Number(right?.avgPhoneScore || 0));
+
+  function handleCompare() {
+    if (!left || !right) return;
+    if (left.slug === right.slug) return;
+    router.push(`/processors/compare/${left.slug}-vs-${right.slug}`);
+  }
 
   return (
     <main className="mobile-container py-6 sm:py-8">
@@ -88,12 +113,16 @@ export default function ProcessorCompareClient({ processors }: Props) {
         <div className="mt-4 rounded-xl border border-slate-200 bg-white p-3">
           <p className="text-xs font-bold uppercase tracking-wide text-slate-500">Quick Compare</p>
           <div className="mt-2 flex flex-wrap items-center gap-2">
-            <div className="flex min-h-10 min-w-[220px] flex-1 items-center justify-between rounded-lg border border-slate-300 bg-slate-50 px-3 py-2">
-              <span className={`truncate text-sm ${left ? "font-semibold text-slate-900" : "text-slate-500"}`}>
-                {left?.name || "Select Processor A"}
-              </span>
-              {left ? (
-                <button type="button" onClick={() => removeProcessor(left.name)} className="ml-2 text-xs font-bold text-slate-500 hover:text-slate-800">
+            <div className="flex min-h-10 min-w-[220px] flex-1 items-center rounded-lg border border-slate-300 bg-slate-50 px-2 py-1">
+              <input
+                value={quickLeftText}
+                onChange={(e) => setQuickLeftText(e.target.value)}
+                list="processor-quick-list"
+                placeholder="Select Processor A"
+                className="h-8 w-full bg-transparent px-1 text-sm text-slate-900 outline-none placeholder:text-slate-500"
+              />
+              {quickLeftText ? (
+                <button type="button" onClick={() => setQuickLeftText("")} className="ml-1 text-xs font-bold text-slate-500 hover:text-slate-800">
                   x
                 </button>
               ) : null}
@@ -101,25 +130,34 @@ export default function ProcessorCompareClient({ processors }: Props) {
             <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-slate-900 text-xs font-extrabold text-white">
               VS
             </span>
-            <div className="flex min-h-10 min-w-[220px] flex-1 items-center justify-between rounded-lg border border-slate-300 bg-slate-50 px-3 py-2">
-              <span className={`truncate text-sm ${right ? "font-semibold text-slate-900" : "text-slate-500"}`}>
-                {right?.name || "Select Processor B"}
-              </span>
-              {right ? (
-                <button type="button" onClick={() => removeProcessor(right.name)} className="ml-2 text-xs font-bold text-slate-500 hover:text-slate-800">
+            <div className="flex min-h-10 min-w-[220px] flex-1 items-center rounded-lg border border-slate-300 bg-slate-50 px-2 py-1">
+              <input
+                value={quickRightText}
+                onChange={(e) => setQuickRightText(e.target.value)}
+                list="processor-quick-list"
+                placeholder="Select Processor B"
+                className="h-8 w-full bg-transparent px-1 text-sm text-slate-900 outline-none placeholder:text-slate-500"
+              />
+              {quickRightText ? (
+                <button type="button" onClick={() => setQuickRightText("")} className="ml-1 text-xs font-bold text-slate-500 hover:text-slate-800">
                   x
                 </button>
               ) : null}
             </div>
             <button
               type="button"
-              onClick={() => setCompared(true)}
-              disabled={!left || !right}
-              className="h-10 rounded-lg bg-blue-700 px-4 text-sm font-bold text-white disabled:cursor-not-allowed disabled:bg-slate-300"
+              onClick={handleCompare}
+              disabled={!left || !right || left.slug === right.slug}
+              className="h-10 rounded-lg bg-blue-700 px-4 text-sm font-bold text-white hover:bg-blue-800 disabled:cursor-not-allowed disabled:bg-slate-300"
             >
               Compare
             </button>
           </div>
+          <datalist id="processor-quick-list">
+            {processors.map((p, idx) => (
+              <option key={`${p.slug}-${p.vendor}-${idx}`} value={p.name} />
+            ))}
+          </datalist>
           <p className="mt-3 text-xs text-slate-500">Pick two processors from the list below, then click compare.</p>
         </div>
 
@@ -133,10 +171,10 @@ export default function ProcessorCompareClient({ processors }: Props) {
             className="mt-2 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm outline-none ring-blue-200 focus:ring-2"
           />
           <div className="mt-2 max-h-72 space-y-2 overflow-auto pr-1">
-            {filtered.map((p) => {
+            {filtered.map((p, idx) => {
               const isAdded = selected.includes(p.name);
               return (
-                <div key={p.slug} className="flex items-center justify-between rounded-lg border border-slate-200 bg-white px-3 py-2">
+                <div key={`${p.slug}-${p.vendor}-${idx}`} className="flex items-center justify-between rounded-lg border border-slate-200 bg-white px-3 py-2">
                   <div className="min-w-0">
                     <Link href={`/processors/${p.slug}`} className="truncate text-sm font-semibold text-slate-900 hover:text-blue-700">
                       {p.name}
@@ -164,7 +202,7 @@ export default function ProcessorCompareClient({ processors }: Props) {
         </div>
         {!compared ? (
           <div className="px-4 py-8 text-center text-sm font-semibold text-slate-500">
-            Select two processors and click <span className="text-slate-700">Compare</span> to view full comparison.
+            Select two processors and click <span className="text-slate-700">Compare</span> to open full comparison page.
           </div>
         ) : (
         <div className="grid grid-cols-3 text-sm">
@@ -203,7 +241,7 @@ export default function ProcessorCompareClient({ processors }: Props) {
         <h2 className="text-lg font-extrabold text-slate-900">Top Processor Rankings</h2>
         <div className="mt-3 grid gap-2 md:grid-cols-2 xl:grid-cols-3">
           {topRanked.map((p, i) => (
-            <article key={p.slug} className="rounded-lg border border-slate-200 bg-white p-3">
+            <article key={`${p.slug}-${p.vendor}-${i}`} className="rounded-lg border border-slate-200 bg-white p-3">
               <div className="flex items-center justify-between gap-2">
                 <Link href={`/processors/${p.slug}`} className="text-sm font-bold text-slate-900 hover:text-blue-700">
                   #{i + 1} {p.name}

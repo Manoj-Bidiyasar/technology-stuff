@@ -12,19 +12,33 @@ export type ProcessorProfile = {
   gpu?: string;
   phoneCount: number;
   avgPhoneScore: number;
-  topPhones: Array<{ name: string; slug: string }>;
+  topPhones: Array<{
+    name: string;
+    slug: string;
+    antutu?: number;
+    buyUrl?: string;
+    buyLabel?: string;
+    amazonUrl?: string;
+    flipkartUrl?: string;
+  }>;
 };
 
 const DUMMY_PROCESSORS: Omit<ProcessorProfile, "slug">[] = [
   { name: "MediaTek Dimensity 9500s", vendor: "MediaTek", antutu: 3397028, fabricationNm: 3, maxCpuGhz: 3.5, gpu: "Mali-G1 Ultra MC12", phoneCount: 0, avgPhoneScore: 9.8, topPhones: [] },
+  { name: "MediaTek Helio G99 Ultimate", vendor: "MediaTek", antutu: 470000, fabricationNm: 6, maxCpuGhz: 2.2, gpu: "Mali-G57 MC2", phoneCount: 0, avgPhoneScore: 7.2, topPhones: [] },
   { name: "Snapdragon 8 Elite", vendor: "Qualcomm", antutu: 2850000, fabricationNm: 3, maxCpuGhz: 4.32, gpu: "Adreno 840", phoneCount: 0, avgPhoneScore: 9.6, topPhones: [] },
   { name: "Dimensity 9400", vendor: "MediaTek", antutu: 2750000, fabricationNm: 3, maxCpuGhz: 3.63, gpu: "Immortalis-G925", phoneCount: 0, avgPhoneScore: 9.4, topPhones: [] },
   { name: "Apple A18 Pro", vendor: "Apple", antutu: 2650000, fabricationNm: 3, maxCpuGhz: 4.05, gpu: "Apple 6-core GPU", phoneCount: 0, avgPhoneScore: 9.3, topPhones: [] },
   { name: "Snapdragon 8 Gen 3", vendor: "Qualcomm", antutu: 2050000, fabricationNm: 4, maxCpuGhz: 3.3, gpu: "Adreno 750", phoneCount: 0, avgPhoneScore: 8.9, topPhones: [] },
   { name: "Dimensity 9300", vendor: "MediaTek", antutu: 2150000, fabricationNm: 4, maxCpuGhz: 3.25, gpu: "Immortalis-G720", phoneCount: 0, avgPhoneScore: 9.0, topPhones: [] },
   { name: "Snapdragon 7+ Gen 3", vendor: "Qualcomm", antutu: 1450000, fabricationNm: 4, maxCpuGhz: 2.8, gpu: "Adreno 732", phoneCount: 0, avgPhoneScore: 8.1, topPhones: [] },
+  { name: "Snapdragon 7 Gen 4", vendor: "Qualcomm", antutu: 1180000, fabricationNm: 4, maxCpuGhz: 2.8, gpu: "Adreno 722", phoneCount: 0, avgPhoneScore: 8.0, topPhones: [] },
+  { name: "Snapdragon 780G", vendor: "Qualcomm", antutu: 640000, fabricationNm: 5, maxCpuGhz: 2.4, gpu: "Adreno 642", phoneCount: 0, avgPhoneScore: 7.6, topPhones: [] },
+  { name: "Snapdragon 732G", vendor: "Qualcomm", antutu: 430000, fabricationNm: 8, maxCpuGhz: 2.3, gpu: "Adreno 618", phoneCount: 0, avgPhoneScore: 7.0, topPhones: [] },
   { name: "Dimensity 8300 Ultra", vendor: "MediaTek", antutu: 1500000, fabricationNm: 4, maxCpuGhz: 3.35, gpu: "Mali-G615 MC6", phoneCount: 0, avgPhoneScore: 8.3, topPhones: [] },
   { name: "Exynos 2400", vendor: "Samsung", antutu: 1800000, fabricationNm: 4, maxCpuGhz: 3.21, gpu: "Xclipse 940", phoneCount: 0, avgPhoneScore: 8.5, topPhones: [] },
+  { name: "Exynos 2500", vendor: "Samsung", antutu: 2260000, fabricationNm: 3, maxCpuGhz: 3.5, gpu: "Xclipse 950", phoneCount: 0, avgPhoneScore: 9.0, topPhones: [] },
+  { name: "Unisoc T760", vendor: "Unisoc", antutu: 560000, fabricationNm: 6, maxCpuGhz: 2.4, gpu: "Mali-G57 MC4", phoneCount: 0, avgPhoneScore: 7.2, topPhones: [] },
   { name: "Tensor G4", vendor: "Google", antutu: 1250000, fabricationNm: 4, maxCpuGhz: 3.1, gpu: "Mali-G715", phoneCount: 0, avgPhoneScore: 7.8, topPhones: [] },
   { name: "Snapdragon 6 Gen 4", vendor: "Qualcomm", antutu: 780000, fabricationNm: 4, maxCpuGhz: 2.3, gpu: "Adreno 7xx", phoneCount: 0, avgPhoneScore: 7.1, topPhones: [] },
 ];
@@ -54,6 +68,7 @@ function vendorFromChip(name: string): string {
   if (n.includes("dimensity") || n.includes("mediatek") || n.includes("helio")) return "MediaTek";
   if (n.includes("apple") || n.includes("a1") || n.includes("a17") || n.includes("a18")) return "Apple";
   if (n.includes("exynos")) return "Samsung";
+  if (n.includes("unisoc") || n.includes("tiger")) return "Unisoc";
   if (n.includes("tensor")) return "Google";
   if (n.includes("kirin")) return "Huawei";
   return "Other";
@@ -83,7 +98,16 @@ export async function listProcessorProfiles(): Promise<ProcessorProfile[]> {
     phoneCount: number;
     scoreSum: number;
     scoreCount: number;
-    phones: Array<{ name: string; slug: string; score: number }>;
+    phones: Array<{
+      name: string;
+      slug: string;
+      score: number;
+      antutu: number;
+      buyUrl?: string;
+      buyLabel?: string;
+      amazonUrl?: string;
+      flipkartUrl?: string;
+    }>;
   };
 
   const map = new Map<string, Agg>();
@@ -110,7 +134,16 @@ export async function listProcessorProfiles(): Promise<ProcessorProfile[]> {
         phoneCount: 1,
         scoreSum: Number.isFinite(score) ? score : 0,
         scoreCount: Number.isFinite(score) ? 1 : 0,
-        phones: [{ name: p.name, slug: p.slug, score: Number.isFinite(score) ? score : 0 }],
+        phones: [{
+          name: p.name,
+          slug: p.slug,
+          score: Number.isFinite(score) ? score : 0,
+          antutu,
+          buyUrl: p.affiliateLinks?.amazon || p.affiliateLinks?.flipkart || undefined,
+          buyLabel: p.affiliateLinks?.amazon ? "Amazon" : (p.affiliateLinks?.flipkart ? "Flipkart" : undefined),
+          amazonUrl: p.affiliateLinks?.amazon || undefined,
+          flipkartUrl: p.affiliateLinks?.flipkart || undefined,
+        }],
       });
       continue;
     }
@@ -124,7 +157,16 @@ export async function listProcessorProfiles(): Promise<ProcessorProfile[]> {
       existing.scoreSum += score;
       existing.scoreCount += 1;
     }
-    existing.phones.push({ name: p.name, slug: p.slug, score: Number.isFinite(score) ? score : 0 });
+    existing.phones.push({
+      name: p.name,
+      slug: p.slug,
+      score: Number.isFinite(score) ? score : 0,
+      antutu,
+      buyUrl: p.affiliateLinks?.amazon || p.affiliateLinks?.flipkart || undefined,
+      buyLabel: p.affiliateLinks?.amazon ? "Amazon" : (p.affiliateLinks?.flipkart ? "Flipkart" : undefined),
+      amazonUrl: p.affiliateLinks?.amazon || undefined,
+      flipkartUrl: p.affiliateLinks?.flipkart || undefined,
+    });
   }
 
   const fromProducts: ProcessorProfile[] = [...map.values()]
@@ -133,7 +175,15 @@ export async function listProcessorProfiles(): Promise<ProcessorProfile[]> {
       const topPhones = [...item.phones]
         .sort((a, b) => b.score - a.score)
         .slice(0, 8)
-        .map((v) => ({ name: v.name, slug: v.slug }));
+        .map((v) => ({
+          name: v.name,
+          slug: v.slug,
+          antutu: v.antutu > 0 ? v.antutu : undefined,
+          buyUrl: v.buyUrl,
+          buyLabel: v.buyLabel,
+          amazonUrl: v.amazonUrl,
+          flipkartUrl: v.flipkartUrl,
+        }));
 
       return {
         slug: slugify(item.name),

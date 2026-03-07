@@ -392,12 +392,37 @@ export type ProductListResult = {
   totalPages: number;
 };
 
+function isQuotaExceededError(error: unknown): boolean {
+  const code = String((error as { code?: string | number } | null)?.code ?? "").toLowerCase();
+  const message = String((error as { message?: string } | null)?.message ?? "").toLowerCase();
+  return (
+    code === "8" ||
+    code.includes("resource-exhausted") ||
+    message.includes("resource_exhausted") ||
+    message.includes("quota exceeded")
+  );
+}
+
 export async function listPublishedProducts(filters: ProductFilters = {}): Promise<ProductListResult> {
   const page = Math.max(1, filters.page || 1);
   const pageSize = Math.min(30, Math.max(1, filters.pageSize || 12));
   const deviceType = normalizeDeviceType(filters.deviceType);
 
-  const snapshot = await productsRef.where("status", "==", "published").limit(500).get();
+  let snapshot: Awaited<ReturnType<typeof productsRef.where>>;
+  try {
+    snapshot = await productsRef.where("status", "==", "published").limit(500).get();
+  } catch (error) {
+    if (isQuotaExceededError(error)) {
+      return {
+        items: [],
+        total: 0,
+        page,
+        pageSize,
+        totalPages: 1,
+      };
+    }
+    throw error;
+  }
   let items = snapshot.docs
     .map((doc) => hydrateProduct(doc.id, doc.data() as Partial<Product>))
     .filter((item) => normalizeDeviceType(item.deviceType) === deviceType);
@@ -861,7 +886,13 @@ export async function listLatestProducts(limit = 8, deviceType: "smartphone" | "
 }
 
 export async function listTrendingProducts(limit = 8, deviceType: "smartphone" | "tablet" = "smartphone"): Promise<Product[]> {
-  const snapshot = await productsRef.where("status", "==", "published").limit(300).get();
+  let snapshot: Awaited<ReturnType<typeof productsRef.where>>;
+  try {
+    snapshot = await productsRef.where("status", "==", "published").limit(300).get();
+  } catch (error) {
+    if (isQuotaExceededError(error)) return [];
+    throw error;
+  }
   const items = snapshot.docs
     .map((doc) => hydrateProduct(doc.id, doc.data() as Partial<Product>))
     .filter((item) => normalizeDeviceType(item.deviceType) === deviceType);
@@ -870,7 +901,13 @@ export async function listTrendingProducts(limit = 8, deviceType: "smartphone" |
 }
 
 export async function listBrands(deviceType: "smartphone" | "tablet" = "smartphone"): Promise<string[]> {
-  const snapshot = await productsRef.where("status", "==", "published").limit(500).get();
+  let snapshot: Awaited<ReturnType<typeof productsRef.where>>;
+  try {
+    snapshot = await productsRef.where("status", "==", "published").limit(500).get();
+  } catch (error) {
+    if (isQuotaExceededError(error)) return [];
+    throw error;
+  }
   const brands = new Set<string>();
   snapshot.docs.forEach((doc) => {
     const row = normalizeProduct(doc.data() as Partial<Product>);
@@ -883,18 +920,30 @@ export async function listBrands(deviceType: "smartphone" | "tablet" = "smartpho
 export async function getPublishedProductBySlug(slug: string, deviceType: "smartphone" | "tablet" = "smartphone"): Promise<Product | null> {
   const docId = slugify(slug);
   if (docId) {
-    const direct = await productsRef.doc(docId).get();
+    let direct;
+    try {
+      direct = await productsRef.doc(docId).get();
+    } catch (error) {
+      if (isQuotaExceededError(error)) return null;
+      throw error;
+    }
     if (direct.exists) {
       const item = hydrateProduct(direct.id, direct.data() as Partial<Product>);
       if (item.status === "published" && normalizeDeviceType(item.deviceType) === deviceType) return item;
     }
   }
 
-  const snapshot = await productsRef
-    .where("status", "==", "published")
-    .where("slug", "==", slug)
-    .limit(1)
-    .get();
+  let snapshot: Awaited<ReturnType<typeof productsRef.where>>;
+  try {
+    snapshot = await productsRef
+      .where("status", "==", "published")
+      .where("slug", "==", slug)
+      .limit(1)
+      .get();
+  } catch (error) {
+    if (isQuotaExceededError(error)) return null;
+    throw error;
+  }
   if (snapshot.empty) return null;
   const item = hydrateProduct(snapshot.docs[0].id, snapshot.docs[0].data() as Partial<Product>);
   if (normalizeDeviceType(item.deviceType) !== deviceType) return null;
