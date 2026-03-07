@@ -174,12 +174,12 @@ function ModernSpecCards({
       {rows.map((row, idx) => (
         <div
           key={`${row.label}-${idx}`}
-          className={`grid grid-cols-[230px_minmax(0,1fr)] items-start gap-3 px-4 py-1.5 ${
-            idx !== rows.length - 1 ? "border-b border-slate-100" : ""
+          className={`grid grid-cols-2 items-stretch gap-0 sm:grid-cols-[230px_minmax(0,1fr)] ${
+            idx !== rows.length - 1 ? "border-b border-slate-200" : ""
           }`}
         >
-          <div className={`text-sm font-medium leading-6 text-slate-600 ${row.labelAlign === "center" ? "self-center" : ""}`}>{row.label}</div>
-          <div className={`text-sm font-semibold leading-6 text-slate-900 ${row.valueAlign === "center" ? "text-center" : ""}`}>{row.value || "-"}</div>
+          <div className="flex items-center justify-start bg-slate-100 px-3 py-2 text-left text-sm font-medium leading-6 text-slate-600 sm:px-4">{row.label}</div>
+          <div className={`px-3 py-2 text-center text-[13px] font-semibold leading-5 text-slate-900 sm:px-4 sm:text-sm sm:leading-6 ${row.valueAlign === "center" ? "sm:text-center" : "sm:text-left"}`}>{row.value || "-"}</div>
         </div>
       ))}
     </div>
@@ -503,6 +503,89 @@ function formatCameraSupportModes(modes: string[] | undefined, fallback?: string
   return normalizeCameraMode(String(fallback || "-"));
 }
 
+function clusterRows(value: string): ReactNode {
+  const raw = String(value || "").trim();
+  if (!raw || raw === "-") return "-";
+  const rows = raw
+    .split(/\s*,\s*/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+  if (!rows.length) return "-";
+  if (rows.length === 1) return rows[0];
+  return (
+    <div className="space-y-1">
+      {rows.map((row) => (
+        <div key={row}>{row}</div>
+      ))}
+    </div>
+  );
+}
+
+function mobileClusterRows(value: string): ReactNode {
+  const raw = String(value || "").trim();
+  if (!raw || raw === "-") return "-";
+  const rows = raw
+    .split(/\s*,\s*/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+  if (rows.length <= 1) return raw;
+  return (
+    <>
+      <div className="space-y-1 sm:hidden">
+        {rows.map((row) => (
+          <div key={row}>{row}</div>
+        ))}
+      </div>
+      <span className="hidden sm:inline">{raw}</span>
+    </>
+  );
+}
+
+function mobileVersionWithDetails(value: string): ReactNode {
+  const raw = String(value || "").trim();
+  const parts = raw.match(/^([A-Za-z0-9.+-]+)\s*(\([^)]*\))$/);
+  if (!parts) return raw || "-";
+  return (
+    <>
+      <span className="sm:hidden">
+        <span className="block leading-tight">{parts[1]}</span>
+        <span className="block whitespace-nowrap text-[11px] leading-tight">{parts[2]}</span>
+      </span>
+      <span className="hidden sm:inline">{raw}</span>
+    </>
+  );
+}
+
+function normalizeFeatureText(value: string): string {
+  return String(value || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "");
+}
+
+function formatOtherCpuFeatures(features: string[] | undefined, architecture?: string): string {
+  const list = (features || [])
+    .map((item) => String(item || "").trim())
+    .filter(Boolean);
+  if (!list.length) return "-";
+  const archRaw = String(architecture || "").trim();
+  const archNorm = normalizeFeatureText(archRaw);
+  const archTokens = archRaw
+    .split(/[^A-Za-z0-9.+-]+/)
+    .map((t) => normalizeFeatureText(t))
+    .filter((t) => t.length >= 4);
+  const filtered = list.filter((item) => {
+    if (!archNorm) return true;
+    const featureNorm = normalizeFeatureText(item);
+    if (!featureNorm) return false;
+    if (featureNorm === archNorm) return false;
+    if (featureNorm.length >= 6 && archNorm.includes(featureNorm)) return false;
+    if (archNorm.length >= 6 && featureNorm.includes(archNorm)) return false;
+    if (archTokens.some((token) => featureNorm.includes(token) || token.includes(featureNorm))) return false;
+    return true;
+  });
+  return filtered.length ? filtered.join(", ") : "-";
+}
+
 function sortMemoryTypes(values: string[]): string[] {
   const rank = (v: string) => {
     const t = v.toUpperCase().replace(/\s+/g, "");
@@ -608,6 +691,21 @@ function formatNetworkSupport(detail: {
   const maxNet = rank.find((r) => tokens.includes(r));
   if (!maxNet) return "-";
   return maxNet;
+}
+
+function formatModemName(value?: string): string {
+  const raw = String(value || "").trim();
+  if (!raw) return "-";
+  const compact = raw.toUpperCase().replace(/\s+/g, "");
+  const generic = compact
+    .replace(/DUAL/g, "")
+    .split(/[/,|+()-]+/)
+    .map((t) => t.trim())
+    .filter(Boolean);
+  if (generic.length > 0 && generic.every((t) => /^(2G|3G|4G|5G|LTE|NR|SA|NSA)$/.test(t))) {
+    return "-";
+  }
+  return raw;
 }
 
 function compactNetworkBadge(value?: string): string {
@@ -836,7 +934,7 @@ export default async function ProcessorDetailPage({ params }: Props) {
       label: "Official Page",
       value: (
         <a href={detail?.sourceUrl} target="_blank" rel="noreferrer" className="text-blue-700 hover:underline">
-          Visit Site
+          Visit official page
         </a>
       ),
     });
@@ -929,25 +1027,25 @@ export default async function ProcessorDetailPage({ params }: Props) {
   return (
     <main className="mobile-container py-6 sm:py-8">
       <section className="mb-3">
-        <div className="inline-flex items-center gap-2 text-sm font-semibold text-slate-500">
+        <div className="inline-flex max-w-full items-center gap-2 whitespace-nowrap text-xs font-semibold text-slate-500 sm:text-sm">
           <Link href="/" className="rounded px-1 py-0.5 text-slate-600 transition-colors hover:bg-blue-50 hover:text-blue-700 active:bg-blue-100">Home</Link>
           <span className="text-slate-300">/</span>
           <Link href="/processors" className="rounded px-1 py-0.5 text-slate-600 transition-colors hover:bg-blue-50 hover:text-blue-700 active:bg-blue-100">Processors</Link>
           <span className="text-slate-300">/</span>
-          <span className="text-slate-900">{displayName}</span>
+          <span className="min-w-0 max-w-[46vw] truncate text-slate-900 sm:max-w-none sm:truncate-none">{displayName}</span>
         </div>
       </section>
 
       <section className="panel overflow-hidden">
-        <div className="flex items-center justify-between gap-3 border-b border-slate-200 bg-gradient-to-r from-blue-50 to-indigo-50 px-4 py-3 sm:px-5">
-          <h1 className="text-lg font-extrabold text-blue-800 sm:text-xl">{displayName}</h1>
-          <Link href={`/processors?left=${encodeURIComponent(p.slug)}`} className="shrink-0 rounded-lg bg-blue-700 px-3 py-1.5 text-xs font-bold text-white hover:bg-blue-800">
+        <div className="flex flex-col items-start gap-2 border-b border-slate-200 bg-gradient-to-r from-blue-50 to-indigo-50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-5">
+          <h1 className="w-full truncate whitespace-nowrap text-lg font-extrabold text-blue-800 sm:w-auto sm:whitespace-normal sm:text-xl">{displayName}</h1>
+          <Link href={`/processors?left=${encodeURIComponent(p.slug)}`} className="hidden shrink-0 rounded-lg bg-blue-700 px-3 py-1.5 text-xs font-bold text-white hover:bg-blue-800 sm:inline-flex">
             Compare
           </Link>
         </div>
         <div className="p-4 sm:p-5">
           <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_300px]">
-            <div className="grid gap-4 md:grid-cols-[124px_minmax(0,1fr)]">
+            <div className="grid grid-cols-[112px_minmax(0,1fr)] gap-3 md:grid-cols-[124px_minmax(0,1fr)] md:gap-4">
               <div className="space-y-2">
                 <div className={`relative mx-auto h-28 w-28 overflow-hidden rounded-md border border-white/10 sm:h-32 sm:w-32 ${chipTile.tone} ${chipTile.edge}`}>
                   <div className="absolute inset-0 bg-[radial-gradient(circle_at_18%_15%,rgba(255,255,255,0.15),transparent_36%)]" />
@@ -989,7 +1087,10 @@ export default async function ProcessorDetailPage({ params }: Props) {
                     )}
                   </div>
                 </div>
-                <span className={`inline-flex w-full items-center justify-center gap-1.5 whitespace-nowrap rounded-xl border px-2.5 py-1.5 text-[10px] font-extrabold uppercase tracking-[0.08em] shadow-sm ${chipClassBadgeTone(chipClass)}`}>
+                <Link href={`/processors?left=${encodeURIComponent(p.slug)}`} className="mx-auto flex w-fit rounded-lg bg-blue-700 px-3 py-1.5 text-xs font-bold text-white hover:bg-blue-800 sm:hidden">
+                  Compare
+                </Link>
+                <span className={`mx-auto hidden w-auto items-center justify-center gap-1.5 whitespace-nowrap rounded-lg border px-2 py-1 text-[9px] font-extrabold uppercase tracking-[0.06em] shadow-sm sm:inline-flex sm:w-full sm:rounded-xl sm:px-2.5 sm:py-1.5 sm:text-[10px] sm:tracking-[0.08em] ${chipClassBadgeTone(chipClass)}`}>
                   <span className="h-1.5 w-1.5 rounded-full bg-current opacity-80" />
                   {chipClass}
                 </span>
@@ -1018,6 +1119,17 @@ export default async function ProcessorDetailPage({ params }: Props) {
                     <span className="text-[11px] font-bold uppercase tracking-wide">Announced</span>
                   </div>
                   <span className="text-sm font-semibold text-slate-900">{toMonthYear(detail?.announced)}</span>
+                </div>
+                <div className="flex items-center justify-between gap-3 py-2 sm:hidden">
+                  <div className="inline-flex items-center gap-2 text-slate-500">
+                    <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-indigo-50 text-indigo-700">
+                      <svg viewBox="0 0 24 24" fill="none" className="h-3.5 w-3.5" aria-hidden="true">
+                        <path d="M6 7h12M6 12h12M6 17h8" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+                      </svg>
+                    </span>
+                    <span className="text-[11px] font-bold uppercase tracking-wide">Class</span>
+                  </div>
+                  <span className="text-sm font-semibold text-slate-900">{chipClass}</span>
                 </div>
                 <div className="flex items-center justify-between gap-3 py-2">
                   <div className="inline-flex items-center gap-2 text-slate-500">
@@ -1054,6 +1166,7 @@ export default async function ProcessorDetailPage({ params }: Props) {
       </section>
 
       <SectionChipNav
+        className="top-[6.5rem] sm:top-14"
         items={[
           { id: "benchmarks", label: "Benchmarks" },
           { id: "cpu-memory", label: "CPU & Memory" },
@@ -1132,17 +1245,17 @@ export default async function ProcessorDetailPage({ params }: Props) {
                 </div>
                 <p className="mt-1 text-xs text-slate-600">Detailed AnTuTu score breakdown</p>
               </div>
-              <div className="grid grid-cols-[230px_minmax(0,1fr)] text-sm">
-                <div className="border-b border-r border-slate-100 bg-slate-50 px-4 py-2 text-slate-700">CPU</div>
-                <div className="border-b border-slate-100 px-4 py-2 font-semibold text-slate-900">{benchAntutuCpu ? String(benchAntutuCpu) : "-"}</div>
-                <div className="border-b border-r border-slate-100 bg-slate-50 px-4 py-2 text-slate-700">GPU</div>
-                <div className="border-b border-slate-100 px-4 py-2 font-semibold text-slate-900">{benchAntutuGpu ? String(benchAntutuGpu) : "-"}</div>
-                <div className="border-b border-r border-slate-100 bg-slate-50 px-4 py-2 text-slate-700">Memory</div>
-                <div className="border-b border-slate-100 px-4 py-2 font-semibold text-slate-900">{benchAntutuMemory ? String(benchAntutuMemory) : "-"}</div>
-                <div className="border-b border-r border-slate-100 bg-slate-50 px-4 py-2 text-slate-700">UX</div>
-                <div className="border-b border-slate-100 px-4 py-2 font-semibold text-slate-900">{benchAntutuUx ? String(benchAntutuUx) : "-"}</div>
-                <div className="border-r border-slate-100 bg-slate-50 px-4 py-2 font-semibold text-slate-700">Total Score</div>
-                <div className="px-4 py-2 font-semibold text-slate-900">{benchAntutu ? String(benchAntutu) : "-"}</div>
+              <div className="grid grid-cols-2 text-sm sm:grid-cols-[230px_minmax(0,1fr)]">
+                <div className="border-b border-r border-slate-200 bg-slate-100 px-3 py-2 text-slate-700 sm:px-4">CPU</div>
+                <div className="border-b border-slate-200 px-3 py-2 text-center font-semibold text-slate-900 sm:px-4 sm:text-left">{benchAntutuCpu ? String(benchAntutuCpu) : "-"}</div>
+                <div className="border-b border-r border-slate-200 bg-slate-100 px-3 py-2 text-slate-700 sm:px-4">GPU</div>
+                <div className="border-b border-slate-200 px-3 py-2 text-center font-semibold text-slate-900 sm:px-4 sm:text-left">{benchAntutuGpu ? String(benchAntutuGpu) : "-"}</div>
+                <div className="border-b border-r border-slate-200 bg-slate-100 px-3 py-2 text-slate-700 sm:px-4">Memory</div>
+                <div className="border-b border-slate-200 px-3 py-2 text-center font-semibold text-slate-900 sm:px-4 sm:text-left">{benchAntutuMemory ? String(benchAntutuMemory) : "-"}</div>
+                <div className="border-b border-r border-slate-200 bg-slate-100 px-3 py-2 text-slate-700 sm:px-4">UX</div>
+                <div className="border-b border-slate-200 px-3 py-2 text-center font-semibold text-slate-900 sm:px-4 sm:text-left">{benchAntutuUx ? String(benchAntutuUx) : "-"}</div>
+                <div className="border-r border-slate-200 bg-slate-100 px-3 py-2 font-semibold text-slate-700 sm:px-4">Total Score</div>
+                <div className="px-3 py-2 text-center font-semibold text-slate-900 sm:px-4 sm:text-left">{benchAntutu ? String(benchAntutu) : "-"}</div>
               </div>
             </div>
           </article>
@@ -1174,7 +1287,7 @@ export default async function ProcessorDetailPage({ params }: Props) {
                 { label: "TDP", value: Number.isFinite(detail?.tdpW) ? `${detail?.tdpW} W` : "-" },
                 { label: "L2 Cache", value: detail?.l2Cache || "-" },
                 { label: "L3 Cache", value: detail?.l3Cache || "-" },
-                { label: "Other CPU Features", value: detail?.cpuFeatures?.length ? detail.cpuFeatures.join(", ") : "-" },
+                { label: "Other CPU Features", value: formatOtherCpuFeatures(detail?.cpuFeatures, detail?.architecture) },
               ]}
             />
           </article>
@@ -1214,7 +1327,7 @@ export default async function ProcessorDetailPage({ params }: Props) {
               title="Memory & Storage Support"
               titleIcon="memory"
               rows={[
-                { label: "Memory Type", value: formatMemoryTypes(detail || {}) },
+                { label: "Memory Type", value: mobileClusterRows(formatMemoryTypes(detail || {})) },
                 {
                   label: "Memory Frequency",
                   labelAlign: "center",
@@ -1230,7 +1343,7 @@ export default async function ProcessorDetailPage({ params }: Props) {
                 { label: "Memory Bus Width", value: Number.isFinite(detail?.memoryBusWidthBits) ? `${detail?.memoryBusWidthBits}-bit` : "-" },
                 { label: "Bandwidth", value: detail?.bandwidthGbps ? `${decimal(detail.bandwidthGbps, 1)} GB/s` : "-" },
                 { label: "Max Memory", value: detail?.maxMemoryGb ? `${detail.maxMemoryGb}GB` : "-" },
-                { label: "Storage Type", value: formatStorageTypes(detail || {}) },
+                { label: "Storage Type", value: mobileClusterRows(formatStorageTypes(detail || {})) },
               ]}
             />
           </article>
@@ -1243,18 +1356,23 @@ export default async function ProcessorDetailPage({ params }: Props) {
                 { label: "Camera ISP", value: detail?.cameraIsp || "-" },
                 {
                   label: "Camera Support Modes",
-                  value: formatCameraSupportModes(
-                    detail?.cameraSupportModes,
-                    detail?.maxCameraSupport || detail?.cameraSupport || "-"
+                  value: clusterRows(
+                    formatCameraSupportModes(
+                      detail?.cameraSupportModes,
+                      detail?.maxCameraSupport || detail?.cameraSupport || "-"
+                    )
                   ),
+                  labelAlign: "center",
                 },
                 { label: "Other Camera Features", value: detail?.cameraFeatures?.length ? detail.cameraFeatures.join(", ") : "-" },
                 {
                   label: "Video Recording Modes",
-                  value:
+                  value: clusterRows(
                     detail?.videoRecordingModes?.length
                       ? detail.videoRecordingModes.join(", ")
-                      : (detail?.maxVideoCapture || detail?.videoCapture || "-"),
+                      : (detail?.maxVideoCapture || detail?.videoCapture || "-")
+                  ),
+                  labelAlign: "center",
                 },
                 { label: "Other Video Features", value: detail?.videoFeatures?.length ? detail.videoFeatures.join(", ") : "-" },
                 { label: "Video Playback", value: detail?.videoPlayback || "-" },
@@ -1269,12 +1387,14 @@ export default async function ProcessorDetailPage({ params }: Props) {
               rows={[
                 {
                   label: "Display Modes",
-                  value:
+                  value: clusterRows(
                     detail?.displayModes?.length
                       ? detail.displayModes.join(", ")
                       : ((detail?.maxDisplayResolution || detail?.maxRefreshRateHz)
                           ? `${detail?.maxDisplayResolution || "-"}${detail?.maxRefreshRateHz ? ` @ ${detail.maxRefreshRateHz}Hz` : ""}`
-                          : "-"),
+                          : "-")
+                  ),
+                  labelAlign: "center",
                 },
                 { label: "Output Display", value: detail?.outputDisplay || "-" },
                 { label: "Display Features", value: detail?.displayFeatures?.length ? detail.displayFeatures.join(", ") : "-" },
@@ -1289,11 +1409,12 @@ export default async function ProcessorDetailPage({ params }: Props) {
               title="Connectivity"
               titleIcon="connectivity"
               rows={[
+                { label: "Modem Name", value: formatModemName(detail?.modem) },
                 { label: "Network Support", value: formatNetworkSupport(detail || {}) },
                 { label: "Download Speed", value: Number.isFinite(detail?.downloadMbps) ? `Up to ${detail?.downloadMbps} Mbps` : "-" },
                 { label: "Upload Speed", value: Number.isFinite(detail?.uploadMbps) ? `Up to ${detail?.uploadMbps} Mbps` : "-" },
-                { label: "Wi-Fi", value: formatWifi(detail?.wifi) },
-                { label: "Bluetooth", value: formatBluetooth(detail?.bluetooth, detail?.bluetoothFeatures) },
+                { label: "Wi-Fi", value: mobileVersionWithDetails(formatWifi(detail?.wifi)) },
+                { label: "Bluetooth", value: mobileVersionWithDetails(formatBluetooth(detail?.bluetooth, detail?.bluetoothFeatures)) },
                 { label: "Navigation", value: detail?.navigation?.length ? detail.navigation.join(", ") : "-" },
               ]}
             />

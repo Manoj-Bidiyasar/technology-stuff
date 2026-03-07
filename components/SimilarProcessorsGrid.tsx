@@ -25,6 +25,21 @@ function antutuLabel(value?: number): string {
   return String(Math.round(value));
 }
 
+function splitNameRows(fullName: string): { line1: string; line2: string } {
+  const raw = String(fullName || "").trim();
+  if (!raw) return { line1: "-", line2: "" };
+  const vendors = ["Qualcomm", "MediaTek", "Samsung", "Apple", "Google", "UNISOC", "Unisoc"];
+  for (const vendor of vendors) {
+    if (raw.toLowerCase().startsWith(vendor.toLowerCase())) {
+      const rest = raw.slice(vendor.length).trim();
+      return { line1: vendor, line2: rest || vendor };
+    }
+  }
+  const parts = raw.split(/\s+/);
+  if (parts.length <= 1) return { line1: raw, line2: "" };
+  return { line1: parts[0], line2: parts.slice(1).join(" ") };
+}
+
 export default function SimilarProcessorsGrid({ items }: { items: SimilarCard[] }) {
   const pageSize = 8;
   const [page, setPage] = useState(0);
@@ -70,7 +85,7 @@ export default function SimilarProcessorsGrid({ items }: { items: SimilarCard[] 
         </>
       ) : null}
 
-      <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+      <div className="grid grid-cols-2 gap-2 sm:gap-2.5 lg:grid-cols-3 xl:grid-cols-5">
         {visible.map((item) => {
           const itemExynos = item.tile.brand === "SAMSUNG";
           const itemUnisoc = item.tile.brand === "UNISOC";
@@ -89,7 +104,7 @@ export default function SimilarProcessorsGrid({ items }: { items: SimilarCard[] 
                     ? "bg-none text-[#f3f7ff]"
                     : "bg-gradient-to-r from-[#ffe6a7] via-[#ffd37a] to-[#f5b35c] text-transparent";
           const itemBrandPosClass = itemExynos ? "left-3 top-1/2 text-left" : "left-1/2 top-1/2 -translate-x-1/2 text-center";
-          const itemBrandSizeClass = itemExynos ? "text-[16px]" : itemUnisoc ? "text-[15px]" : itemApple ? "text-[17px]" : "text-[13px]";
+          const itemBrandSizeClass = itemExynos ? "text-[11px] sm:text-[16px]" : itemUnisoc ? "text-[11px] sm:text-[15px]" : itemApple ? "text-[12px] sm:text-[17px]" : "text-[10px] sm:text-[13px]";
           const itemSeriesClass = item.series?.isPremium
             ? "font-bold uppercase tracking-[0.08em] text-[#f6c874]"
             : itemSnap7Gen
@@ -117,14 +132,16 @@ export default function SimilarProcessorsGrid({ items }: { items: SimilarCard[] 
                       ? "font-black uppercase tracking-[0.03em] text-white"
                       : "font-semibold tracking-[0.02em] text-slate-200";
 
+          const split = splitNameRows(item.fullName);
+
           return (
             <Link
               key={item.slug}
               href={`/processors/${item.slug}`}
-              className="rounded-xl border border-slate-200 bg-white px-2.5 py-2.5 hover:border-blue-300"
+              className="h-full rounded-xl border border-slate-200 bg-white px-2 py-2 hover:border-blue-300 sm:px-2.5 sm:py-2.5"
             >
-              <div className="flex flex-col items-center text-center">
-                <div className={`relative h-24 w-24 overflow-hidden rounded-md border border-white/10 sm:h-28 sm:w-28 ${item.tile.tone} ${item.tile.edge}`}>
+              <div className="flex h-full flex-col items-center text-center">
+                <div className={`relative h-[92px] w-[92px] overflow-hidden rounded-lg border border-white/10 sm:h-28 sm:w-28 ${item.tile.tone} ${item.tile.edge}`}>
                   <div className="absolute inset-0 bg-[radial-gradient(circle_at_18%_15%,rgba(255,255,255,0.15),transparent_36%)]" />
                   <div className="absolute inset-0 bg-[linear-gradient(135deg,transparent_15%,rgba(255,255,255,0.06)_35%,transparent_60%)]" />
                   <div className="absolute inset-0 opacity-20 [background-image:linear-gradient(120deg,transparent_0%,transparent_42%,rgba(255,255,255,0.12)_42%,rgba(255,255,255,0.12)_48%,transparent_48%,transparent_100%)]" />
@@ -135,19 +152,23 @@ export default function SimilarProcessorsGrid({ items }: { items: SimilarCard[] 
                       </svg>
                     </div>
                   ) : null}
-                  <div className="relative h-full p-2.5">
-                    <div className={`absolute -translate-y-1/2 overflow-hidden whitespace-nowrap bg-clip-text font-black uppercase leading-none tracking-[0.05em] ${itemExynos || itemUnisoc ? "" : "drop-shadow-[0_0_6px_rgba(255,210,120,0.35)]"} ${itemBrandClass} ${itemBrandPosClass} ${itemBrandSizeClass}`}>
+                  <div className="relative h-full p-1.5 sm:p-2.5">
+                    <div className={`absolute -translate-y-1/2 overflow-hidden whitespace-nowrap bg-clip-text font-black uppercase leading-none tracking-[0.04em] ${itemExynos || itemUnisoc ? "" : "drop-shadow-[0_0_6px_rgba(255,210,120,0.35)]"} ${itemBrandClass} ${itemBrandPosClass} ${itemBrandSizeClass}`}>
                       {item.tile.brand}
                     </div>
                     {item.series ? (
-                      <div className={`absolute bottom-2.5 ${itemExynos ? "right-2.5 left-auto max-w-[62%] text-right" : itemUnisoc ? "right-2.5 left-auto max-w-[58%] text-right" : itemSnap7Gen || itemSnap7Legacy ? "right-2.5 left-auto max-w-[58%] text-right" : "right-2.5 max-w-[60%] text-right"} leading-tight`}>
-                        <span className={`block text-[9px] ${itemSeriesClass}`}>{item.series.line1}</span>
-                        {item.series.line2 ? <span className={`block text-[10px] ${itemSeriesLine2Class}`}>{item.series.line2}</span> : null}
+                      <div className={`absolute bottom-2 ${itemExynos || itemUnisoc || itemSnap7Gen || itemSnap7Legacy ? "right-1.5 max-w-[66%] text-right" : "right-1.5 max-w-[70%] text-right"} leading-tight`}>
+                        <span className={`block truncate text-[9px] ${itemSeriesClass}`}>{item.series.line1}</span>
+                        {item.series.line2 ? <span className={`block truncate text-[9px] ${itemSeriesLine2Class}`}>{item.series.line2}</span> : null}
                       </div>
                     ) : null}
                   </div>
                 </div>
-                <div className="mt-1.5 line-clamp-2 text-[1.03rem] font-extrabold leading-5 text-slate-900">{item.fullName}</div>
+                <div className="mt-1.5 min-h-[2.6rem] leading-tight text-slate-900">
+                  <div className="text-sm font-bold sm:hidden">{split.line1}</div>
+                  <div className="text-sm font-bold sm:hidden line-clamp-1">{split.line2}</div>
+                  <div className="hidden line-clamp-2 text-[1.03rem] font-extrabold leading-5 sm:block">{item.fullName}</div>
+                </div>
                 <div className="mt-1 text-xs font-semibold text-slate-500">{`AnTuTu: ${antutuLabel(item.antutu)}`}</div>
               </div>
             </Link>

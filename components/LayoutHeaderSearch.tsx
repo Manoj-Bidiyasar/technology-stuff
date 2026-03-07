@@ -17,7 +17,8 @@ export default function LayoutHeaderSearch({ suggestions, variant = "desktop" }:
   const isTabletCompareSlug = Boolean(pathname && pathname.startsWith("/tablets/compare/"));
   const isCompareSlug = Boolean(pathname && pathname.startsWith("/compare/"));
   const isProcessorCompareSlug = Boolean(pathname && pathname.startsWith("/processors/compare/"));
-  const shouldShow = isMobileList || isMobileDetail || isTabletList || isTabletDetail || isCompareSlug || isTabletCompareSlug || isProcessorCompareSlug;
+  const isProcessorDetail = Boolean(pathname && pathname.startsWith("/processors/") && !pathname.startsWith("/processors/compare/"));
+  const shouldShow = isMobileList || isMobileDetail || isTabletList || isTabletDetail || isCompareSlug || isTabletCompareSlug || isProcessorCompareSlug || isProcessorDetail;
   const placeholder = isTabletList || isTabletDetail || isTabletCompareSlug ? "Search tablets" : "Search mobiles";
 
   if (!shouldShow) return null;

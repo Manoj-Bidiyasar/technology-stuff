@@ -94,7 +94,7 @@ export default function ProcessorComments({ processorName, initialComments }: Pr
       <div className="divide-y divide-slate-200">
         {sorted.map((row) => (
           <article key={row.id} className="px-4 py-4">
-            <div className="flex items-start gap-3">
+            <div className="flex items-start gap-2 sm:gap-3">
               <span className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-slate-200 text-slate-600">
                 <svg viewBox="0 0 24 24" fill="none" className="h-7 w-7" aria-hidden="true">
                   <circle cx="12" cy="8" r="4" fill="currentColor" />
@@ -106,8 +106,8 @@ export default function ProcessorComments({ processorName, initialComments }: Pr
                   <p className="text-sm font-bold text-slate-900">{row.user}</p>
                   <p className="text-xs text-slate-500">{row.at}</p>
                 </div>
-                <p className="mt-1.5 text-sm leading-6 text-slate-800">{row.text}</p>
-                <div className="mt-2.5 flex items-center gap-4 text-xs font-bold">
+                <p className="mt-1.5 hidden text-sm leading-6 text-slate-800 sm:block">{row.text}</p>
+                <div className="mt-2.5 hidden items-center gap-4 text-xs font-bold sm:flex">
                   <span className="text-emerald-700">{row.score > 0 ? `+${row.score}` : row.score}</span>
                   <button
                     type="button"
@@ -164,6 +164,17 @@ export default function ProcessorComments({ processorName, initialComments }: Pr
                   </form>
                 ) : null}
               </div>
+            </div>
+            <p className="mt-1.5 text-sm leading-6 text-slate-800 sm:hidden">{row.text}</p>
+            <div className="mt-2 flex items-center gap-4 text-xs font-bold sm:hidden">
+              <span className="text-emerald-700">{row.score > 0 ? `+${row.score}` : row.score}</span>
+              <button
+                type="button"
+                onClick={() => setOpenReplyId((prev) => (prev === row.id ? null : row.id))}
+                className="text-slate-700 hover:text-blue-700"
+              >
+                Reply
+              </button>
             </div>
           </article>
         ))}

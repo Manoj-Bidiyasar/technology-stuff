@@ -91,24 +91,24 @@ export default function SectionChipNav({ items, className = "" }: SectionChipNav
   if (!items.length) return null;
 
   return (
-    <section className={`panel sticky top-0 z-40 mt-4 p-3 backdrop-blur supports-[backdrop-filter]:bg-white/90 ${className}`}>
-      <div className="flex items-center gap-2">
+    <section className={`panel sticky top-0 z-30 mt-4 px-1.5 py-1.5 sm:p-3 backdrop-blur supports-[backdrop-filter]:bg-white/90 ${className}`}>
+      <div className="flex items-center gap-1 sm:gap-2">
         <button
           type="button"
           onClick={() => scrollTrack(-260)}
-          className={`inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-700 shadow-sm transition hover:border-blue-300 hover:text-blue-700 ${
+          className={`inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-700 shadow-sm transition hover:border-blue-300 hover:text-blue-700 sm:h-8 sm:w-8 ${
             canScrollLeft ? "" : "invisible pointer-events-none"
           }`}
           aria-label="Scroll chips left"
         >
-          <svg viewBox="0 0 24 24" fill="none" className="h-4 w-4" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" className="h-3.5 w-3.5 sm:h-4 sm:w-4" aria-hidden="true">
             <path d="m15 6-6 6 6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
         </button>
 
         <div
           ref={trackRef}
-          className="flex min-w-0 flex-1 gap-2 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+          className="flex min-w-0 flex-1 gap-1 overflow-x-auto [scrollbar-width:none] sm:gap-2 [&::-webkit-scrollbar]:hidden"
         >
           {items.map((item) => {
             const active = activeId === item.id;
@@ -120,7 +120,7 @@ export default function SectionChipNav({ items, className = "" }: SectionChipNav
                 }}
                 type="button"
                 onClick={() => jumpTo(item.id)}
-                className={`shrink-0 whitespace-nowrap rounded-full border px-3 py-1.5 text-sm font-semibold transition ${
+                className={`shrink-0 whitespace-nowrap rounded-full border px-2 py-0.5 text-xs font-semibold transition sm:px-3 sm:py-1.5 sm:text-sm ${
                   active
                     ? "border-blue-300 bg-blue-50 text-blue-700"
                     : "border-slate-200 bg-white text-slate-700 hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700"
@@ -136,12 +136,12 @@ export default function SectionChipNav({ items, className = "" }: SectionChipNav
         <button
           type="button"
           onClick={() => scrollTrack(260)}
-          className={`inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-700 shadow-sm transition hover:border-blue-300 hover:text-blue-700 ${
+          className={`inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-700 shadow-sm transition hover:border-blue-300 hover:text-blue-700 sm:h-8 sm:w-8 ${
             canScrollRight ? "" : "invisible pointer-events-none"
           }`}
           aria-label="Scroll chips right"
         >
-          <svg viewBox="0 0 24 24" fill="none" className="h-4 w-4" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" className="h-3.5 w-3.5 sm:h-4 sm:w-4" aria-hidden="true">
             <path d="m9 6 6 6-6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
         </button>
