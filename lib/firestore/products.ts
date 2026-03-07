@@ -408,9 +408,12 @@ export async function listPublishedProducts(filters: ProductFilters = {}): Promi
   const pageSize = Math.min(30, Math.max(1, filters.pageSize || 12));
   const deviceType = normalizeDeviceType(filters.deviceType);
 
-  let snapshot: Awaited<ReturnType<typeof productsRef.where>>;
+  let items: Product[] = [];
   try {
-    snapshot = await productsRef.where("status", "==", "published").limit(500).get();
+    const snapshot = await productsRef.where("status", "==", "published").limit(500).get();
+    items = snapshot.docs
+      .map((doc) => hydrateProduct(doc.id, doc.data() as Partial<Product>))
+      .filter((item) => normalizeDeviceType(item.deviceType) === deviceType);
   } catch (error) {
     if (isQuotaExceededError(error)) {
       return {
@@ -423,9 +426,6 @@ export async function listPublishedProducts(filters: ProductFilters = {}): Promi
     }
     throw error;
   }
-  let items = snapshot.docs
-    .map((doc) => hydrateProduct(doc.id, doc.data() as Partial<Product>))
-    .filter((item) => normalizeDeviceType(item.deviceType) === deviceType);
 
   if (filters.search) {
     const search = filters.search.toLowerCase();
@@ -886,31 +886,32 @@ export async function listLatestProducts(limit = 8, deviceType: "smartphone" | "
 }
 
 export async function listTrendingProducts(limit = 8, deviceType: "smartphone" | "tablet" = "smartphone"): Promise<Product[]> {
-  let snapshot: Awaited<ReturnType<typeof productsRef.where>>;
+  let items: Product[] = [];
   try {
-    snapshot = await productsRef.where("status", "==", "published").limit(300).get();
+    const snapshot = await productsRef.where("status", "==", "published").limit(300).get();
+    items = snapshot.docs
+      .map((doc) => hydrateProduct(doc.id, doc.data() as Partial<Product>))
+      .filter((item) => normalizeDeviceType(item.deviceType) === deviceType);
   } catch (error) {
     if (isQuotaExceededError(error)) return [];
     throw error;
   }
-  const items = snapshot.docs
-    .map((doc) => hydrateProduct(doc.id, doc.data() as Partial<Product>))
-    .filter((item) => normalizeDeviceType(item.deviceType) === deviceType);
   items.sort((a, b) => averageRating(b.ratings) - averageRating(a.ratings));
   return items.slice(0, limit);
 }
 
 export async function listBrands(deviceType: "smartphone" | "tablet" = "smartphone"): Promise<string[]> {
-  let snapshot: Awaited<ReturnType<typeof productsRef.where>>;
+  let docs: Array<{ data: () => Partial<Product> }> = [];
   try {
-    snapshot = await productsRef.where("status", "==", "published").limit(500).get();
+    const snapshot = await productsRef.where("status", "==", "published").limit(500).get();
+    docs = snapshot.docs.map((doc) => ({ data: () => doc.data() as Partial<Product> }));
   } catch (error) {
     if (isQuotaExceededError(error)) return [];
     throw error;
   }
   const brands = new Set<string>();
-  snapshot.docs.forEach((doc) => {
-    const row = normalizeProduct(doc.data() as Partial<Product>);
+  docs.forEach((doc) => {
+    const row = normalizeProduct(doc.data());
     if (normalizeDeviceType(row.deviceType) !== deviceType) return;
     if (row.brand) brands.add(row.brand);
   });
@@ -933,19 +934,20 @@ export async function getPublishedProductBySlug(slug: string, deviceType: "smart
     }
   }
 
-  let snapshot: Awaited<ReturnType<typeof productsRef.where>>;
+  let docs: Array<{ id: string; data: () => Partial<Product> }> = [];
   try {
-    snapshot = await productsRef
+    const snapshot = await productsRef
       .where("status", "==", "published")
       .where("slug", "==", slug)
       .limit(1)
       .get();
+    docs = snapshot.docs.map((doc) => ({ id: doc.id, data: () => doc.data() as Partial<Product> }));
   } catch (error) {
     if (isQuotaExceededError(error)) return null;
     throw error;
   }
-  if (snapshot.empty) return null;
-  const item = hydrateProduct(snapshot.docs[0].id, snapshot.docs[0].data() as Partial<Product>);
+  if (docs.length === 0) return null;
+  const item = hydrateProduct(docs[0].id, docs[0].data());
   if (normalizeDeviceType(item.deviceType) !== deviceType) return null;
   return item;
 }

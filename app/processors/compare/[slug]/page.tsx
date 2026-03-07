@@ -321,7 +321,15 @@ function buildMoreMatchups(left: ProcessorProfile, right: ProcessorProfile, all:
     return da - db;
   });
 
-  const pairs: Array<{ slug: string; leftName: string; rightName: string }> = [];
+  const pairs: Array<{
+    slug: string;
+    leftSlug: string;
+    rightSlug: string;
+    leftVendor: string;
+    rightVendor: string;
+    leftName: string;
+    rightName: string;
+  }> = [];
   const seen = new Set<string>();
   const add = (a: ProcessorProfile, b: ProcessorProfile) => {
     if (!a?.slug || !b?.slug || a.slug === b.slug) return;
