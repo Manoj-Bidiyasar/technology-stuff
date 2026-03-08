@@ -1,4 +1,6 @@
 import { listPublishedProducts } from "@/lib/firestore/products";
+import { listPublishedCustomProcessorProfiles } from "@/lib/firestore/processors";
+import { unstable_cache } from "next/cache";
 import { calculateOverallScore100 } from "@/lib/utils/score";
 import { slugify } from "@/utils/slugify";
 
@@ -39,7 +41,9 @@ const DUMMY_PROCESSORS: Omit<ProcessorProfile, "slug">[] = [
   { name: "Exynos 2400", vendor: "Samsung", antutu: 1800000, fabricationNm: 4, maxCpuGhz: 3.21, gpu: "Xclipse 940", phoneCount: 0, avgPhoneScore: 8.5, topPhones: [] },
   { name: "Exynos 2500", vendor: "Samsung", antutu: 2260000, fabricationNm: 3, maxCpuGhz: 3.5, gpu: "Xclipse 950", phoneCount: 0, avgPhoneScore: 9.0, topPhones: [] },
   { name: "Unisoc T760", vendor: "Unisoc", antutu: 560000, fabricationNm: 6, maxCpuGhz: 2.4, gpu: "Mali-G57 MC4", phoneCount: 0, avgPhoneScore: 7.2, topPhones: [] },
+  { name: "Tensor G2", vendor: "Google", antutu: 980000, fabricationNm: 4, maxCpuGhz: 2.85, gpu: "Mali-G710 MP7", phoneCount: 0, avgPhoneScore: 7.5, topPhones: [] },
   { name: "Tensor G4", vendor: "Google", antutu: 1250000, fabricationNm: 4, maxCpuGhz: 3.1, gpu: "Mali-G715", phoneCount: 0, avgPhoneScore: 7.8, topPhones: [] },
+  { name: "Tensor G5", vendor: "Google", antutu: 1560000, fabricationNm: 3, maxCpuGhz: 3.3, gpu: "Mali-G720", phoneCount: 0, avgPhoneScore: 8.2, topPhones: [] },
   { name: "Snapdragon 6 Gen 4", vendor: "Qualcomm", antutu: 780000, fabricationNm: 4, maxCpuGhz: 2.3, gpu: "Adreno 7xx", phoneCount: 0, avgPhoneScore: 7.1, topPhones: [] },
 ];
 
@@ -74,7 +78,7 @@ function vendorFromChip(name: string): string {
   return "Other";
 }
 
-export async function listProcessorProfiles(): Promise<ProcessorProfile[]> {
+async function buildProcessorProfiles(): Promise<ProcessorProfile[]> {
   let products: Awaited<ReturnType<typeof listPublishedProducts>>["items"] = [];
   try {
     const rows = await listPublishedProducts({
@@ -205,5 +209,38 @@ export async function listProcessorProfiles(): Promise<ProcessorProfile[]> {
     .filter((item) => !existing.has(item.name.toLowerCase()))
     .map((item) => ({ ...item, slug: slugify(item.name) }));
 
-  return [...fromProducts, ...mergedDummy].sort((a, b) => (b.antutu || 0) - (a.antutu || 0));
+  let custom: ProcessorProfile[] = [];
+  try {
+    custom = await listPublishedCustomProcessorProfiles();
+  } catch {
+    custom = [];
+  }
+
+  const merged = new Map<string, ProcessorProfile>();
+  [...fromProducts, ...mergedDummy].forEach((item) => merged.set(item.name.toLowerCase(), item));
+  custom.forEach((item) => {
+    const slug = slugify(item.name);
+    merged.set(item.name.toLowerCase(), {
+      ...item,
+      slug,
+      topPhones: item.topPhones || [],
+    });
+  });
+
+  return [...merged.values()].sort((a, b) => (b.antutu || 0) - (a.antutu || 0));
+}
+
+const processorProfilesCacheSeconds = (() => {
+  const value = Number(process.env.PROCESSOR_PROFILES_CACHE_SECONDS || 1800);
+  return Number.isFinite(value) && value > 0 ? value : 1800;
+})();
+
+const getCachedProcessorProfiles = unstable_cache(
+  async () => buildProcessorProfiles(),
+  ["processor-profiles-v3"],
+  { revalidate: processorProfilesCacheSeconds }
+);
+
+export async function listProcessorProfiles(): Promise<ProcessorProfile[]> {
+  return getCachedProcessorProfiles();
 }

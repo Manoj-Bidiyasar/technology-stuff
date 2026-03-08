@@ -1,23 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createBlog, listAllBlogsAdmin } from "@/lib/firestore/blogs";
-import type { BlogPost } from "@/lib/types/content";
+import { createProcessor, listAllProcessorsAdmin, type ProcessorAdmin } from "@/lib/firestore/processors";
 import { requireAdmin } from "@/lib/auth/adminApi";
 
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const admin = searchParams.get("admin");
-
     if (admin === "1") {
       const unauthorized = requireAdmin(request);
       if (unauthorized) return unauthorized;
-      const items = await listAllBlogsAdmin();
+      const items = await listAllProcessorsAdmin();
       return NextResponse.json({ items });
     }
-
     return NextResponse.json({ items: [] });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Failed to fetch blogs.";
+    const message = error instanceof Error ? error.message : "Failed to fetch processors.";
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
@@ -27,16 +24,11 @@ export async function POST(request: NextRequest) {
     const unauthorized = requireAdmin(request);
     if (unauthorized) return unauthorized;
 
-    const body = (await request.json()) as BlogPost;
-
-    if (!body.title || !body.slug) {
-      return NextResponse.json({ error: "title and slug are required." }, { status: 400 });
-    }
-
-    const id = await createBlog(body);
+    const body = (await request.json()) as ProcessorAdmin;
+    const id = await createProcessor(body);
     return NextResponse.json({ id }, { status: 201 });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Failed to create blog.";
+    const message = error instanceof Error ? error.message : "Failed to create processor.";
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useState, type ReactNode } from "react";
 
 type NavItem = {
@@ -40,6 +40,16 @@ const items: NavItem[] = [
       </svg>
     ),
   },
+  {
+    href: "/admin/processors",
+    label: "Processors",
+    icon: (
+      <svg viewBox="0 0 24 24" fill="none" className="h-4 w-4" aria-hidden>
+        <rect x="7" y="7" width="10" height="10" rx="2" stroke="currentColor" strokeWidth="1.8" />
+        <path d="M4 10h3M4 14h3M17 10h3M17 14h3M10 4v3M14 4v3M10 17v3M14 17v3" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+      </svg>
+    ),
+  },
 ];
 
 function AdminNavLink({ href, label, icon }: NavItem) {
@@ -63,14 +73,26 @@ function getCrumb(pathname: string): { section: string; page: string } {
   if (pathname === "/admin") return { section: "Admin", page: "Dashboard" };
   if (pathname === "/admin/products") return { section: "Admin", page: "Products" };
   if (pathname === "/admin/blogs") return { section: "Admin", page: "Blogs" };
+  if (pathname === "/admin/processors") return { section: "Admin", page: "Processors" };
   if (/^\/admin\/blogs\/[^/]+$/.test(pathname)) return { section: "Admin / Blogs", page: "Edit Blog" };
   return { section: "Admin", page: "Panel" };
 }
 
 export default function AdminLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname();
+  const router = useRouter();
   const crumb = getCrumb(pathname || "/admin");
   const [mobileOpen, setMobileOpen] = useState(false);
+
+  async function logout() {
+    await fetch("/api/admin/logout", { method: "POST" });
+    router.replace("/admin/login");
+    router.refresh();
+  }
+
+  if (pathname?.startsWith("/admin/login")) {
+    return <div className="mx-auto min-h-screen max-w-6xl px-3 pb-6 pt-4 sm:px-4">{children}</div>;
+  }
 
   return (
     <div className="mx-auto min-h-screen max-w-6xl px-3 pb-6 pt-4 sm:px-4">
@@ -86,11 +108,20 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
           </button>
         </div>
         {mobileOpen ? (
-          <nav className="mt-2 grid gap-1">
-            {items.map((item) => (
-              <AdminNavLink key={`mobile-${item.href}`} href={item.href} label={item.label} icon={item.icon} />
-            ))}
-          </nav>
+          <div className="mt-2 grid gap-2">
+            <nav className="grid gap-1">
+              {items.map((item) => (
+                <AdminNavLink key={`mobile-${item.href}`} href={item.href} label={item.label} icon={item.icon} />
+              ))}
+            </nav>
+            <button
+              type="button"
+              onClick={logout}
+              className="rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700"
+            >
+              Logout
+            </button>
+          </div>
         ) : null}
       </section>
 
@@ -102,6 +133,13 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
               <AdminNavLink key={item.href} href={item.href} label={item.label} icon={item.icon} />
             ))}
           </nav>
+          <button
+            type="button"
+            onClick={logout}
+            className="mt-3 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100"
+          >
+            Logout
+          </button>
         </aside>
 
         <div className="space-y-3">

@@ -1010,7 +1010,7 @@ export default async function ProcessorCompareSlugPage({ params }: Props) {
                 <div className="absolute inset-0 bg-[linear-gradient(135deg,transparent_15%,rgba(255,255,255,0.06)_35%,transparent_60%)]" />
                 <div className="absolute inset-0 opacity-20 [background-image:linear-gradient(120deg,transparent_0%,transparent_42%,rgba(255,255,255,0.12)_42%,rgba(255,255,255,0.12)_48%,transparent_48%,transparent_100%)]" />
                 <div className="relative h-full p-2 sm:p-3">
-                  <div className={`absolute left-1/2 top-1/2 w-[88%] -translate-x-1/2 -translate-y-1/2 text-center bg-gradient-to-r from-[#ffe6a7] via-[#ffd37a] to-[#f5b35c] bg-clip-text ${leftTile.brand === "MEDIATEK" ? "text-[9px]" : "text-[7px]"} font-black uppercase leading-none tracking-[0.005em] text-transparent drop-shadow-[0_0_6px_rgba(255,210,120,0.35)] sm:text-[10px] md:text-[14px] md:tracking-[0.05em]`}>
+                  <div className={`absolute left-1/2 top-1/2 w-[88%] -translate-x-1/2 -translate-y-1/2 text-center bg-gradient-to-r from-[#ffe6a7] via-[#ffd37a] to-[#f5b35c] bg-clip-text ${(leftTile.brand === "MEDIATEK" || leftTile.brand === "GOOGLE") ? "text-[9px]" : "text-[7px]"} font-black uppercase leading-none tracking-[0.005em] text-transparent drop-shadow-[0_0_6px_rgba(255,210,120,0.35)] sm:text-[10px] md:text-[14px] md:tracking-[0.05em]`}>
                     {leftTile.brand}
                   </div>
                   {leftSeries ? (
@@ -1055,7 +1055,7 @@ export default async function ProcessorCompareSlugPage({ params }: Props) {
                 <div className="absolute inset-0 bg-[linear-gradient(135deg,transparent_15%,rgba(255,255,255,0.06)_35%,transparent_60%)]" />
                 <div className="absolute inset-0 opacity-20 [background-image:linear-gradient(120deg,transparent_0%,transparent_42%,rgba(255,255,255,0.12)_42%,rgba(255,255,255,0.12)_48%,transparent_48%,transparent_100%)]" />
                 <div className="relative h-full p-2 sm:p-3">
-                  <div className={`absolute left-1/2 top-1/2 w-[88%] -translate-x-1/2 -translate-y-1/2 text-center bg-gradient-to-r from-[#ffe6a7] via-[#ffd37a] to-[#f5b35c] bg-clip-text ${rightTile.brand === "MEDIATEK" ? "text-[9px]" : "text-[7px]"} font-black uppercase leading-none tracking-[0.005em] text-transparent drop-shadow-[0_0_6px_rgba(255,210,120,0.35)] sm:text-[10px] md:text-[14px] md:tracking-[0.05em]`}>
+                  <div className={`absolute left-1/2 top-1/2 w-[88%] -translate-x-1/2 -translate-y-1/2 text-center bg-gradient-to-r from-[#ffe6a7] via-[#ffd37a] to-[#f5b35c] bg-clip-text ${(rightTile.brand === "MEDIATEK" || rightTile.brand === "GOOGLE") ? "text-[9px]" : "text-[7px]"} font-black uppercase leading-none tracking-[0.005em] text-transparent drop-shadow-[0_0_6px_rgba(255,210,120,0.35)] sm:text-[10px] md:text-[14px] md:tracking-[0.05em]`}>
                     {rightTile.brand}
                   </div>
                   {rightSeries ? (

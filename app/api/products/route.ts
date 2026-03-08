@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createProduct, getPublishedProductBySlug, listAllProductsAdmin, searchProductSuggestions } from "@/lib/firestore/products";
 import type { Product } from "@/lib/types/content";
+import { requireAdmin } from "@/lib/auth/adminApi";
 
 export async function GET(request: NextRequest) {
   try {
@@ -39,6 +40,8 @@ export async function GET(request: NextRequest) {
     }
 
     if (admin === "1") {
+      const unauthorized = requireAdmin(request);
+      if (unauthorized) return unauthorized;
       const all = searchParams.get("all");
       const items = await listAllProductsAdmin(all === "1" ? undefined : deviceType);
       return NextResponse.json({ items });
@@ -53,6 +56,9 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    const unauthorized = requireAdmin(request);
+    if (unauthorized) return unauthorized;
+
     const body = (await request.json()) as Product;
 
     if (!body.name || !body.brand) {

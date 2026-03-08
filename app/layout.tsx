@@ -3,7 +3,7 @@ import Link from "next/link";
 import { Sora, Space_Mono } from "next/font/google";
 import MainNav from "@/components/MainNav";
 import LayoutHeaderSearch from "@/components/LayoutHeaderSearch";
-import { listLatestProducts } from "@/lib/firestore/products";
+import { listHeaderSuggestionsCached } from "@/lib/firestore/products";
 import "./globals.css";
 
 const sora = Sora({
@@ -27,32 +27,8 @@ export const metadata: Metadata = {
     "Mobile phone reviews, complete specifications, side-by-side comparisons, and buying guides.",
 };
 
-function isQuotaExceededError(error: unknown): boolean {
-  const code = String((error as { code?: string | number } | null)?.code ?? "").toLowerCase();
-  const message = String((error as { message?: string } | null)?.message ?? "").toLowerCase();
-  return (
-    code === "8" ||
-    code.includes("resource-exhausted") ||
-    message.includes("resource_exhausted") ||
-    message.includes("quota exceeded")
-  );
-}
-
 export default async function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
-  const [latestMobiles, latestTablets] = await Promise.all([
-    listLatestProducts(12, "smartphone").catch((error) => {
-      if (isQuotaExceededError(error)) return [];
-      throw error;
-    }),
-    listLatestProducts(12, "tablet").catch((error) => {
-      if (isQuotaExceededError(error)) return [];
-      throw error;
-    }),
-  ]);
-  const headerSuggestions = [
-    ...latestMobiles.map((item) => ({ name: item.name, slug: item.slug, brand: item.brand, deviceType: "smartphone" as const })),
-    ...latestTablets.map((item) => ({ name: item.name, slug: item.slug, brand: item.brand, deviceType: "tablet" as const })),
-  ];
+  const headerSuggestions = await listHeaderSuggestionsCached();
 
   return (
     <html lang="en">

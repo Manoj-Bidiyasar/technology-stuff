@@ -885,6 +885,44 @@ export async function listLatestProducts(limit = 8, deviceType: "smartphone" | "
   return rows.items;
 }
 
+export type HeaderSuggestion = {
+  name: string;
+  slug: string;
+  brand: string;
+  deviceType: "smartphone" | "tablet";
+};
+
+const headerSuggestionsCacheSeconds = (() => {
+  const value = Number(process.env.HEADER_SUGGESTIONS_CACHE_SECONDS || 1800);
+  return Number.isFinite(value) && value > 0 ? value : 1800;
+})();
+
+const getCachedHeaderSuggestions = unstable_cache(
+  async (): Promise<HeaderSuggestion[]> => {
+    const [latestMobiles, latestTablets] = await Promise.all([
+      listLatestProducts(12, "smartphone").catch((error) => {
+        if (isQuotaExceededError(error)) return [];
+        throw error;
+      }),
+      listLatestProducts(12, "tablet").catch((error) => {
+        if (isQuotaExceededError(error)) return [];
+        throw error;
+      }),
+    ]);
+
+    return [
+      ...latestMobiles.map((item) => ({ name: item.name, slug: item.slug, brand: item.brand, deviceType: "smartphone" as const })),
+      ...latestTablets.map((item) => ({ name: item.name, slug: item.slug, brand: item.brand, deviceType: "tablet" as const })),
+    ];
+  },
+  ["header-suggestions-v1"],
+  { revalidate: headerSuggestionsCacheSeconds }
+);
+
+export async function listHeaderSuggestionsCached(): Promise<HeaderSuggestion[]> {
+  return getCachedHeaderSuggestions();
+}
+
 export async function listTrendingProducts(limit = 8, deviceType: "smartphone" | "tablet" = "smartphone"): Promise<Product[]> {
   let items: Product[] = [];
   try {

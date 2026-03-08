@@ -19,6 +19,11 @@ export default function AdminHome() {
           <h2 className="text-lg font-bold text-slate-900">Blogs</h2>
           <p className="mt-1 text-sm text-slate-600">Create articles, edit HTML content, and publish updates.</p>
         </Link>
+
+        <Link href="/admin/processors" className="panel block p-4 transition hover:border-blue-300">
+          <h2 className="text-lg font-bold text-slate-900">Processors</h2>
+          <p className="mt-1 text-sm text-slate-600">Manage processor list entries, classes, and compare coverage.</p>
+        </Link>
       </section>
     </main>
   );

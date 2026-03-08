@@ -1,14 +1,13 @@
 import type { Metadata } from "next";
-import ProcessorCompareClient from "@/components/ProcessorCompareClient";
+import ProcessorsLandingClient from "@/components/ProcessorsLandingClient";
 import { listProcessorProfiles } from "@/lib/processors/profiles";
 
 export const metadata: Metadata = {
-  title: "Processor Comparison",
-  description: "Compare smartphone processors by benchmark, process node, CPU clock, and practical device scores.",
+  title: "Processors",
+  description: "Explore smartphone processors with benchmarks, node size, clocks, device score, and quick compare tools.",
 };
 
 export default async function ProcessorsPage() {
   const processors = await listProcessorProfiles();
-  return <ProcessorCompareClient processors={processors} />;
+  return <ProcessorsLandingClient processors={processors} />;
 }
-

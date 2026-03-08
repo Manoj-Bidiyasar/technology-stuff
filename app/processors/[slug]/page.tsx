@@ -1663,7 +1663,8 @@ export default async function ProcessorDetailPage({ params }: Props) {
                         : "bg-gradient-to-r from-[#ffe6a7] via-[#ffd37a] to-[#f5b35c] text-transparent";
 
               const brandPosClass = exynos ? "left-2 top-1/2 text-left" : "left-1/2 top-1/2 -translate-x-1/2 text-center";
-              const brandSizeClass = exynos ? "text-[11px]" : unisoc ? "text-[11px]" : apple ? "text-[12px]" : "text-[10px]";
+              const google = tile.brand === "GOOGLE";
+              const brandSizeClass = exynos ? "text-[11px]" : unisoc ? "text-[11px]" : apple ? "text-[12px]" : google ? "text-[12px]" : "text-[10px]";
 
               const seriesClass = series?.isPremium
                 ? "font-bold uppercase tracking-[0.08em] text-[#f6c874]"

@@ -1,37 +1,36 @@
 import { NextRequest, NextResponse } from "next/server";
-import { deleteBlog, updateBlog } from "@/lib/firestore/blogs";
-import type { BlogPost } from "@/lib/types/content";
+import { deleteProcessor, updateProcessor, type ProcessorAdmin } from "@/lib/firestore/processors";
 import { requireAdmin } from "@/lib/auth/adminApi";
 
-type BlogRouteProps = {
+type Props = {
   params: Promise<{ id: string }>;
 };
 
-export async function PUT(request: NextRequest, { params }: BlogRouteProps) {
+export async function PUT(request: NextRequest, { params }: Props) {
   try {
     const unauthorized = requireAdmin(request);
     if (unauthorized) return unauthorized;
 
     const { id } = await params;
-    const body = (await request.json()) as Partial<BlogPost>;
-    await updateBlog(id, body);
+    const body = (await request.json()) as Partial<ProcessorAdmin>;
+    await updateProcessor(id, body);
     return NextResponse.json({ ok: true });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Failed to update blog.";
+    const message = error instanceof Error ? error.message : "Failed to update processor.";
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
 
-export async function DELETE(_request: NextRequest, { params }: BlogRouteProps) {
+export async function DELETE(_request: NextRequest, { params }: Props) {
   try {
     const unauthorized = requireAdmin(_request);
     if (unauthorized) return unauthorized;
 
     const { id } = await params;
-    await deleteBlog(id);
+    await deleteProcessor(id);
     return NextResponse.json({ ok: true });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Failed to delete blog.";
+    const message = error instanceof Error ? error.message : "Failed to delete processor.";
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
