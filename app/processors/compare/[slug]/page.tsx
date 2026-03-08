@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { isValidElement, type ReactNode } from "react";
+import ProcessorChipVisual from "@/components/ProcessorChipVisual";
+import ProcessorNameLabel, { getProcessorLabelLines } from "@/components/ProcessorNameLabel";
 import ProcessorCompareMoreSection from "@/components/ProcessorCompareMoreSection";
 import { getProcessorDetailBySlug } from "@/lib/processors/details";
 import { listProcessorProfiles, type ProcessorProfile } from "@/lib/processors/profiles";
@@ -187,105 +189,9 @@ function valueScore(profile: ProcessorProfile): number {
   return Math.round(avg * 0.7 + usage * 0.3);
 }
 
-function getChipTileMeta(name: string, vendor: string): { brand: string; series?: string; tone: string; edge: string } {
-  const lower = name.toLowerCase();
-  if ((/qualcomm/i.test(vendor) || /snapdragon/i.test(name)) && /elite/i.test(name)) {
-    return {
-      brand: "SNAPDRAGON",
-      series: "ELITE",
-      tone: "bg-gradient-to-br from-[#090d14] via-[#1a1b1e] to-[#6b4a17] text-[#ffe8b2]",
-      edge: "shadow-[0_0_0_1px_rgba(244,198,105,0.85),0_0_22px_rgba(245,175,73,0.5),0_0_34px_rgba(255,208,120,0.35)]",
-    };
-  }
-  if (/qualcomm/i.test(vendor) || /snapdragon/i.test(name)) {
-    return {
-      brand: "SNAPDRAGON",
-      tone: "bg-gradient-to-br from-[#101726] via-[#1f2b40] to-[#5e4523] text-[#f7e2b5]",
-      edge: "shadow-[0_0_0_1px_rgba(212,172,98,0.65),0_0_14px_rgba(196,146,52,0.3),0_0_26px_rgba(59,130,246,0.2)]",
-    };
-  }
-  if (/samsung/i.test(vendor) || /exynos/i.test(lower)) {
-    return {
-      brand: "SAMSUNG",
-      series: "EXYNOS",
-      tone: "bg-gradient-to-br from-[#070d1b] via-[#101b33] to-[#0c1324] text-[#dbeafe]",
-      edge: "shadow-[0_0_0_1px_rgba(59,130,246,0.6),0_0_18px_rgba(37,99,235,0.35),0_0_32px_rgba(59,130,246,0.25)]",
-    };
-  }
-  if (/apple/i.test(vendor) || /^apple\s+/i.test(name)) {
-    return {
-      brand: "APPLE",
-      tone: "bg-gradient-to-br from-[#0b1020] via-[#1a2442] to-[#2b3f70] text-[#e5eefc]",
-      edge: "shadow-[0_0_0_1px_rgba(148,163,184,0.7),0_0_18px_rgba(59,130,246,0.28),0_0_30px_rgba(148,163,184,0.2)]",
-    };
-  }
-  if (/mediatek/i.test(vendor) || /dimensity|helio/i.test(lower)) {
-    return {
-      brand: "MEDIATEK",
-      series: /dimensity/i.test(lower) ? "DIMENSITY" : "HELIO",
-      tone: "bg-gradient-to-br from-[#060b14] via-[#0a1322] to-[#12294a] text-[#f8e9c2]",
-      edge: "shadow-[0_0_0_1px_rgba(245,188,96,0.75),0_0_18px_rgba(255,170,82,0.45),0_0_32px_rgba(59,130,246,0.35)]",
-    };
-  }
-  return {
-    brand: vendor.toUpperCase(),
-    tone: "bg-gradient-to-br from-slate-900 to-slate-700 text-slate-100",
-    edge: "shadow-[0_0_0_1px_rgba(148,163,184,0.55),0_0_18px_rgba(100,116,139,0.2)]",
-  };
-}
-
-function getChipSeriesInfo(name: string, vendor: string): { line1: string; line2?: string; isPremium?: boolean } | null {
-  const n = String(name || "").trim();
-  if (/qualcomm/i.test(vendor) || /snapdragon/i.test(n)) {
-    const m = n.match(/snapdragon\s+(.+)$/i);
-    const suffix = String(m?.[1] || "").trim();
-    if (suffix) return { line1: suffix.toUpperCase(), isPremium: /elite/i.test(suffix) };
-    return { line1: "SNAPDRAGON" };
-  }
-  if (/mediatek/i.test(vendor) || /dimensity|helio/i.test(n)) {
-    const d = n.match(/dimensity\s+(.+)$/i);
-    if (d?.[1]) return { line1: "DIMENSITY", line2: d[1].trim().toUpperCase(), isPremium: true };
-    const h = n.match(/helio\s+(.+)$/i);
-    if (h?.[1]) return { line1: "HELIO", line2: h[1].trim().toUpperCase() };
-    return { line1: "MEDIATEK" };
-  }
-  if (/samsung/i.test(vendor) || /exynos/i.test(n)) {
-    const ex = n.match(/exynos\s+(.+)$/i);
-    return ex?.[1] ? { line1: "EXYNOS", line2: ex[1].trim().toUpperCase() } : { line1: "EXYNOS" };
-  }
-  if (/apple/i.test(vendor) || /^apple\s+/i.test(n)) {
-    const ap = n.match(/^apple\s+(.+)$/i);
-    return ap?.[1] ? { line1: ap[1].trim().toUpperCase(), isPremium: true } : { line1: "A-SERIES", isPremium: true };
-  }
-  return null;
-}
-
 function compareNameLines(name: string, vendor: string): { line1: string; line2: string } {
-  const raw = String(name || "").trim();
-  const v = String(vendor || "").trim().toLowerCase();
-  if (/qualcomm/i.test(v) || /snapdragon/i.test(raw)) {
-    const stripped = raw.replace(/^qualcomm\s+/i, "").trim();
-    return { line1: "Qualcomm", line2: stripped || "Snapdragon" };
-  }
-  if (/mediatek/i.test(v) || /dimensity|helio/i.test(raw)) {
-    const stripped = raw.replace(/^mediatek\s+/i, "").trim();
-    return { line1: "MediaTek", line2: stripped || "Dimensity" };
-  }
-  if (/samsung/i.test(v) || /exynos/i.test(raw)) {
-    const stripped = raw.replace(/^samsung\s+/i, "").trim();
-    return { line1: "Samsung", line2: stripped || "Exynos" };
-  }
-  if (/apple/i.test(v) || /^apple\s+/i.test(raw)) {
-    const stripped = raw.replace(/^apple\s+/i, "").trim();
-    return { line1: "Apple", line2: stripped || raw };
-  }
-  if (/unisoc/i.test(v) || /unisoc/i.test(raw)) {
-    const stripped = raw.replace(/^unisoc\s+/i, "").trim();
-    return { line1: "Unisoc", line2: stripped || raw };
-  }
-  const line1 = raw.split(/\s+/)[0] || raw;
-  const line2 = raw.replace(new RegExp(`^${line1}\\s+`, "i"), "").trim() || raw;
-  return { line1, line2 };
+  const lines = getProcessorLabelLines(name, vendor);
+  return { line1: lines.line1, line2: lines.line2 || "" };
 }
 
 function inferCoreCount(detail?: Awaited<ReturnType<typeof getProcessorDetailBySlug>>): string {
@@ -966,11 +872,6 @@ export default async function ProcessorCompareSlugPage({ params }: Props) {
     getProcessorDetailBySlug(left.slug),
     getProcessorDetailBySlug(right.slug),
   ]);
-  const leftTile = getChipTileMeta(left.name, left.vendor);
-  const rightTile = getChipTileMeta(right.name, right.vendor);
-  const leftSeries = getChipSeriesInfo(left.name, left.vendor);
-  const rightSeries = getChipSeriesInfo(right.name, right.vendor);
-
   const sections = buildSections(left, right, leftDetail, rightDetail);
   const moreMatchups = buildMoreMatchups(left, right, profiles);
 
@@ -992,7 +893,7 @@ export default async function ProcessorCompareSlugPage({ params }: Props) {
           <p className="mt-1 text-sm text-slate-600">Processor specification comparison</p>
         </div>
 
-        <div className="grid grid-cols-[1fr_48px_1fr] border-b border-slate-200 sm:grid-cols-[1fr_72px_1fr]">
+        <div className="grid grid-cols-[1fr_42px_1fr] border-b border-slate-200 max-[360px]:grid-cols-[1fr_38px_1fr] sm:grid-cols-[1fr_72px_1fr]">
           <div className="bg-white px-2 py-3 sm:px-4">
             <div className="mb-2 flex justify-end">
               <Link
@@ -1005,38 +906,22 @@ export default async function ProcessorCompareSlugPage({ params }: Props) {
               </Link>
             </div>
             <Link href={`/processors/${left.slug}`} className="mx-auto flex w-fit flex-col items-center text-center hover:opacity-95">
-              <div className={`relative h-16 w-16 overflow-hidden rounded-md border border-white/10 sm:h-24 sm:w-24 md:h-28 md:w-28 ${leftTile.tone} ${leftTile.edge}`}>
-                <div className="absolute inset-0 bg-[radial-gradient(circle_at_18%_15%,rgba(255,255,255,0.15),transparent_36%)]" />
-                <div className="absolute inset-0 bg-[linear-gradient(135deg,transparent_15%,rgba(255,255,255,0.06)_35%,transparent_60%)]" />
-                <div className="absolute inset-0 opacity-20 [background-image:linear-gradient(120deg,transparent_0%,transparent_42%,rgba(255,255,255,0.12)_42%,rgba(255,255,255,0.12)_48%,transparent_48%,transparent_100%)]" />
-                <div className="relative h-full p-2 sm:p-3">
-                  <div className={`absolute left-1/2 top-1/2 w-[88%] -translate-x-1/2 -translate-y-1/2 text-center bg-gradient-to-r from-[#ffe6a7] via-[#ffd37a] to-[#f5b35c] bg-clip-text ${(leftTile.brand === "MEDIATEK" || leftTile.brand === "GOOGLE") ? "text-[9px]" : "text-[7px]"} font-black uppercase leading-none tracking-[0.005em] text-transparent drop-shadow-[0_0_6px_rgba(255,210,120,0.35)] sm:text-[10px] md:text-[14px] md:tracking-[0.05em]`}>
-                    {leftTile.brand}
-                  </div>
-                  {leftSeries ? (
-                    <div className="absolute bottom-1.5 right-1.5 max-w-[70%] text-right leading-tight sm:bottom-2.5 sm:right-2.5 sm:max-w-[62%]">
-                      <div className={`text-[6px] sm:text-[8px] md:text-[9px] ${leftSeries.isPremium ? "font-bold uppercase tracking-[0.04em] md:tracking-[0.08em] text-[#f6c874]" : "font-semibold tracking-[0.02em] text-slate-100"}`}>{leftSeries.line1}</div>
-                      {leftSeries.line2 ? <div className={`text-[7px] sm:text-[9px] md:text-[10px] ${leftSeries.isPremium ? "font-black uppercase tracking-[0.02em] md:tracking-[0.04em] text-[#ffe3a9]" : "font-semibold tracking-[0.02em] text-slate-200"}`}>{leftSeries.line2}</div> : null}
-                    </div>
-                  ) : null}
-                </div>
-              </div>
-              {(() => {
-                const n = compareNameLines(left.name, left.vendor);
-                return (
-                  <>
-                    <span className="mt-2 block max-w-[130px] text-center leading-tight text-slate-900 md:hidden">
-                      <span className="block text-xs font-extrabold sm:text-sm">{n.line1}</span>
-                      <span className="block text-xs font-extrabold sm:text-sm">{n.line2}</span>
-                    </span>
-                    <span className="mt-2 hidden text-lg font-extrabold text-slate-900 md:block">{left.name}</span>
-                  </>
-                );
-              })()}
+              <ProcessorChipVisual
+                name={left.name}
+                vendor={left.vendor}
+                className="h-[clamp(4.5rem,24vw,7rem)] w-[clamp(4.5rem,24vw,7rem)] sm:h-24 sm:w-24 md:h-28 md:w-28"
+              />
+              <ProcessorNameLabel
+                name={left.name}
+                vendor={left.vendor}
+                allowSingleLine={false}
+                className="mt-2 max-w-[180px] min-h-[2.3rem] text-slate-900"
+                lineClassName="text-xs font-extrabold leading-tight sm:text-sm md:text-base md:leading-5"
+              />
             </Link>
           </div>
           <div className="flex items-center justify-center bg-slate-50">
-            <span className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-slate-900 text-sm font-extrabold text-white sm:h-11 sm:w-11">VS</span>
+            <span className="inline-flex h-[clamp(1.9rem,8.8vw,2.25rem)] w-[clamp(1.9rem,8.8vw,2.25rem)] items-center justify-center rounded-full bg-slate-900 text-[clamp(0.75rem,3.2vw,0.9rem)] font-extrabold text-white sm:h-11 sm:w-11 sm:text-sm">VS</span>
           </div>
           <div className="bg-white px-2 py-3 sm:px-4">
             <div className="mb-2 flex justify-end">
@@ -1050,34 +935,18 @@ export default async function ProcessorCompareSlugPage({ params }: Props) {
               </Link>
             </div>
             <Link href={`/processors/${right.slug}`} className="mx-auto flex w-fit flex-col items-center text-center hover:opacity-95">
-              <div className={`relative h-16 w-16 overflow-hidden rounded-md border border-white/10 sm:h-24 sm:w-24 md:h-28 md:w-28 ${rightTile.tone} ${rightTile.edge}`}>
-                <div className="absolute inset-0 bg-[radial-gradient(circle_at_18%_15%,rgba(255,255,255,0.15),transparent_36%)]" />
-                <div className="absolute inset-0 bg-[linear-gradient(135deg,transparent_15%,rgba(255,255,255,0.06)_35%,transparent_60%)]" />
-                <div className="absolute inset-0 opacity-20 [background-image:linear-gradient(120deg,transparent_0%,transparent_42%,rgba(255,255,255,0.12)_42%,rgba(255,255,255,0.12)_48%,transparent_48%,transparent_100%)]" />
-                <div className="relative h-full p-2 sm:p-3">
-                  <div className={`absolute left-1/2 top-1/2 w-[88%] -translate-x-1/2 -translate-y-1/2 text-center bg-gradient-to-r from-[#ffe6a7] via-[#ffd37a] to-[#f5b35c] bg-clip-text ${(rightTile.brand === "MEDIATEK" || rightTile.brand === "GOOGLE") ? "text-[9px]" : "text-[7px]"} font-black uppercase leading-none tracking-[0.005em] text-transparent drop-shadow-[0_0_6px_rgba(255,210,120,0.35)] sm:text-[10px] md:text-[14px] md:tracking-[0.05em]`}>
-                    {rightTile.brand}
-                  </div>
-                  {rightSeries ? (
-                    <div className="absolute bottom-1.5 right-1.5 max-w-[70%] text-right leading-tight sm:bottom-2.5 sm:right-2.5 sm:max-w-[62%]">
-                      <div className={`text-[6px] sm:text-[8px] md:text-[9px] ${rightSeries.isPremium ? "font-bold uppercase tracking-[0.04em] md:tracking-[0.08em] text-[#f6c874]" : "font-semibold tracking-[0.02em] text-slate-100"}`}>{rightSeries.line1}</div>
-                      {rightSeries.line2 ? <div className={`text-[7px] sm:text-[9px] md:text-[10px] ${rightSeries.isPremium ? "font-black uppercase tracking-[0.02em] md:tracking-[0.04em] text-[#ffe3a9]" : "font-semibold tracking-[0.02em] text-slate-200"}`}>{rightSeries.line2}</div> : null}
-                    </div>
-                  ) : null}
-                </div>
-              </div>
-              {(() => {
-                const n = compareNameLines(right.name, right.vendor);
-                return (
-                  <>
-                    <span className="mt-2 block max-w-[130px] text-center leading-tight text-slate-900 md:hidden">
-                      <span className="block text-xs font-extrabold sm:text-sm">{n.line1}</span>
-                      <span className="block text-xs font-extrabold sm:text-sm">{n.line2}</span>
-                    </span>
-                    <span className="mt-2 hidden text-lg font-extrabold text-slate-900 md:block">{right.name}</span>
-                  </>
-                );
-              })()}
+              <ProcessorChipVisual
+                name={right.name}
+                vendor={right.vendor}
+                className="h-[clamp(4.5rem,24vw,7rem)] w-[clamp(4.5rem,24vw,7rem)] sm:h-24 sm:w-24 md:h-28 md:w-28"
+              />
+              <ProcessorNameLabel
+                name={right.name}
+                vendor={right.vendor}
+                allowSingleLine={false}
+                className="mt-2 max-w-[180px] min-h-[2.3rem] text-slate-900"
+                lineClassName="text-xs font-extrabold leading-tight sm:text-sm md:text-base md:leading-5"
+              />
             </Link>
           </div>
         </div>

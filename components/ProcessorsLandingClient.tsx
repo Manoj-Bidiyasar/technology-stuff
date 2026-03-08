@@ -75,6 +75,7 @@ export default function ProcessorsLandingClient({ processors }: Props) {
   const [rightText, setRightText] = useState(bySlug.get(initialRightSlug) ? fullProcessorName(bySlug.get(initialRightSlug) as ProcessorProfile) : "");
   const [leftFocused, setLeftFocused] = useState(false);
   const [rightFocused, setRightFocused] = useState(false);
+  const [isTrayVisible, setIsTrayVisible] = useState(true);
 
   const left = bySlug.get(leftSlug);
   const right = bySlug.get(rightSlug);
@@ -126,6 +127,7 @@ export default function ProcessorsLandingClient({ processors }: Props) {
   function addToCompare(slug: string) {
     const item = bySlug.get(slug);
     if (!item) return;
+    setIsTrayVisible(true);
 
     if (!leftSlug) {
       setLeftSlug(item.slug);
@@ -143,6 +145,21 @@ export default function ProcessorsLandingClient({ processors }: Props) {
       setRightSlug(item.slug);
       setRightText(fullProcessorName(item));
     }
+  }
+
+  function clearLeftSelection() {
+    setLeftSlug("");
+    setLeftText("");
+  }
+
+  function clearRightSelection() {
+    setRightSlug("");
+    setRightText("");
+  }
+
+  function clearAllSelection() {
+    clearLeftSelection();
+    clearRightSelection();
   }
 
   return (
@@ -477,13 +494,47 @@ export default function ProcessorsLandingClient({ processors }: Props) {
         </div>
       ) : null}
 
-      <section className="fixed inset-x-0 bottom-3 z-40 px-3 sm:bottom-4">
-        <div className="mx-auto w-full max-w-3xl rounded-2xl border border-slate-200 bg-white/95 p-2 shadow-lg backdrop-blur">
-          <p className="px-1 pb-1 text-[11px] font-bold uppercase tracking-wide text-slate-500">Build Your Processor Comparison</p>
+      {isTrayVisible ? (
+        <section className="fixed inset-x-0 bottom-3 z-40 px-3 sm:bottom-4">
+          <div className="mx-auto w-full max-w-3xl rounded-2xl border border-slate-200 bg-white/95 p-2 shadow-lg backdrop-blur">
+            <div className="flex items-center justify-between gap-2 px-1 pb-1">
+              <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Build Your Processor Comparison</p>
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={clearAllSelection}
+                  className="rounded-md border border-slate-300 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-slate-600 hover:text-slate-800"
+                >
+                  Clear
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsTrayVisible(false)}
+                  aria-label="Close compare tray"
+                  className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-slate-300 text-slate-500 hover:text-slate-700"
+                >
+                  <svg viewBox="0 0 24 24" fill="none" className="h-3.5 w-3.5" aria-hidden="true">
+                    <path d="M6 6l12 12M18 6 6 18" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+                  </svg>
+                </button>
+              </div>
+            </div>
           <div className="grid items-center gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
             <div className="grid grid-cols-[minmax(0,1fr)_24px_minmax(0,1fr)] items-center gap-2 rounded-xl bg-slate-50 px-2 py-2">
               <div className="min-w-0 rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs font-semibold text-slate-700">
-                <span className="block truncate">{left ? fullProcessorName(left) : "Pick Left Processor"}</span>
+                <div className="flex items-center gap-1">
+                  <span className="block min-w-0 flex-1 truncate">{left ? fullProcessorName(left) : "Pick Left Processor"}</span>
+                  {left ? (
+                    <button
+                      type="button"
+                      onClick={clearLeftSelection}
+                      aria-label="Remove left processor"
+                      className="inline-flex h-4 w-4 items-center justify-center rounded-full border border-slate-300 text-[10px] text-slate-500 hover:text-slate-700"
+                    >
+                      x
+                    </button>
+                  ) : null}
+                </div>
               </div>
               <button
                 type="button"
@@ -508,7 +559,19 @@ export default function ProcessorsLandingClient({ processors }: Props) {
                 </svg>
               </button>
               <div className="min-w-0 rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs font-semibold text-slate-700">
-                <span className="block truncate">{right ? fullProcessorName(right) : "Pick Right Processor"}</span>
+                <div className="flex items-center gap-1">
+                  <span className="block min-w-0 flex-1 truncate">{right ? fullProcessorName(right) : "Pick Right Processor"}</span>
+                  {right ? (
+                    <button
+                      type="button"
+                      onClick={clearRightSelection}
+                      aria-label="Remove right processor"
+                      className="inline-flex h-4 w-4 items-center justify-center rounded-full border border-slate-300 text-[10px] text-slate-500 hover:text-slate-700"
+                    >
+                      x
+                    </button>
+                  ) : null}
+                </div>
               </div>
             </div>
 
@@ -523,8 +586,9 @@ export default function ProcessorsLandingClient({ processors }: Props) {
               </button>
             </div>
           </div>
-        </div>
-      </section>
+          </div>
+        </section>
+      ) : null}
     </main>
   );
 }

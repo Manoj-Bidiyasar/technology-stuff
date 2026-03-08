@@ -1,8 +1,11 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { Poppins } from "next/font/google";
 import { notFound } from "next/navigation";
 import { isValidElement, type ReactNode } from "react";
 import ProcessorComments from "@/components/ProcessorComments";
+import ProcessorChipVisual from "@/components/ProcessorChipVisual";
+import ProcessorNameLabel from "@/components/ProcessorNameLabel";
 import SectionChipNav from "@/components/SectionChipNav";
 import SimilarProcessorsGrid from "@/components/SimilarProcessorsGrid";
 import { getProcessorDetailBySlug } from "@/lib/processors/details";
@@ -11,6 +14,11 @@ import { listProcessorProfiles, type ProcessorProfile } from "@/lib/processors/p
 type Props = {
   params: Promise<{ slug: string }>;
 };
+
+const poppins = Poppins({
+  subsets: ["latin"],
+  weight: ["500", "600"],
+});
 
 function decimal(value?: number, digits = 1): string {
   if (!Number.isFinite(value)) return "-";
@@ -283,7 +291,7 @@ function getChipTileMeta(name: string, vendor: string): { brand: string; series?
     return {
       brand: "SNAPDRAGON",
       series: "ELITE",
-      tone: "bg-gradient-to-br from-[#090d14] via-[#1a1b1e] to-[#6b4a17] text-[#ffe8b2]",
+      tone: "bg-gradient-to-br from-[#090d14] via-[#171b24] to-[#2a2f3a] text-[#ffe8b2]",
       edge: "shadow-[0_0_0_1px_rgba(244,198,105,0.85),0_0_22px_rgba(245,175,73,0.5),0_0_34px_rgba(255,208,120,0.35)]",
     };
   }
@@ -291,13 +299,20 @@ function getChipTileMeta(name: string, vendor: string): { brand: string; series?
     return {
       brand: "SNAPDRAGON",
       series: "8 SERIES",
-      tone: "bg-gradient-to-br from-[#101726] via-[#1f2b40] to-[#5e4523] text-[#f7e2b5]",
+      tone: "bg-gradient-to-br from-[#101726] via-[#1f2b40] to-[#2b3444] text-[#f7e2b5]",
       edge: "shadow-[0_0_0_1px_rgba(212,172,98,0.65),0_0_14px_rgba(196,146,52,0.3),0_0_26px_rgba(59,130,246,0.2)]",
     };
   }
   if (tier === "series7gen" || tier === "series7legacy" || tier === "series6" || tier === "series4" || tier === "series2") {
+    const series =
+      tier === "series7gen" ? "7 GEN" :
+      tier === "series7legacy" ? "7 SERIES" :
+      tier === "series6" ? "6 SERIES" :
+      tier === "series4" ? "4 SERIES" :
+      "2 SERIES";
     return {
       brand: "SNAPDRAGON",
+      series,
       tone: "bg-gradient-to-br from-slate-900 to-slate-700 text-slate-100",
       edge: "shadow-[0_0_0_1px_rgba(148,163,184,0.55),0_0_18px_rgba(100,116,139,0.2)]",
     };
@@ -305,6 +320,7 @@ function getChipTileMeta(name: string, vendor: string): { brand: string; series?
   if (tier === "other") {
     return {
       brand: "SNAPDRAGON",
+      series: "OTHER",
       tone: "bg-gradient-to-br from-slate-900 to-slate-700 text-slate-100",
       edge: "shadow-[0_0_0_1px_rgba(148,163,184,0.55),0_0_18px_rgba(100,116,139,0.2)]",
     };
@@ -442,28 +458,39 @@ function getChipSeriesInfo(
   if (/snapdragon/i.test(n) || /qualcomm/i.test(vendor)) {
     const suffix = normalizeSnapdragonSuffix(getSnapdragonSuffix(n));
     if (suffix) {
-      const tier = getSnapdragonTier(n, vendor);
-      if (tier === "elite") {
-        return { line1: suffix.toUpperCase(), isPremium: true };
+      const clean = suffix.replace(/\s+/g, " ").trim();
+      const displayHead = (value: string) =>
+        value
+          .replace(/\s*\+\s*/g, "+")
+          .replace(/\belite\b/gi, "Elite")
+          .trim();
+      const genMatch = clean.match(/^(.*?)(?:\s+)?gen\s*(\d+)$/i);
+
+      if (genMatch) {
+        const rawHead = String(genMatch[1] || "").replace(/\s*\+\s*/g, "+").trim();
+        const head = rawHead ? displayHead(rawHead) : "Snapdragon";
+        const gen = Number(genMatch[2]);
+        return {
+          line1: head,
+          line2: Number.isFinite(gen) ? `GEN ${gen}` : undefined,
+          isPremium: /\belite\b/i.test(rawHead),
+        };
       }
-      if (tier === "series8") {
-        return { line1: suffix.toUpperCase(), isPremium: false };
-      }
-      if (tier === "series7gen" || tier === "series7legacy") {
-        return { line1: suffix.toUpperCase(), isPremium: false };
-      }
-      if (tier === "series6" || tier === "series4" || tier === "series2") {
-        return { line1: suffix.toUpperCase(), isPremium: false };
-      }
-      return { line1: titleCaseWords(suffix) };
+
+      const single = displayHead(clean);
+      return {
+        line1: single,
+        isPremium: /\belite\b/i.test(single),
+      };
     }
+    return { line1: "SNAPDRAGON" };
   }
   if (/exynos/i.test(n) || /samsung/i.test(vendor)) {
     const ex = n.match(/exynos\s+(.+)$/i);
     if (ex?.[1]) {
-      return { line1: "EXYNOS", line2: ex[1].trim().toUpperCase() };
+      return { line1: "Exynos", line2: ex[1].trim() };
     }
-    return { line1: "EXYNOS" };
+    return { line1: "Exynos" };
   }
   if (/unisoc/i.test(n) || /tiger/i.test(n) || /unisoc/i.test(vendor)) {
     const uni = n.match(/(?:unisoc|tiger)\s+(.+)$/i);
@@ -478,6 +505,11 @@ function getChipSeriesInfo(
       return { line1: ap[1].trim().toUpperCase(), isPremium: true };
     }
     return { line1: "A-SERIES", isPremium: true };
+  }
+  if (/tensor/i.test(n) || /google/i.test(vendor)) {
+    const g = n.match(/(?:google\s+)?tensor\s+(.+)$/i);
+    if (g?.[1]) return { line1: `Tensor ${g[1].trim()}` };
+    return { line1: "Tensor" };
   }
   if (vendor.toLowerCase() === "mediatek") {
     const dim = n.match(/dimensity\s+(.+)$/i);
@@ -1023,17 +1055,41 @@ export default async function ProcessorDetailPage({ params }: Props) {
   const chipSeries = getChipSeriesInfo(p.name, p.vendor);
   const isExynosTile = chipTile.brand === "SAMSUNG";
   const isUnisocTile = chipTile.brand === "UNISOC";
+  const isMediaTekTile = chipTile.brand === "MEDIATEK";
   const isAppleTile = chipTile.brand === "APPLE";
+  const isGoogleTile = chipTile.brand === "GOOGLE";
+  const isSnapdragonTile = chipTile.brand === "SNAPDRAGON";
+  const snapdragonTier = getSnapdragonTier(p.name, p.vendor);
+  const isSnapdragon8Tier = isSnapdragonTile && (snapdragonTier === "elite" || snapdragonTier === "series8");
+  const isSnapdragon6Tier = isSnapdragonTile && snapdragonTier === "series6";
+  const isSnapdragon4Tier = isSnapdragonTile && snapdragonTier === "series4";
+  const isSnapdragon2Tier = isSnapdragonTile && snapdragonTier === "series2";
+  const isSnapdragonOtherTier = isSnapdragonTile && snapdragonTier === "other";
+  const isSnapdragonEliteTile = isSnapdragonTile && Boolean(chipSeries?.isPremium);
   const isSnapdragon7GenTier = chipTile.series === "7 GEN";
   const isSnapdragon7LegacyTier = chipTile.series === "7 SERIES";
+  const isMediaTekDimensity = isMediaTekTile && String(chipSeries?.line1 || "").toLowerCase() === "dimensity";
+  const isMediaTekHelio = isMediaTekTile && /^helio/i.test(String(chipSeries?.line1 || ""));
   const displayName = formatProcessorDisplayName(p.name, p.vendor);
   const computedNetworkType = compactNetworkBadge(formatNetworkSupport(detail || {}));
   const maxNetworkType = computedNetworkType !== "-" ? computedNetworkType : (isAppleTile ? "5G" : "");
-  const tileNetworkClass = isSnapdragon7GenTier ? "text-slate-700" : "text-white/95";
-  const tileBrandClass = isSnapdragon7GenTier
-    ? "bg-none text-[#e0162d]"
-    : isSnapdragon7LegacyTier
-      ? "bg-none text-[#ff5667]"
+  const tileNetworkClass = "text-white/95";
+  const tileBrandClass = isSnapdragon8Tier
+    ? "bg-none text-[#f2bd46]"
+    : isSnapdragonTile
+      ? "bg-none text-white"
+      : isGoogleTile
+        ? "bg-none text-[#eef4ff]"
+      : isSnapdragon6Tier
+        ? "bg-none text-[#32d1b7]"
+      : isSnapdragon4Tier
+        ? "bg-none text-[#8ea2ff]"
+      : isSnapdragon2Tier
+        ? "bg-none text-[#b7c0cf]"
+      : isSnapdragonOtherTier
+        ? "bg-none text-[#d4dae4]"
+      : isSnapdragonTile
+        ? "bg-none text-[#d4dae4]"
       : isExynosTile
         ? "bg-none text-white"
         : isUnisocTile
@@ -1041,34 +1097,112 @@ export default async function ProcessorDetailPage({ params }: Props) {
         : isAppleTile
           ? "bg-none text-[#f3f7ff]"
         : "bg-gradient-to-r from-[#ffe6a7] via-[#ffd37a] to-[#f5b35c] text-transparent";
-  const tileBrandPositionClass = isExynosTile ? "left-3 top-1/2 text-left" : "left-1/2 top-1/2 -translate-x-1/2 text-center";
-  const tileBrandSizeClass = isExynosTile ? "text-[16px] sm:text-[17px]" : isUnisocTile ? "text-[15px] sm:text-[16px]" : isAppleTile ? "text-[17px] sm:text-[18px]" : "text-[13px] sm:text-[14px]";
-  const tileSeriesClass = chipSeries?.isPremium
-    ? "font-bold uppercase tracking-[0.08em] text-[#f6c874] sm:text-[10px]"
-    : isSnapdragon7GenTier
-      ? "font-bold tracking-[0.03em] text-[#e0162d] sm:text-[10px]"
-      : isSnapdragon7LegacyTier
-        ? "font-semibold tracking-[0.03em] text-[#ff7b88] sm:text-[10px]"
+  const tileBrandPositionClass = "left-1/2 top-1/2 -translate-x-1/2 text-center";
+  const tileBrandSizeClass = isExynosTile
+    ? "text-[16px] sm:text-[17px]"
+    : isUnisocTile
+      ? "text-[15px] sm:text-[16px]"
+      : isAppleTile
+        ? "text-[17px] sm:text-[18px]"
+        : isSnapdragonTile
+          ? ""
+          : "text-[12px] sm:text-[13px]";
+  const tileBrandTrackingClass = isSnapdragonTile || isGoogleTile || isAppleTile || isUnisocTile || isExynosTile || isMediaTekTile ? "tracking-[0.02em]" : "tracking-[0.04em]";
+  const tileBrandLeadingClass = isSnapdragonTile || isGoogleTile || isAppleTile || isUnisocTile || isExynosTile || isMediaTekTile ? "leading-[1.08]" : "leading-none";
+  const tileBrandLabel = isSnapdragonTile ? "Snapdragon" : isAppleTile ? "Apple" : isGoogleTile ? "Google" : isExynosTile ? "Samsung" : isMediaTekTile ? "MediaTek" : chipTile.brand;
+  const tilePrimaryFontClass = isSnapdragonTile || isAppleTile || isGoogleTile || isUnisocTile || isExynosTile || isMediaTekTile ? poppins.className : "";
+  const tileBrandSizeStyle = isSnapdragonTile
+    ? { fontSize: "clamp(12px, 13cqw, 18px)" }
+    : isGoogleTile
+      ? { fontSize: "clamp(16px, 17cqw, 26px)" }
+      : isAppleTile
+        ? { fontSize: "clamp(19px, 19cqw, 30px)" }
         : isExynosTile
-          ? "font-bold uppercase tracking-[0.04em] text-slate-100 sm:text-[11px]"
+          ? { fontSize: "clamp(15px, 16cqw, 24px)" }
+        : isUnisocTile
+          ? { fontSize: "clamp(13px, 14cqw, 20px)" }
+        : isMediaTekTile
+          ? { fontSize: "clamp(14px, 15cqw, 22px)" }
+      : undefined;
+  const tileBrandWidthClass = isAppleTile
+    ? "w-[85%] max-w-[85%]"
+    : isMediaTekTile
+      ? "w-[90%] max-w-[90%]"
+      : "w-[90%] max-w-[90%]";
+  const tileContainerEdgeClass = isSnapdragon8Tier
+    ? "shadow-[0_0_0_1px_rgba(210,160,70,0.98),0_8px_16px_rgba(16,24,40,0.24)]"
+    : isSnapdragonTile
+      ? "shadow-[0_0_0_1px_rgba(236,242,255,0.9),0_8px_16px_rgba(16,24,40,0.22)]"
+    : isSnapdragonTile
+      ? "shadow-[0_0_0_1px_rgba(178,188,201,0.88),0_8px_16px_rgba(16,24,40,0.22)]"
+    : chipTile.edge;
+  const isSnapdragonSeriesCompact = isSnapdragonTile && (((chipSeries?.line1?.length || 0) >= 8) || Boolean(chipSeries?.line2));
+  const tileSeriesWrapClass = isSnapdragonTile || isMediaTekHelio ? "flex flex-col items-start gap-0.5 text-left" : isExynosTile ? "flex flex-col items-end gap-0.5 text-right" : "";
+  const tileSeriesPositionClass = isSnapdragonTile
+    ? "right-2.5 left-auto max-w-[58%] text-left"
+    : isExynosTile
+      ? "right-2.5 left-auto max-w-[62%] text-right"
+      : isMediaTekDimensity
+        ? "right-2.5 left-auto max-w-[62%] text-right"
+      : isMediaTekHelio
+        ? "right-2.5 left-auto max-w-[62%] text-left"
+      : isUnisocTile
+        ? "right-2.5 left-auto max-w-[58%] text-right"
+        : isSnapdragon7GenTier || isSnapdragon7LegacyTier
+          ? "right-2.5 left-auto max-w-[58%] text-right"
+          : "right-2.5 max-w-[60%] text-right";
+  const tileSeriesClass = chipSeries?.isPremium
+    ? isSnapdragonEliteTile
+      ? isSnapdragonSeriesCompact
+        ? "font-extrabold tracking-[0.03em] [text-shadow:none] text-[#f7d892] text-[10px] sm:text-[12px]"
+        : "font-extrabold tracking-[0.05em] [text-shadow:none] text-[#f7d892] text-[10px] sm:text-[12px]"
+      : "font-bold uppercase tracking-[0.08em] text-[#f6c874] sm:text-[10px]"
+    : isSnapdragonTile
+      ? "font-semibold tracking-[0.03em] text-white sm:text-[10px]"
+      : isExynosTile
+          ? "font-semibold tracking-[0.03em] text-slate-100 sm:text-[11px]"
           : isUnisocTile
             ? "font-bold uppercase tracking-[0.04em] text-emerald-100 sm:text-[10px]"
           : isAppleTile
             ? "font-bold uppercase tracking-[0.04em] text-slate-100 sm:text-[11px]"
           : "font-semibold tracking-[0.02em] text-slate-100 sm:text-[10px]";
   const tileSeriesLine2Class = chipSeries?.isPremium
-    ? "font-black uppercase tracking-[0.04em] text-[#ffe3a9] sm:text-[11px]"
-    : isSnapdragon7GenTier
-      ? "font-bold uppercase tracking-[0.04em] text-[#b90f22] sm:text-[10px]"
-      : isSnapdragon7LegacyTier
-        ? "font-bold uppercase tracking-[0.04em] text-[#ff5d72] sm:text-[10px]"
-        : isExynosTile
-          ? "font-black uppercase tracking-[0.02em] text-white sm:text-[12px]"
+    ? isSnapdragonEliteTile
+      ? isSnapdragonSeriesCompact
+        ? "font-bold uppercase tracking-[0.03em] [text-shadow:none] text-[#fff1c9] text-[8px] sm:text-[9px]"
+        : "font-bold uppercase tracking-[0.02em] [text-shadow:none] text-[#fff1c9] text-[8px] sm:text-[9px]"
+      : "font-black uppercase tracking-[0.04em] text-[#ffe3a9] sm:text-[11px]"
+    : isSnapdragonTile
+      ? "font-bold uppercase tracking-[0.04em] text-[#f2f6ff] sm:text-[10px]"
+      : isExynosTile
+          ? "font-bold tracking-[0.03em] text-white sm:text-[11px]"
           : isUnisocTile
             ? "font-black uppercase tracking-[0.03em] text-emerald-50 sm:text-[11px]"
             : isAppleTile
               ? "font-black uppercase tracking-[0.03em] text-white sm:text-[12px]"
           : "font-semibold tracking-[0.02em] text-slate-200 sm:text-[10px]";
+  const tileSeriesLine1Style = isSnapdragonTile
+    ? { fontSize: "clamp(10px, 9cqw, 14px)" }
+    : isGoogleTile
+      ? { fontSize: "clamp(10px, 10cqw, 15px)" }
+      : isAppleTile
+        ? { fontSize: "clamp(10px, 10cqw, 15px)" }
+        : isMediaTekTile
+          ? { fontSize: "clamp(10px, 10.2cqw, 16px)" }
+        : isUnisocTile
+          ? { fontSize: "clamp(9px, 9cqw, 13px)" }
+        : isExynosTile
+          ? { fontSize: "clamp(9px, 9.5cqw, 14px)" }
+      : undefined;
+  const tileSeriesLine2Style = isSnapdragonTile
+    ? { fontSize: "clamp(8px, 7cqw, 11px)" }
+    : isGoogleTile || isAppleTile || isUnisocTile || isExynosTile || isMediaTekTile
+      ? isExynosTile
+        ? { fontSize: "clamp(8px, 8.2cqw, 12px)" }
+        : isMediaTekTile
+          ? { fontSize: "clamp(8px, 7.2cqw, 11px)" }
+        : { fontSize: "clamp(8px, 7cqw, 10px)" }
+      : undefined;
   const orderedTopSpecs = [
     { label: "GPU", value: p.gpu || "", kind: "gpu" },
     { label: "Fabrication Process", value: p.fabricationNm ? `${p.fabricationNm}nm` : (detail?.process || ""), kind: "fabrication" },
@@ -1141,8 +1275,8 @@ export default async function ProcessorDetailPage({ params }: Props) {
     slug: item.slug,
     antutu: item.antutu,
     fullName: formatFullProcessorName(item.name, item.vendor),
-    tile: getChipTileMeta(item.name, item.vendor),
-    series: getChipSeriesInfo(item.name, item.vendor),
+    rawName: item.name,
+    vendor: item.vendor,
   }));
   const commentRows = [
     {
@@ -1182,7 +1316,7 @@ export default async function ProcessorDetailPage({ params }: Props) {
           <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_300px]">
             <div className="grid grid-cols-[112px_minmax(0,1fr)] gap-3 md:grid-cols-[124px_minmax(0,1fr)] md:gap-4">
               <div className="space-y-2">
-                <div className={`relative mx-auto h-28 w-28 overflow-hidden rounded-md border border-white/10 sm:h-32 sm:w-32 ${chipTile.tone} ${chipTile.edge}`}>
+                <div className={`relative mx-auto h-28 w-28 overflow-hidden rounded-md border border-white/10 [container-type:inline-size] sm:h-32 sm:w-32 ${chipTile.tone} ${tileContainerEdgeClass}`}>
                   <div className="absolute inset-0 bg-[radial-gradient(circle_at_18%_15%,rgba(255,255,255,0.15),transparent_36%)]" />
                   <div className="absolute inset-0 bg-[linear-gradient(135deg,transparent_15%,rgba(255,255,255,0.06)_35%,transparent_60%)]" />
                   <div className="absolute inset-0 opacity-20 [background-image:linear-gradient(120deg,transparent_0%,transparent_42%,rgba(255,255,255,0.12)_42%,rgba(255,255,255,0.12)_48%,transparent_48%,transparent_100%)]" />
@@ -1195,23 +1329,25 @@ export default async function ProcessorDetailPage({ params }: Props) {
                   ) : null}
                   <div className="relative h-full p-3">
                     {maxNetworkType ? (
-                      <div className={`absolute right-2 top-2 text-[10px] font-black uppercase tracking-[0.08em] sm:text-[11px] ${tileNetworkClass}`}>
+                      <div className={`absolute right-0 top-2 inline-flex min-w-[2.2rem] items-center justify-center text-[10px] font-black uppercase tracking-[0.08em] sm:text-[11px] ${tileNetworkClass}`}>
                         {maxNetworkType}
                       </div>
                     ) : null}
-                    <div className={`absolute -translate-y-1/2 overflow-hidden whitespace-nowrap bg-clip-text font-black uppercase leading-none tracking-[0.05em] ${isExynosTile || isUnisocTile ? "" : "drop-shadow-[0_0_6px_rgba(255,210,120,0.35)]"} ${tileBrandClass} ${tileBrandPositionClass} ${tileBrandSizeClass}`}>
-                      {chipTile.brand}
+                    <div style={tileBrandSizeStyle} className={`absolute -translate-y-1/2 ${tileBrandWidthClass} ${isSnapdragonTile || isGoogleTile ? "overflow-visible" : "overflow-hidden"} whitespace-nowrap bg-clip-text text-center ${tileBrandLeadingClass} ${isSnapdragonTile || isMediaTekTile ? "font-semibold" : "font-black"} ${isSnapdragonTile || isAppleTile || isGoogleTile || isMediaTekTile ? "" : "uppercase"} ${tilePrimaryFontClass} ${tileBrandTrackingClass} ${isExynosTile || isUnisocTile || isSnapdragonTile || isGoogleTile ? "" : "drop-shadow-[0_0_6px_rgba(255,210,120,0.35)]"} ${tileBrandClass} ${tileBrandPositionClass} ${tileBrandSizeClass}`}>
+                      {tileBrandLabel}
                     </div>
                     {chipSeries ? (
-                      <div className={`absolute bottom-2.5 ${isExynosTile ? "right-2.5 left-auto max-w-[62%] text-right" : isUnisocTile ? "right-2.5 left-auto max-w-[58%] text-right" : isSnapdragon7GenTier || isSnapdragon7LegacyTier ? "right-2.5 left-auto max-w-[58%] text-right" : "right-2.5 max-w-[60%] text-right"} leading-tight`}>
+                      <div className={`absolute bottom-2.5 ${tileSeriesPositionClass} leading-tight ${tileSeriesWrapClass}`}>
                         <div
-                          className={`truncate text-[9px] ${tileSeriesClass}`}
+                          style={tileSeriesLine1Style}
+                          className={`truncate ${tilePrimaryFontClass} ${isSnapdragonTile ? "" : "text-[9px]"} ${tileSeriesClass}`}
                         >
                           {chipSeries.line1}
                         </div>
                         {chipSeries.line2 ? (
                           <div
-                            className={`text-[10px] ${tileSeriesLine2Class}`}
+                            style={tileSeriesLine2Style}
+                            className={`${tilePrimaryFontClass} ${isSnapdragonTile ? "" : "text-[10px]"} ${tileSeriesLine2Class}`}
                           >
                             {chipSeries.line2}
                           </div>
@@ -1635,108 +1771,35 @@ export default async function ProcessorDetailPage({ params }: Props) {
         </div>
         <ol className="grid grid-cols-1 gap-3 px-4 pb-4 pt-1 md:grid-cols-2">
           {competitorRows.map((item) => {
-            const itemTile = getChipTileMeta(item.name, item.vendor);
-            const itemSeries = getChipSeriesInfo(item.name, item.vendor);
-            const leftSeries = getChipSeriesInfo(p.name, p.vendor);
-            const leftFullName = formatFullProcessorName(p.name, p.vendor);
-            const rightFullName = formatFullProcessorName(item.name, item.vendor);
-            function miniVisual(
-              tile: ReturnType<typeof getChipTileMeta>,
-              series: ReturnType<typeof getChipSeriesInfo>
-            ) {
-              const exynos = tile.brand === "SAMSUNG";
-              const unisoc = tile.brand === "UNISOC";
-              const apple = tile.brand === "APPLE";
-              const snap7gen = tile.series === "7 GEN";
-              const snap7legacy = tile.series === "7 SERIES";
-
-              const brandClass = snap7gen
-                ? "bg-none text-[#e0162d]"
-                : snap7legacy
-                  ? "bg-none text-[#ff5667]"
-                  : exynos
-                    ? "bg-none text-white"
-                    : unisoc
-                      ? "bg-none text-[#d1fae5]"
-                      : apple
-                        ? "bg-none text-[#f3f7ff]"
-                        : "bg-gradient-to-r from-[#ffe6a7] via-[#ffd37a] to-[#f5b35c] text-transparent";
-
-              const brandPosClass = exynos ? "left-2 top-1/2 text-left" : "left-1/2 top-1/2 -translate-x-1/2 text-center";
-              const google = tile.brand === "GOOGLE";
-              const brandSizeClass = exynos ? "text-[11px]" : unisoc ? "text-[11px]" : apple ? "text-[12px]" : google ? "text-[12px]" : "text-[10px]";
-
-              const seriesClass = series?.isPremium
-                ? "font-bold uppercase tracking-[0.08em] text-[#f6c874]"
-                : snap7gen
-                  ? "font-bold tracking-[0.03em] text-[#e0162d]"
-                  : snap7legacy
-                    ? "font-semibold tracking-[0.03em] text-[#ff7b88]"
-                    : exynos
-                      ? "font-bold uppercase tracking-[0.04em] text-slate-100"
-                      : unisoc
-                        ? "font-bold uppercase tracking-[0.04em] text-emerald-100"
-                        : apple
-                          ? "font-bold uppercase tracking-[0.04em] text-slate-100"
-                          : "font-semibold tracking-[0.02em] text-slate-100";
-
-              const seriesLine2Class = series?.isPremium
-                ? "font-black uppercase tracking-[0.04em] text-[#ffe3a9]"
-                : snap7gen
-                  ? "font-bold uppercase tracking-[0.04em] text-[#b90f22]"
-                  : snap7legacy
-                    ? "font-bold uppercase tracking-[0.04em] text-[#ff5d72]"
-                    : exynos
-                      ? "font-black uppercase tracking-[0.02em] text-white"
-                      : unisoc
-                        ? "font-black uppercase tracking-[0.03em] text-emerald-50"
-                        : apple
-                          ? "font-black uppercase tracking-[0.03em] text-white"
-                          : "font-semibold tracking-[0.02em] text-slate-200";
-
-              return (
-                <span className={`relative inline-flex h-[92px] w-[92px] shrink-0 overflow-hidden rounded-lg border border-white/10 ${tile.tone} ${tile.edge}`}>
-                  <span className="absolute inset-0 bg-[radial-gradient(circle_at_18%_15%,rgba(255,255,255,0.15),transparent_36%)]" />
-                  <span className="absolute inset-0 bg-[linear-gradient(135deg,transparent_15%,rgba(255,255,255,0.06)_35%,transparent_60%)]" />
-                  <span className="absolute inset-0 opacity-20 [background-image:linear-gradient(120deg,transparent_0%,transparent_42%,rgba(255,255,255,0.12)_42%,rgba(255,255,255,0.12)_48%,transparent_48%,transparent_100%)]" />
-                  {apple ? (
-                    <span className="pointer-events-none absolute inset-0 flex items-center justify-center opacity-20">
-                      <svg viewBox="0 0 24 24" className="h-16 w-16 text-white/80" aria-hidden="true">
-                        <path fill="currentColor" d="M16.37 12.2c.02 2.49 2.2 3.32 2.23 3.33-.02.06-.35 1.2-1.14 2.37-.68 1-1.39 1.99-2.5 2.01-1.1.02-1.45-.65-2.71-.65-1.27 0-1.65.63-2.69.67-1.07.04-1.9-1.08-2.58-2.08-1.4-2.03-2.47-5.73-1.03-8.24.71-1.25 1.98-2.03 3.35-2.05 1.04-.02 2.01.7 2.71.7.7 0 2-.86 3.37-.73.57.02 2.17.23 3.2 1.74-.08.05-1.9 1.11-1.88 3.23Zm-2.2-6.32c.57-.69.96-1.65.85-2.61-.82.03-1.81.54-2.39 1.23-.53.61-.99 1.59-.86 2.53.91.07 1.84-.46 2.4-1.15Z" />
-                      </svg>
-                    </span>
-                  ) : null}
-                  <span className="relative h-full w-full p-1.5">
-                    <span className={`absolute -translate-y-1/2 overflow-hidden whitespace-nowrap bg-clip-text font-black uppercase leading-none tracking-[0.04em] ${brandClass} ${brandPosClass} ${brandSizeClass}`}>
-                      {tile.brand}
-                    </span>
-                    {series ? (
-                      <span className={`absolute bottom-2 ${exynos || unisoc || snap7gen || snap7legacy ? "right-1.5 max-w-[66%] text-right" : "right-1.5 max-w-[70%] text-right"} leading-tight`}>
-                        <span className={`block truncate text-[9px] ${seriesClass}`}>{series.line1}</span>
-                        {series.line2 ? <span className={`block truncate text-[9px] ${seriesLine2Class}`}>{series.line2}</span> : null}
-                      </span>
-                    ) : null}
-                  </span>
-                </span>
-              );
-            }
             return (
               <li key={`${p.slug}-vs-${item.slug}`}>
                 <Link
-                  href={`/processors?left=${encodeURIComponent(p.slug)}&right=${encodeURIComponent(item.slug)}`}
-                  className="block rounded-xl border border-slate-200 bg-gradient-to-b from-white to-slate-50 px-3 py-3 shadow-sm hover:border-blue-300 hover:shadow-md"
+                  href={`/processors/compare/${encodeURIComponent(p.slug)}-vs-${encodeURIComponent(item.slug)}`}
+                  className="block rounded-xl border border-slate-200 bg-gradient-to-b from-white to-slate-50 px-3 py-3 shadow-sm hover:border-blue-300 hover:shadow-md max-[360px]:px-2 max-[360px]:py-2"
                 >
                   <div className="grid grid-cols-[minmax(0,1fr)_38px_minmax(0,1fr)] items-center gap-2">
                     <div className="flex min-w-0 flex-col items-center text-center">
-                      {miniVisual(chipTile, leftSeries)}
-                      <span className="mt-1.5 text-[13px] font-bold leading-5 text-slate-900">{leftFullName}</span>
+                      <ProcessorChipVisual name={p.name} vendor={p.vendor} className="h-[92px] w-[92px] max-[360px]:h-[80px] max-[360px]:w-[80px]" />
+                      <ProcessorNameLabel
+                        name={p.name}
+                        vendor={p.vendor}
+                        singleLineMaxChars={22}
+                        className="mt-1.5 min-h-[2.4rem] px-1 text-slate-900 max-[360px]:mt-1 max-[360px]:min-h-[2rem]"
+                        lineClassName="text-[10px] font-bold leading-4 max-[360px]:text-[9px] max-[360px]:leading-4"
+                      />
                     </div>
-                    <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-blue-200 bg-blue-50 text-[11px] font-black text-blue-800 shadow-sm">
+                    <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-blue-200 bg-blue-50 text-[11px] font-black text-blue-800 shadow-sm max-[360px]:h-7 max-[360px]:w-7 max-[360px]:text-[10px]">
                       VS
                     </span>
                     <div className="flex min-w-0 flex-col items-center text-center">
-                      {miniVisual(itemTile, itemSeries)}
-                      <span className="mt-1.5 text-[13px] font-bold leading-5 text-slate-900">{rightFullName}</span>
+                      <ProcessorChipVisual name={item.name} vendor={item.vendor} className="h-[92px] w-[92px] max-[360px]:h-[80px] max-[360px]:w-[80px]" />
+                      <ProcessorNameLabel
+                        name={item.name}
+                        vendor={item.vendor}
+                        singleLineMaxChars={22}
+                        className="mt-1.5 min-h-[2.4rem] px-1 text-slate-900 max-[360px]:mt-1 max-[360px]:min-h-[2rem]"
+                        lineClassName="text-[10px] font-bold leading-4 max-[360px]:text-[9px] max-[360px]:leading-4"
+                      />
                     </div>
                   </div>
                 </Link>
@@ -1746,7 +1809,7 @@ export default async function ProcessorDetailPage({ params }: Props) {
         </ol>
         <div className="flex justify-center px-4 py-3">
           <Link
-            href={`/processors?left=${encodeURIComponent(p.slug)}`}
+            href="/processors/compare"
             className="inline-flex items-center rounded-md border border-blue-200 bg-blue-50 px-2.5 py-1.5 text-sm font-bold text-blue-700 hover:bg-blue-100"
           >
             Compare More

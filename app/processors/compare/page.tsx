@@ -67,10 +67,10 @@ export default async function ProcessorCompareListPage() {
     .filter((group) => group.items.length > 0);
 
   return (
-    <main className="mobile-container py-6 sm:py-8">
-      <section className="panel p-4 sm:p-5">
-        <h1 className="text-2xl font-extrabold text-slate-900 sm:text-3xl">Processor Compare List</h1>
-        <p className="mt-2 text-sm text-slate-600">Choose a class and open any head-to-head processor matchup.</p>
+    <main className="mobile-container py-6 max-[320px]:py-4 sm:py-8">
+      <section className="panel p-4 max-[320px]:p-3 sm:p-5">
+        <h1 className="text-2xl font-extrabold text-slate-900 max-[320px]:text-[1.75rem] sm:text-3xl">Processor Compare List</h1>
+        <p className="mt-2 text-sm text-slate-600 max-[320px]:mt-1.5 max-[320px]:text-[13px]">Choose a class and open any head-to-head processor matchup.</p>
       </section>
 
       <ProcessorCompareClassSections grouped={grouped} />

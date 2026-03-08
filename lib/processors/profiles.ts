@@ -28,7 +28,9 @@ export type ProcessorProfile = {
 const DUMMY_PROCESSORS: Omit<ProcessorProfile, "slug">[] = [
   { name: "MediaTek Dimensity 9500s", vendor: "MediaTek", antutu: 3397028, fabricationNm: 3, maxCpuGhz: 3.5, gpu: "Mali-G1 Ultra MC12", phoneCount: 0, avgPhoneScore: 9.8, topPhones: [] },
   { name: "MediaTek Helio G99 Ultimate", vendor: "MediaTek", antutu: 470000, fabricationNm: 6, maxCpuGhz: 2.2, gpu: "Mali-G57 MC2", phoneCount: 0, avgPhoneScore: 7.2, topPhones: [] },
+  { name: "MediaTek Helio G100", vendor: "MediaTek", antutu: 520000, fabricationNm: 6, maxCpuGhz: 2.4, gpu: "Mali-G57 MC2", phoneCount: 0, avgPhoneScore: 7.4, topPhones: [] },
   { name: "Snapdragon 8 Elite", vendor: "Qualcomm", antutu: 2850000, fabricationNm: 3, maxCpuGhz: 4.32, gpu: "Adreno 840", phoneCount: 0, avgPhoneScore: 9.6, topPhones: [] },
+  { name: "Snapdragon 8 Elite Gen 5", vendor: "Qualcomm", antutu: 3720000, fabricationNm: 2, maxCpuGhz: 4.75, gpu: "Adreno 850", phoneCount: 0, avgPhoneScore: 9.9, topPhones: [] },
   { name: "Dimensity 9400", vendor: "MediaTek", antutu: 2750000, fabricationNm: 3, maxCpuGhz: 3.63, gpu: "Immortalis-G925", phoneCount: 0, avgPhoneScore: 9.4, topPhones: [] },
   { name: "Apple A18 Pro", vendor: "Apple", antutu: 2650000, fabricationNm: 3, maxCpuGhz: 4.05, gpu: "Apple 6-core GPU", phoneCount: 0, avgPhoneScore: 9.3, topPhones: [] },
   { name: "Snapdragon 8 Gen 3", vendor: "Qualcomm", antutu: 2050000, fabricationNm: 4, maxCpuGhz: 3.3, gpu: "Adreno 750", phoneCount: 0, avgPhoneScore: 8.9, topPhones: [] },
@@ -237,7 +239,7 @@ const processorProfilesCacheSeconds = (() => {
 
 const getCachedProcessorProfiles = unstable_cache(
   async () => buildProcessorProfiles(),
-  ["processor-profiles-v3"],
+  ["processor-profiles-v5"],
   { revalidate: processorProfilesCacheSeconds }
 );
 
