@@ -4,6 +4,19 @@ import type { BlogPost } from "@/lib/types/content";
 
 const blogsRef = adminDb.collection("blogs");
 
+function stripUndefinedDeep(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value.map((item) => stripUndefinedDeep(item)).filter((item) => item !== undefined);
+  }
+  if (value && typeof value === "object") {
+    const entries = Object.entries(value as Record<string, unknown>)
+      .map(([key, val]) => [key, stripUndefinedDeep(val)] as const)
+      .filter(([, val]) => val !== undefined);
+    return Object.fromEntries(entries);
+  }
+  return value === undefined ? undefined : value;
+}
+
 function normalizeBlog(input: Partial<BlogPost>): BlogPost {
   return {
     title: input.title || "",
@@ -14,6 +27,22 @@ function normalizeBlog(input: Partial<BlogPost>): BlogPost {
     tags: Array.isArray(input.tags) ? input.tags : [],
     categories: Array.isArray(input.categories) ? input.categories : [],
     status: input.status || "draft",
+    seo: {
+      metaTitle: input.seo?.metaTitle || "",
+      metaDescription: input.seo?.metaDescription || "",
+      canonicalUrl: input.seo?.canonicalUrl || "",
+      focusKeyword: input.seo?.focusKeyword || "",
+      ogImage: input.seo?.ogImage || "",
+      noIndex: Boolean(input.seo?.noIndex),
+    },
+    workflow: {
+      stage: input.workflow?.stage || "draft",
+      priority: input.workflow?.priority || "medium",
+      assignee: input.workflow?.assignee || "",
+      dueDate: input.workflow?.dueDate || "",
+      notes: input.workflow?.notes || "",
+      lastAutoSavedAt: input.workflow?.lastAutoSavedAt,
+    },
     createdAt: input.createdAt,
     updatedAt: input.updatedAt,
   };
@@ -98,7 +127,7 @@ export async function getBlogById(id: string): Promise<BlogPost | null> {
 export async function createBlog(data: BlogPost): Promise<string> {
   const payload = normalizeBlog(data);
   const ref = await blogsRef.add({
-    ...payload,
+    ...(stripUndefinedDeep(payload) as Record<string, unknown>),
     createdAt: FieldValue.serverTimestamp(),
     updatedAt: FieldValue.serverTimestamp(),
   });
@@ -108,7 +137,7 @@ export async function createBlog(data: BlogPost): Promise<string> {
 export async function updateBlog(id: string, data: Partial<BlogPost>): Promise<void> {
   const payload = normalizeBlog(data);
   await blogsRef.doc(id).update({
-    ...payload,
+    ...(stripUndefinedDeep(payload) as Record<string, unknown>),
     updatedAt: FieldValue.serverTimestamp(),
   });
 }

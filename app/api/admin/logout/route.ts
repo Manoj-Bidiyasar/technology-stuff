@@ -1,7 +1,11 @@
-import { NextResponse } from "next/server";
-import { ADMIN_SESSION_COOKIE } from "@/lib/auth/admin";
+import { NextRequest, NextResponse } from "next/server";
+import { destroyAdminSession } from "@/lib/auth/admin";
+import { ADMIN_SESSION_COOKIE } from "@/lib/auth/constants";
 
-export async function POST() {
+export async function POST(request: NextRequest) {
+  const token = request.cookies.get(ADMIN_SESSION_COOKIE)?.value || "";
+  await destroyAdminSession(token);
+
   const response = NextResponse.json({ ok: true });
   response.cookies.set({
     name: ADMIN_SESSION_COOKIE,
@@ -14,4 +18,3 @@ export async function POST() {
   });
   return response;
 }
-

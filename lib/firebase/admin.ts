@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { cert, getApps, initializeApp } from "firebase-admin/app";
+import { getAuth } from "firebase-admin/auth";
 import { getFirestore } from "firebase-admin/firestore";
 
 function loadServiceAccount() {
@@ -42,3 +43,4 @@ const adminApp =
   });
 
 export const adminDb = getFirestore(adminApp);
+export const adminAuth = getAuth(adminApp);

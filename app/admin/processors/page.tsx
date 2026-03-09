@@ -1,34 +1,59 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import type { ProcessorAdmin } from "@/lib/firestore/processors";
+import { slugify } from "@/utils/slugify";
 
-function emptyProcessor(): ProcessorAdmin {
-  return {
-    name: "",
-    vendor: "Qualcomm",
-    antutu: 0,
-    fabricationNm: undefined,
-    maxCpuGhz: undefined,
-    gpu: "",
-    avgPhoneScore: 0,
-    status: "published",
-    scheduledAt: "",
-  };
-}
+type StatusFilter = "all" | "draft" | "review" | "published" | "scheduled" | "recently_deleted";
+const BRAND_OPTIONS = ["Samsung", "Qualcomm", "MediaTek", "Apple", "Google", "Unisoc", "Huawei", "Intel", "AMD"];
+const BRAND_TITLE_HINTS: Record<string, string[]> = {
+  Samsung: ["Exynos"],
+  Qualcomm: ["Snapdragon"],
+  MediaTek: ["Dimensity", "Helio"],
+  Google: ["Tensor"],
+  Apple: ["A", "M"],
+  Unisoc: ["Tiger", "T"],
+  Huawei: ["Kirin"],
+  Intel: ["Core", "Atom"],
+  AMD: ["Ryzen"],
+};
 
 export default function AdminProcessorsPage() {
   const [rows, setRows] = useState<ProcessorAdmin[]>([]);
-  const [form, setForm] = useState<ProcessorAdmin>(emptyProcessor());
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [saving, setSaving] = useState(false);
+  const [query, setQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+  const [vendorFilter, setVendorFilter] = useState("all");
+  const [classFilter, setClassFilter] = useState("all");
+  const [createTitle, setCreateTitle] = useState("");
+  const [createBrand, setCreateBrand] = useState("");
+  const [createSlugInput, setCreateSlugInput] = useState("");
+  const [createSlugEdited, setCreateSlugEdited] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
 
-  const total = useMemo(() => rows.length, [rows]);
+  const suggestedSlug = useMemo(() => slugify(createTitle || ""), [createTitle]);
+  const createSlug = useMemo(
+    () => slugify((createSlugEdited ? createSlugInput : suggestedSlug) || createTitle || ""),
+    [createSlugEdited, createSlugInput, suggestedSlug, createTitle]
+  );
+  const createDocId = createSlug;
+  const createTitleSuggestions = useMemo(() => {
+    const hints = BRAND_TITLE_HINTS[createBrand] || [];
+    if (!createBrand || hints.length === 0) return [];
+    const raw = createTitle.trim();
+    const afterBrand = raw.toLowerCase().startsWith(createBrand.toLowerCase()) ? raw.slice(createBrand.length).trim() : raw;
+    if (!afterBrand) return hints;
+    return hints.filter((item) => item.toLowerCase().startsWith(afterBrand.toLowerCase()));
+  }, [createBrand, createTitle]);
+  const isCreateDocDuplicate = useMemo(
+    () => Boolean(createDocId) && rows.some((row) => String(row.id || "").toLowerCase() === createDocId.toLowerCase()),
+    [createDocId, rows]
+  );
 
   async function refresh() {
-    const response = await fetch("/api/processors?admin=1", { cache: "no-store" });
+    const response = await fetch("/api/processors?admin=1", { cache: "no-store", credentials: "include" });
     const json = await response.json();
     setRows((json.items || []) as ProcessorAdmin[]);
   }
@@ -37,231 +62,371 @@ export default function AdminProcessorsPage() {
     refresh().catch((err) => setError(err instanceof Error ? err.message : "Failed to load processors."));
   }, []);
 
-  function setField<K extends keyof ProcessorAdmin>(key: K, value: ProcessorAdmin[K]) {
-    setForm((prev) => ({ ...prev, [key]: value }));
-  }
-
-  function editRow(row: ProcessorAdmin) {
-    setEditingId(row.id || null);
-    setForm({
-      ...emptyProcessor(),
-      ...row,
-      status: row.status || "published",
+  const filteredRows = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return rows.filter((row) => {
+      if (statusFilter !== "all" && (row.status || "published") !== statusFilter) return false;
+      if (vendorFilter !== "all" && String(row.vendor || "").toLowerCase() !== vendorFilter.toLowerCase()) return false;
+      const rowClass = String(row.detail?.className || "").trim().toLowerCase();
+      if (classFilter !== "all" && rowClass !== classFilter.toLowerCase()) return false;
+      if (!q) return true;
+      const hay = [row.name, row.vendor, row.id, row.gpu, row.status].map((v) => String(v || "").toLowerCase()).join(" ");
+      return hay.includes(q);
     });
-    setMessage("");
-    setError("");
+  }, [classFilter, query, rows, statusFilter, vendorFilter]);
+
+  const vendorOptions = useMemo(
+    () => ["all", ...Array.from(new Set(rows.map((row) => String(row.vendor || "").trim()).filter(Boolean))).sort((a, b) => a.localeCompare(b))],
+    [rows]
+  );
+
+  const classOptions = useMemo(
+    () => ["all", ...Array.from(new Set(rows.map((row) => String(row.detail?.className || "").trim()).filter(Boolean))).sort((a, b) => a.localeCompare(b))],
+    [rows]
+  );
+
+  async function changeStatus(id: string, status: ProcessorAdmin["status"]) {
+    const response = await fetch(`/api/processors/${id}`, {
+      method: "PUT",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status }),
+    });
+    const json = await response.json();
+    if (!response.ok) throw new Error(json.error || "Status update failed.");
   }
 
-  function resetForm() {
-    setEditingId(null);
-    setForm(emptyProcessor());
-  }
-
-  async function onSubmit(event: React.FormEvent) {
-    event.preventDefault();
-    setSaving(true);
-    setMessage("");
+  async function moveToRecentlyDeleted(id?: string) {
+    if (!id) return;
+    if (!window.confirm("Move this processor to Recently Deleted?")) return;
     setError("");
-
+    setMessage("");
     try {
-      const response = await fetch(editingId ? `/api/processors/${editingId}` : "/api/processors", {
-        method: editingId ? "PUT" : "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form),
-      });
-      const json = await response.json();
-      if (!response.ok) throw new Error(json.error || "Failed to save processor.");
-
-      setMessage(editingId ? "Processor updated." : "Processor created.");
-      resetForm();
+      await changeStatus(id, "recently_deleted");
+      setMessage("Processor moved to recently deleted.");
       await refresh();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to save processor.");
-    } finally {
-      setSaving(false);
+      setError(err instanceof Error ? err.message : "Failed to move.");
     }
   }
 
-  async function removeProcessor(id?: string) {
+  async function restoreProcessor(id?: string) {
     if (!id) return;
-    if (!window.confirm("Delete this processor?")) return;
     setError("");
     setMessage("");
     try {
-      const response = await fetch(`/api/processors/${id}`, { method: "DELETE" });
-      const json = await response.json();
-      if (!response.ok) throw new Error(json.error || "Delete failed.");
-      setMessage("Processor deleted.");
-      if (editingId === id) resetForm();
+      await changeStatus(id, "draft");
+      setMessage("Processor restored as draft.");
       await refresh();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Delete failed.");
+      setError(err instanceof Error ? err.message : "Restore failed.");
+    }
+  }
+
+  async function deletePermanently(id?: string) {
+    if (!id) return;
+    if (!window.confirm("Delete this processor permanently?")) return;
+    setError("");
+    setMessage("");
+    try {
+      const response = await fetch(`/api/processors/${id}`, { method: "DELETE", credentials: "include" });
+      const json = await response.json();
+      if (!response.ok) throw new Error(json.error || "Permanent delete failed.");
+      setMessage("Processor deleted permanently.");
+      await refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Permanent delete failed.");
+    }
+  }
+
+  async function moveSelectedToRecentlyDeleted() {
+    if (selectedIds.length === 0) return;
+    if (!window.confirm(`Move ${selectedIds.length} selected processor(s) to Recently Deleted?`)) return;
+    setError("");
+    setMessage("");
+    try {
+      await Promise.all(selectedIds.map((id) => changeStatus(id, "recently_deleted")));
+      setSelectedIds([]);
+      setMessage("Selected processors moved to recently deleted.");
+      await refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Bulk move failed.");
     }
   }
 
   return (
     <main className="space-y-4">
-      <section className="panel p-4 sm:p-5">
-        <h1 className="text-xl font-extrabold text-slate-900">{editingId ? "Edit Processor" : "Create Processor"}</h1>
-        <p className="mt-1 text-sm text-slate-600">Create independent processor entries directly from this panel.</p>
-      </section>
-
-      <form onSubmit={onSubmit} className="panel grid gap-3 p-4 sm:p-5">
-        <div className="grid gap-3 sm:grid-cols-2">
-          <label className="grid gap-1">
-            <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">Processor Name</span>
-            <input
-              value={form.name}
-              onChange={(e) => setField("name", e.target.value)}
-              placeholder="e.g. Tensor G2"
-              className="rounded-lg border border-slate-200 px-3 py-2"
-              required
-            />
-          </label>
-
-          <label className="grid gap-1">
-            <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">Vendor</span>
-            <input
-              value={form.vendor}
-              onChange={(e) => setField("vendor", e.target.value)}
-              placeholder="e.g. Google"
-              className="rounded-lg border border-slate-200 px-3 py-2"
-              required
-            />
-          </label>
-
-          <label className="grid gap-1">
-            <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">AnTuTu Score</span>
-            <input
-              type="number"
-              min={0}
-              value={form.antutu || 0}
-              onChange={(e) => setField("antutu", Number(e.target.value || 0))}
-              className="rounded-lg border border-slate-200 px-3 py-2"
-              required
-            />
-          </label>
-
-          <label className="grid gap-1">
-            <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">Fabrication (nm)</span>
-            <input
-              type="number"
-              step="0.1"
-              min={0}
-              value={form.fabricationNm ?? ""}
-              onChange={(e) => setField("fabricationNm", e.target.value ? Number(e.target.value) : undefined)}
-              className="rounded-lg border border-slate-200 px-3 py-2"
-            />
-          </label>
-
-          <label className="grid gap-1">
-            <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">Max CPU (GHz)</span>
-            <input
-              type="number"
-              step="0.01"
-              min={0}
-              value={form.maxCpuGhz ?? ""}
-              onChange={(e) => setField("maxCpuGhz", e.target.value ? Number(e.target.value) : undefined)}
-              className="rounded-lg border border-slate-200 px-3 py-2"
-            />
-          </label>
-
-          <label className="grid gap-1">
-            <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">GPU</span>
-            <input
-              value={form.gpu || ""}
-              onChange={(e) => setField("gpu", e.target.value)}
-              placeholder="e.g. Mali-G710 MP7"
-              className="rounded-lg border border-slate-200 px-3 py-2"
-            />
-          </label>
-
-          <label className="grid gap-1">
-            <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">Avg Score / 10</span>
-            <input
-              type="number"
-              step="0.1"
-              min={0}
-              max={10}
-              value={form.avgPhoneScore ?? 0}
-              onChange={(e) => setField("avgPhoneScore", Number(e.target.value || 0))}
-              className="rounded-lg border border-slate-200 px-3 py-2"
-            />
-          </label>
-
-          <label className="grid gap-1">
-            <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">Status</span>
-            <select
-              value={form.status || "published"}
-              onChange={(e) => {
-                const nextStatus = e.target.value as ProcessorAdmin["status"];
-                setField("status", nextStatus);
-                if (nextStatus !== "scheduled") setField("scheduledAt", "");
-              }}
-              className="rounded-lg border border-slate-200 px-3 py-2"
-            >
-              <option value="published">Published</option>
-              <option value="draft">Draft</option>
-              <option value="scheduled">Scheduled</option>
-            </select>
-          </label>
-
-          {form.status === "scheduled" ? (
-            <label className="grid gap-1 sm:col-span-2">
-              <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">Scheduled Date & Time</span>
-              <input
-                type="datetime-local"
-                value={form.scheduledAt || ""}
-                onChange={(e) => setField("scheduledAt", e.target.value)}
-                className="rounded-lg border border-slate-200 px-3 py-2"
-              />
-            </label>
-          ) : null}
-        </div>
-
-        <div className="flex flex-wrap gap-2">
-          <button type="submit" disabled={saving} className="rounded-lg bg-blue-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60">
-            {saving ? "Saving..." : editingId ? "Update Processor" : "Create Processor"}
-          </button>
-          {editingId ? (
-            <button type="button" onClick={resetForm} className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700">
-              Cancel Edit
-            </button>
-          ) : null}
-        </div>
-      </form>
-
       {message ? <p className="text-sm font-semibold text-emerald-700">{message}</p> : null}
       {error ? <p className="text-sm font-semibold text-rose-700">{error}</p> : null}
 
       <section className="panel p-4 sm:p-5">
-        <div className="flex items-center justify-between gap-2">
-          <h2 className="text-lg font-bold text-slate-900">Existing Processors</h2>
-          <span className="rounded-full bg-blue-50 px-2.5 py-1 text-xs font-bold text-blue-700">{total}</span>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 className="text-xl font-extrabold text-slate-900">Processors</h2>
+            <p className="mt-1 text-sm text-slate-600">Manage processor entries and publish status.</p>
+          </div>
         </div>
-        <div className="mt-3 grid gap-3">
-          {rows.map((row) => (
-            <article key={row.id || row.name} className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <p className="text-sm font-bold text-slate-900">{row.name}</p>
-                <p className="text-xs text-slate-500">
-                  {row.vendor} | {row.status || "published"} | AnTuTu: {row.antutu ? `~${Math.round(row.antutu).toLocaleString("en-IN")}` : "NA"}
-                </p>
-                {row.status === "scheduled" && row.scheduledAt ? (
-                  <p className="text-xs text-amber-700">Scheduled: {new Date(row.scheduledAt).toLocaleString()}</p>
+
+        <div className="mt-4 rounded-2xl border border-slate-300 bg-white p-5 shadow-sm">
+          <div className="flex items-center justify-between gap-3 border-b border-slate-100 pb-3">
+            <div>
+              <h3 className="text-xl font-extrabold text-slate-900">Create Processor</h3>
+              <p className="mt-1 text-sm text-slate-600">Set top fields first, then open full editor.</p>
+            </div>
+            <span className="rounded-full bg-blue-50 px-2.5 py-1 text-[11px] font-bold text-blue-700">Quick Create</span>
+          </div>
+
+          <div className="mt-4 grid gap-4 sm:grid-cols-2">
+            <label className="grid gap-1">
+              <span className="text-sm font-semibold text-slate-800">Brand</span>
+              <select
+                value={createBrand}
+                onChange={(e) => {
+                  const nextBrand = e.target.value;
+                  setCreateBrand(nextBrand);
+                  setCreateTitle(nextBrand ? `${nextBrand} ` : "");
+                  setCreateSlugInput("");
+                  setCreateSlugEdited(false);
+                }}
+                className="h-10 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2"
+              >
+                <option value="">Select Brand</option>
+                {BRAND_OPTIONS.map((item) => (
+                  <option key={item} value={item}>{item}</option>
+                ))}
+              </select>
+            </label>
+
+            <label className="grid gap-1">
+              <span className="text-sm font-semibold text-slate-800">Slug</span>
+              <input
+                value={createSlug}
+                onChange={(e) => {
+                  setCreateSlugInput(e.target.value);
+                  setCreateSlugEdited(true);
+                }}
+                className="h-10 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2"
+              />
+            </label>
+
+            <label className="grid gap-1">
+              <span className="flex items-center justify-between gap-2">
+                <span className="text-sm font-semibold text-slate-800">Title (Processor Name)</span>
+                {createBrand && createTitleSuggestions.length > 0 ? (
+                  <span className="flex flex-wrap items-center justify-end gap-1.5">
+                    {createTitleSuggestions.map((item) => (
+                      <button
+                        key={item}
+                        type="button"
+                        onClick={() => {
+                          const next = `${createBrand} ${item}`.trim();
+                          setCreateTitle(next);
+                          if (!createSlugEdited) setCreateSlugInput(slugify(next));
+                        }}
+                        className="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                      >
+                        {item}
+                      </button>
+                    ))}
+                  </span>
                 ) : null}
-              </div>
-              <div className="flex items-center gap-2">
-                <button type="button" onClick={() => editRow(row)} className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700">
-                  Edit
+              </span>
+              <input
+                value={createTitle}
+                onChange={(e) => {
+                  const next = e.target.value;
+                  setCreateTitle(next);
+                  if (!createSlugEdited) setCreateSlugInput(slugify(next));
+                }}
+                placeholder="Samsung Exynos 2400"
+                className="h-10 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2"
+              />
+            </label>
+
+            <label className="grid gap-1">
+              <span className="text-sm font-semibold text-slate-800">Document ID</span>
+              <input value={createDocId} readOnly className="h-10 rounded-lg border border-slate-200 bg-slate-100 px-3 py-2 text-slate-600" />
+            </label>
+          </div>
+
+          <div className="mt-5 flex justify-center border-t border-slate-100 pt-4">
+            <Link
+              href={
+                createTitle && createSlug && !isCreateDocDuplicate
+                  ? `/admin/processor-bootstrap?name=${encodeURIComponent(createTitle)}&slug=${encodeURIComponent(createSlug)}&brand=${encodeURIComponent(createBrand)}`
+                  : "/admin/processors"
+              }
+              className={`rounded-lg px-6 py-2.5 text-sm font-semibold text-white ${
+                !createTitle || !createSlug || isCreateDocDuplicate ? "pointer-events-none bg-slate-400" : "bg-blue-700 shadow-sm"
+              }`}
+            >
+              Create New Processor
+            </Link>
+          </div>
+          {isCreateDocDuplicate ? (
+            <p className="mt-2 text-center text-xs font-semibold text-rose-700">
+              Slug/Document ID already exists. Please change slug to a unique value.
+            </p>
+          ) : null}
+        </div>
+      </section>
+
+      <section className="panel p-4 sm:p-5">
+        <h3 className="text-lg font-bold text-slate-900">Processor List</h3>
+        <div className="mt-3 grid gap-3">
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search by processor name, vendor, id..."
+            className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+          />
+
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex flex-wrap gap-2">
+              {[
+                { key: "all", label: "All" },
+                { key: "draft", label: "Draft" },
+                { key: "review", label: "Review" },
+                { key: "published", label: "Published" },
+                { key: "scheduled", label: "Scheduled" },
+                { key: "recently_deleted", label: "Recently Deleted" },
+              ].map((item) => (
+                <button
+                  key={item.key}
+                  type="button"
+                  onClick={() => setStatusFilter(item.key as StatusFilter)}
+                  className={`rounded-full border px-3 py-1.5 text-xs font-medium leading-none transition ${
+                    statusFilter === item.key ? "border-slate-900 bg-slate-900 text-white" : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+                  }`}
+                >
+                  {item.label}
                 </button>
-                <button type="button" onClick={() => removeProcessor(row.id)} className="rounded-lg bg-rose-600 px-3 py-1.5 text-xs font-semibold text-white">
-                  Delete
-                </button>
-              </div>
-            </article>
-          ))}
-          {rows.length === 0 ? <p className="text-sm text-slate-500">No processors yet.</p> : null}
+              ))}
+            </div>
+
+            <div className="flex items-center gap-2">
+              <select
+                value={vendorFilter}
+                onChange={(e) => setVendorFilter(e.target.value)}
+                className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700"
+              >
+                {vendorOptions.map((item) => (
+                  <option key={`vendor-${item}`} value={item}>
+                    {item === "all" ? "All Vendors" : item}
+                  </option>
+                ))}
+              </select>
+
+              <select
+                value={classFilter}
+                onChange={(e) => setClassFilter(e.target.value)}
+                className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700"
+              >
+                {classOptions.map((item) => (
+                  <option key={`class-${item}`} value={item}>
+                    {item === "all" ? "All Classes" : item}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={moveSelectedToRecentlyDeleted}
+            disabled={selectedIds.length === 0}
+            className="w-fit rounded-md border border-slate-200 bg-slate-100 px-3 py-2 text-xs font-semibold text-slate-400 disabled:cursor-not-allowed"
+          >
+            Move Selected to Recently Deleted ({selectedIds.length})
+          </button>
+        </div>
+
+        <div className="mt-4 overflow-x-auto rounded-xl border border-slate-200">
+          <table className="min-w-full divide-y divide-slate-200 bg-white text-sm">
+            <thead className="bg-slate-50">
+              <tr className="text-left text-xs uppercase tracking-wide text-slate-600">
+                <th className="px-4 py-3 font-semibold">Select</th>
+                <th className="px-4 py-3 font-semibold">Processor</th>
+                <th className="px-4 py-3 font-semibold">Brand</th>
+                <th className="px-4 py-3 font-semibold">AnTuTu</th>
+                <th className="px-4 py-3 font-semibold">Status</th>
+                <th className="px-4 py-3 font-semibold">Creator</th>
+                <th className="px-4 py-3 font-semibold">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {filteredRows.map((row) => (
+                <tr key={row.id || row.name} className="hover:bg-slate-50/70">
+                  <td className="px-4 py-3">
+                    {row.id ? (
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.includes(row.id)}
+                        onChange={(e) =>
+                          setSelectedIds((prev) =>
+                            e.target.checked ? [...prev, row.id as string] : prev.filter((id) => id !== row.id)
+                          )
+                        }
+                      />
+                    ) : null}
+                  </td>
+                  <td className="px-4 py-3">
+                    <p className="font-semibold text-slate-900">{row.name || "-"}</p>
+                    <p className="text-xs text-slate-500">{row.id || "-"}</p>
+                  </td>
+                  <td className="px-4 py-3 text-slate-800">{row.vendor || "-"}</td>
+                  <td className="px-4 py-3 text-slate-800">{row.antutu ? `~${Math.round(row.antutu).toLocaleString("en-IN")}` : "NA"}</td>
+                  <td className="px-4 py-3">
+                    <span
+                      className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${
+                        (row.status || "published") === "published"
+                          ? "bg-emerald-100 text-emerald-700"
+                          : row.status === "draft"
+                            ? "bg-amber-100 text-amber-800"
+                            : row.status === "recently_deleted"
+                              ? "bg-rose-100 text-rose-700"
+                              : "bg-blue-100 text-blue-700"
+                      }`}
+                    >
+                      {row.status || "published"}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3 text-slate-800">{row.createdBy || "Admin"}</td>
+                  <td className="px-4 py-3">
+                    <div className="flex items-center gap-2">
+                      <Link
+                        href={row.id ? `/admin/processor-editor?id=${encodeURIComponent(row.id)}` : "/admin/processor-create"}
+                        className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700"
+                      >
+                        Edit
+                      </Link>
+                      {row.status === "recently_deleted" ? (
+                        <>
+                          <button type="button" onClick={() => restoreProcessor(row.id)} className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700">
+                            Restore
+                          </button>
+                          <button type="button" onClick={() => deletePermanently(row.id)} className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-1.5 text-xs font-semibold text-rose-700">
+                            Delete Forever
+                          </button>
+                        </>
+                      ) : (
+                        <button type="button" onClick={() => moveToRecentlyDeleted(row.id)} className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-1.5 text-xs font-semibold text-rose-700">
+                          Delete
+                        </button>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              ))}
+              {filteredRows.length === 0 ? (
+                <tr>
+                  <td colSpan={7} className="px-4 py-8 text-center text-sm text-slate-500">
+                    No processors found for current filters.
+                  </td>
+                </tr>
+              ) : null}
+            </tbody>
+          </table>
         </div>
       </section>
     </main>

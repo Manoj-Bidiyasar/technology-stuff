@@ -1,9 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { ADMIN_SESSION_COOKIE, getAdminSessionToken } from "@/lib/auth/admin";
+import { ADMIN_SESSION_COOKIE } from "@/lib/auth/constants";
 
 function isAuthenticated(request: NextRequest): boolean {
-  const token = request.cookies.get(ADMIN_SESSION_COOKIE)?.value || "";
-  return token === getAdminSessionToken();
+  return Boolean(request.cookies.get(ADMIN_SESSION_COOKIE)?.value);
 }
 
 export function middleware(request: NextRequest) {
@@ -11,9 +10,7 @@ export function middleware(request: NextRequest) {
   const loggedIn = isAuthenticated(request);
 
   if (pathname.startsWith("/admin/login")) {
-    if (loggedIn) {
-      return NextResponse.redirect(new URL("/admin", request.url));
-    }
+    // Allow login page even if a stale session cookie exists.
     return NextResponse.next();
   }
 
@@ -32,4 +29,3 @@ export function middleware(request: NextRequest) {
 export const config = {
   matcher: ["/admin/:path*"],
 };
-

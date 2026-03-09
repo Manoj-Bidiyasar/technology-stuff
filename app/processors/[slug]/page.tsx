@@ -637,6 +637,15 @@ function formatOtherCpuFeatures(features: string[] | undefined, architecture?: s
   return filtered.length ? filtered.join(", ") : "-";
 }
 
+function formatCpuArchitecture(detail?: ProcessorDetail): string {
+  const instruction = String(detail?.instructionSet || "").trim();
+  const bits = String(detail?.architectureBits || "").trim();
+  if (instruction && bits) return `${instruction}, ${bits}`;
+  if (instruction) return instruction;
+  const legacy = String(detail?.architecture || "").trim();
+  return legacy || "-";
+}
+
 function sortMemoryTypes(values: string[]): string[] {
   const rank = (v: string) => {
     const t = v.toUpperCase().replace(/\s+/g, "");
@@ -926,7 +935,7 @@ export default async function ProcessorDetailPage({ params }: Props) {
   const p = all.find((item) => item.slug === slug);
   if (!p) notFound();
 
-  const detail = getProcessorDetailBySlug(slug);
+  const detail = await getProcessorDetailBySlug(slug);
   const similar = neighbors(p, all);
   const perf = perfIndex(p.antutu || 0);
   const eff = efficiency(p.fabricationNm);
@@ -1479,14 +1488,14 @@ export default async function ProcessorDetailPage({ params }: Props) {
                       "-"
                     ),
                 },
-                { label: "Architecture", value: detail?.architecture || "-" },
+                { label: "Architecture", value: formatCpuArchitecture(detail) },
                 { label: "Max. Clock Speed", value: clockMhz ? `${clockMhz} MHz` : "-" },
                 { label: "Fabrication Process", value: p.fabricationNm ? `${p.fabricationNm}nm` : (detail?.process || "-") },
                 { label: "Transistor Count", value: detail?.transistorCount || "-" },
                 { label: "TDP", value: Number.isFinite(detail?.tdpW) ? `${detail?.tdpW} W` : "-" },
                 { label: "L2 Cache", value: detail?.l2Cache || "-" },
                 { label: "L3 Cache", value: detail?.l3Cache || "-" },
-                { label: "Other CPU Features", value: formatOtherCpuFeatures(detail?.cpuFeatures, detail?.architecture) },
+                { label: "Other CPU Features", value: formatOtherCpuFeatures(detail?.cpuFeatures, formatCpuArchitecture(detail)) },
               ]}
             />
           </article>

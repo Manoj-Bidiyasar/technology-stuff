@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { deleteBlog, updateBlog } from "@/lib/firestore/blogs";
 import type { BlogPost } from "@/lib/types/content";
-import { requireAdmin } from "@/lib/auth/adminApi";
+import { requireAdminCapability } from "@/lib/auth/adminApi";
 
 type BlogRouteProps = {
   params: Promise<{ id: string }>;
@@ -9,7 +9,7 @@ type BlogRouteProps = {
 
 export async function PUT(request: NextRequest, { params }: BlogRouteProps) {
   try {
-    const unauthorized = requireAdmin(request);
+    const { unauthorized } = await requireAdminCapability(request, "blogs");
     if (unauthorized) return unauthorized;
 
     const { id } = await params;
@@ -24,7 +24,7 @@ export async function PUT(request: NextRequest, { params }: BlogRouteProps) {
 
 export async function DELETE(_request: NextRequest, { params }: BlogRouteProps) {
   try {
-    const unauthorized = requireAdmin(_request);
+    const { unauthorized } = await requireAdminCapability(_request, "blogs");
     if (unauthorized) return unauthorized;
 
     const { id } = await params;

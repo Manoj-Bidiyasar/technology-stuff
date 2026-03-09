@@ -1,30 +1,42 @@
 import { NextRequest, NextResponse } from "next/server";
-import { ADMIN_SESSION_COOKIE, getAdminSessionToken, verifyAdminCredentials } from "@/lib/auth/admin";
+import { createAdminSessionFromIdToken, getAdminSessionMaxAgeSeconds } from "@/lib/auth/admin";
+import { ADMIN_SESSION_COOKIE } from "@/lib/auth/constants";
 
 type LoginBody = {
-  username?: string;
-  password?: string;
+  idToken?: string;
+  deviceId?: string;
+  userAgent?: string;
 };
 
 export async function POST(request: NextRequest) {
   try {
     const body = (await request.json()) as LoginBody;
-    const username = String(body.username || "").trim();
-    const password = String(body.password || "");
-
-    if (!verifyAdminCredentials(username, password)) {
-      return NextResponse.json({ error: "Invalid username or password." }, { status: 401 });
+    const result = await createAdminSessionFromIdToken({
+      idToken: String(body.idToken || "").trim(),
+      deviceId: String(body.deviceId || "").trim(),
+      userAgent: String(body.userAgent || "").trim(),
+    });
+    if (!result.ok) {
+      const status =
+        result.error === "session/device-not-allowed"
+          ? 403
+          : result.error === "user-profile-missing"
+            ? 404
+            : result.error === "user-not-active" || result.error === "user-role-not-allowed"
+              ? 403
+              : 401;
+      return NextResponse.json({ error: result.error }, { status });
     }
 
     const response = NextResponse.json({ ok: true });
     response.cookies.set({
       name: ADMIN_SESSION_COOKIE,
-      value: getAdminSessionToken(),
+      value: result.sessionToken,
       httpOnly: true,
       sameSite: "lax",
       secure: process.env.NODE_ENV === "production",
       path: "/",
-      maxAge: 60 * 60 * 12,
+      maxAge: getAdminSessionMaxAgeSeconds(),
     });
     return response;
   } catch (error) {
@@ -32,4 +44,3 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
-

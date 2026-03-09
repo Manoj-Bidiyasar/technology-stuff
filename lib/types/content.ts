@@ -373,6 +373,22 @@ export type BlogPost = {
   tags?: string[];
   categories?: string[];
   status: PublishStatus;
+  seo?: {
+    metaTitle?: string;
+    metaDescription?: string;
+    canonicalUrl?: string;
+    focusKeyword?: string;
+    ogImage?: string;
+    noIndex?: boolean;
+  };
+  workflow?: {
+    stage?: "idea" | "draft" | "review" | "approved" | "published";
+    priority?: "low" | "medium" | "high";
+    assignee?: string;
+    dueDate?: string;
+    notes?: string;
+    lastAutoSavedAt?: TimestampLike | string;
+  };
   createdAt?: TimestampLike;
   updatedAt?: TimestampLike;
 };

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { deleteProduct, updateProduct } from "@/lib/firestore/products";
 import type { Product } from "@/lib/types/content";
-import { requireAdmin } from "@/lib/auth/adminApi";
+import { requireAdminCapability } from "@/lib/auth/adminApi";
 
 type ProductRouteProps = {
   params: Promise<{ id: string }>;
@@ -9,7 +9,7 @@ type ProductRouteProps = {
 
 export async function PUT(request: NextRequest, { params }: ProductRouteProps) {
   try {
-    const unauthorized = requireAdmin(request);
+    const { unauthorized } = await requireAdminCapability(request, "products");
     if (unauthorized) return unauthorized;
 
     const { id } = await params;
@@ -24,7 +24,7 @@ export async function PUT(request: NextRequest, { params }: ProductRouteProps) {
 
 export async function DELETE(_request: NextRequest, { params }: ProductRouteProps) {
   try {
-    const unauthorized = requireAdmin(_request);
+    const { unauthorized } = await requireAdminCapability(_request, "products");
     if (unauthorized) return unauthorized;
 
     const { id } = await params;

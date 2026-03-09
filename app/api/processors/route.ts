@@ -1,13 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createProcessor, listAllProcessorsAdmin, type ProcessorAdmin } from "@/lib/firestore/processors";
-import { requireAdmin } from "@/lib/auth/adminApi";
+import { requireAdminCapability } from "@/lib/auth/adminApi";
 
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const admin = searchParams.get("admin");
     if (admin === "1") {
-      const unauthorized = requireAdmin(request);
+      const { unauthorized } = await requireAdminCapability(request, "processors");
       if (unauthorized) return unauthorized;
       const items = await listAllProcessorsAdmin();
       return NextResponse.json({ items });
@@ -21,7 +21,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const unauthorized = requireAdmin(request);
+    const { unauthorized } = await requireAdminCapability(request, "processors");
     if (unauthorized) return unauthorized;
 
     const body = (await request.json()) as ProcessorAdmin;
@@ -32,3 +32,4 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
+

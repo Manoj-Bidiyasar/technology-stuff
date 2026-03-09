@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createBlog, listAllBlogsAdmin } from "@/lib/firestore/blogs";
 import type { BlogPost } from "@/lib/types/content";
-import { requireAdmin } from "@/lib/auth/adminApi";
+import { requireAdminCapability } from "@/lib/auth/adminApi";
 
 export async function GET(request: NextRequest) {
   try {
@@ -9,7 +9,7 @@ export async function GET(request: NextRequest) {
     const admin = searchParams.get("admin");
 
     if (admin === "1") {
-      const unauthorized = requireAdmin(request);
+      const { unauthorized } = await requireAdminCapability(request, "blogs");
       if (unauthorized) return unauthorized;
       const items = await listAllBlogsAdmin();
       return NextResponse.json({ items });
@@ -24,7 +24,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const unauthorized = requireAdmin(request);
+    const { unauthorized } = await requireAdminCapability(request, "blogs");
     if (unauthorized) return unauthorized;
 
     const body = (await request.json()) as BlogPost;
@@ -40,3 +40,4 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
+

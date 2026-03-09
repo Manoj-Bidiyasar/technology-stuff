@@ -1,3 +1,6 @@
+import { unstable_cache } from "next/cache";
+import { listPublishedCustomProcessorDetailsBySlug } from "@/lib/firestore/processors";
+
 export type ProcessorDetail = {
   announced?: string;
   manufacturer?: string;
@@ -8,6 +11,7 @@ export type ProcessorDetail = {
   cores?: string;
   architecture?: string;
   instructionSet?: string;
+  architectureBits?: string;
   cpuFeatures?: string[];
   l2Cache?: string;
   l3Cache?: string;
@@ -495,6 +499,43 @@ const DETAILS: Record<string, ProcessorDetail> = {
   },
 };
 
-export function getProcessorDetailBySlug(slug: string): ProcessorDetail | undefined {
-  return DETAILS[slug];
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function deepMerge<T extends Record<string, unknown>>(base?: T, override?: T): T {
+  const left = isPlainObject(base) ? base : ({} as T);
+  const right = isPlainObject(override) ? override : ({} as T);
+  const out: Record<string, unknown> = { ...left };
+
+  Object.entries(right).forEach(([key, value]) => {
+    if (value === undefined) return;
+    const existing = out[key];
+    if (isPlainObject(existing) && isPlainObject(value)) {
+      out[key] = deepMerge(existing, value);
+      return;
+    }
+    out[key] = value;
+  });
+  return out as T;
+}
+
+const getCachedCustomDetails = unstable_cache(
+  async () => listPublishedCustomProcessorDetailsBySlug(),
+  ["processor-custom-detail-map-v1"],
+  { revalidate: 1800 }
+);
+
+export async function getProcessorDetailBySlug(slug: string): Promise<ProcessorDetail | undefined> {
+  const key = String(slug || "").trim().toLowerCase();
+  const local = DETAILS[key];
+  let remote: ProcessorDetail | undefined;
+  try {
+    const map = await getCachedCustomDetails();
+    remote = map[key];
+  } catch {
+    remote = undefined;
+  }
+  if (!local && !remote) return undefined;
+  return deepMerge<ProcessorDetail>((local || {}) as ProcessorDetail, (remote || {}) as ProcessorDetail);
 }

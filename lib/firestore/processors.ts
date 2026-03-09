@@ -1,6 +1,8 @@
 import { FieldValue } from "firebase-admin/firestore";
 import { adminDb } from "@/lib/firebase/admin";
 import type { ProcessorProfile } from "@/lib/processors/profiles";
+import type { ProcessorDetail } from "@/lib/processors/details";
+import { slugify } from "@/utils/slugify";
 
 const processorsRef = adminDb.collection("processors");
 
@@ -13,14 +15,19 @@ export type ProcessorAdmin = {
   maxCpuGhz?: number;
   gpu?: string;
   avgPhoneScore?: number;
-  status?: "draft" | "published" | "scheduled";
+  detail?: ProcessorDetail;
+  createdBy?: string;
+  status?: "draft" | "review" | "published" | "scheduled" | "recently_deleted";
   scheduledAt?: string;
   createdAt?: unknown;
   updatedAt?: unknown;
 };
 
 function normalize(input: Partial<ProcessorAdmin>): ProcessorAdmin {
-  const status = input.status === "draft" || input.status === "scheduled" ? input.status : "published";
+  const status =
+    input.status === "draft" || input.status === "review" || input.status === "scheduled" || input.status === "recently_deleted"
+      ? input.status
+      : "published";
   const scheduledAt = status === "scheduled" ? String(input.scheduledAt || "").trim() : "";
 
   return {
@@ -31,9 +38,15 @@ function normalize(input: Partial<ProcessorAdmin>): ProcessorAdmin {
     maxCpuGhz: Number.isFinite(Number(input.maxCpuGhz)) && Number(input.maxCpuGhz) > 0 ? Number(input.maxCpuGhz) : undefined,
     gpu: String(input.gpu || "").trim() || undefined,
     avgPhoneScore: Number.isFinite(Number(input.avgPhoneScore)) ? Number(input.avgPhoneScore) : 0,
+    detail: input.detail && typeof input.detail === "object" ? (input.detail as ProcessorDetail) : undefined,
+    createdBy: String(input.createdBy || "").trim() || undefined,
     status,
     scheduledAt: scheduledAt || undefined,
   };
+}
+
+function stripUndefined<T extends Record<string, unknown>>(input: T): Partial<T> {
+  return Object.fromEntries(Object.entries(input).filter(([, value]) => value !== undefined)) as Partial<T>;
 }
 
 function hydrate(id: string, input: Partial<ProcessorAdmin>): ProcessorAdmin {
@@ -56,11 +69,20 @@ export async function listAllProcessorsAdmin(): Promise<ProcessorAdmin[]> {
 export async function createProcessor(data: ProcessorAdmin): Promise<string> {
   const payload = normalize(data);
   if (!payload.name) throw new Error("Processor name is required.");
-  const created = await processorsRef.add({
-    ...payload,
+  const explicitId = String(data.id || "").trim();
+  const writePayload = {
+    ...stripUndefined(payload as unknown as Record<string, unknown>),
     createdAt: FieldValue.serverTimestamp(),
     updatedAt: FieldValue.serverTimestamp(),
-  });
+  };
+  if (explicitId) {
+    const ref = processorsRef.doc(explicitId);
+    const existing = await ref.get();
+    if (existing.exists) throw new Error("Processor with same Document ID already exists.");
+    await ref.set(writePayload);
+    return explicitId;
+  }
+  const created = await processorsRef.add(writePayload);
   return created.id;
 }
 
@@ -69,7 +91,7 @@ export async function updateProcessor(id: string, data: Partial<ProcessorAdmin>)
   if (!payload.name) throw new Error("Processor name is required.");
   await processorsRef.doc(id).set(
     {
-      ...payload,
+      ...stripUndefined(payload as unknown as Record<string, unknown>),
       updatedAt: FieldValue.serverTimestamp(),
     },
     { merge: true }
@@ -78,6 +100,12 @@ export async function updateProcessor(id: string, data: Partial<ProcessorAdmin>)
 
 export async function deleteProcessor(id: string): Promise<void> {
   await processorsRef.doc(id).delete();
+}
+
+export async function getProcessorAdminById(id: string): Promise<ProcessorAdmin | null> {
+  const snap = await processorsRef.doc(id).get();
+  if (!snap.exists) return null;
+  return hydrate(snap.id, snap.data() as Partial<ProcessorAdmin>);
 }
 
 export async function listPublishedCustomProcessorProfiles(): Promise<ProcessorProfile[]> {
@@ -98,4 +126,17 @@ export async function listPublishedCustomProcessorProfiles(): Promise<ProcessorP
       topPhones: [],
     }))
     .sort((a, b) => (b.antutu || 0) - (a.antutu || 0));
+}
+
+export async function listPublishedCustomProcessorDetailsBySlug(): Promise<Record<string, ProcessorDetail>> {
+  const snapshot = await processorsRef.where("status", "==", "published").limit(1000).get();
+  const out: Record<string, ProcessorDetail> = {};
+  snapshot.docs
+    .map((doc) => hydrate(doc.id, doc.data() as Partial<ProcessorAdmin>))
+    .forEach((row) => {
+      const key = slugify(String(row.name || ""));
+      if (!key || !row.detail || typeof row.detail !== "object") return;
+      out[key] = row.detail;
+    });
+  return out;
 }
