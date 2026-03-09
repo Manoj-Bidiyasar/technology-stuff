@@ -8,7 +8,7 @@ import ProcessorChipVisual from "@/components/ProcessorChipVisual";
 import ProcessorNameLabel from "@/components/ProcessorNameLabel";
 import SectionChipNav from "@/components/SectionChipNav";
 import SimilarProcessorsGrid from "@/components/SimilarProcessorsGrid";
-import { getProcessorDetailBySlug } from "@/lib/processors/details";
+import { getProcessorDetailBySlug, type ProcessorDetail } from "@/lib/processors/details";
 import { listProcessorProfiles, type ProcessorProfile } from "@/lib/processors/profiles";
 
 type Props = {

@@ -611,10 +611,13 @@ export default function ProcessorEditorPage() {
       const mapped = freqMap[type];
       const mappedNumber = mapped === undefined ? undefined : Number(mapped);
       const firstFallback = idx === 0 && fallbackFreq !== undefined ? Number(fallbackFreq) : undefined;
+      let freq: number | "" = "";
+      if (mappedNumber !== undefined && Number.isFinite(mappedNumber)) freq = mappedNumber;
+      else if (firstFallback !== undefined && Number.isFinite(firstFallback)) freq = firstFallback;
       return {
         id: `m${idx + 1}`,
         type,
-        freq: Number.isFinite(mappedNumber) ? mappedNumber : (Number.isFinite(firstFallback) ? firstFallback : ""),
+        freq,
       };
     });
     if (!nextRows.length) return;
@@ -674,11 +677,11 @@ export default function ProcessorEditorPage() {
   }, [form.detail?.outputDisplay]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    const next = readPrivateFields(form.detail?.adminPrivateFields);
+    const next = readPrivateFields(getDetailField("adminPrivateFields"));
     const currentSig = JSON.stringify(privateFields);
     const nextSig = JSON.stringify(next);
     if (currentSig !== nextSig) setPrivateFields(next);
-  }, [form.detail?.adminPrivateFields]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [form.detail]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     const allRows = [...displayModesDraft, ...outputDisplaysDraft];
