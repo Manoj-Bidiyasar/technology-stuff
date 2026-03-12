@@ -2048,7 +2048,11 @@ export default function ProcessorEditorPage() {
         vendor,
         type: "processor",
         createdBy: form.createdBy || creatorName,
-        fabricationNm: extractFabricationNm(getDetailField("process")),
+        fabricationNm: (() => {
+          const raw = extractFabricationNm(getDetailField("process"));
+          const n = Number(raw);
+          return Number.isFinite(n) ? n : undefined;
+        })(),
         detail: cleanObject((() => {
           const detail = { ...(form.detail || {}) } as Record<string, unknown>;
           delete detail.cameraSupport;
