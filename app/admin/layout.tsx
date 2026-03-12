@@ -16,6 +16,7 @@ const items: NavItem[] = [
   { href: "/admin/products", label: "Products", capability: "products" },
   { href: "/admin/blogs", label: "Blogs", capability: "blogs" },
   { href: "/admin/processors", label: "Processors", capability: "processors" },
+  { href: "/admin/helper/processor-terms", label: "Helper", capability: "helper" },
 ];
 
 type Viewer = {

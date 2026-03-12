@@ -46,6 +46,8 @@ export default function AdminBlogsPage() {
   const [lastSavedAt, setLastSavedAt] = useState<string>("");
   const [lastAutoSavedAt, setLastAutoSavedAt] = useState<string>("");
   const saveInFlightRef = useRef(false);
+  const [helperAliasMap, setHelperAliasMap] = useState<Record<string, string>>({});
+  const [helperSuggestions, setHelperSuggestions] = useState<string[]>([]);
 
   const finalSlug = useMemo(() => form.slug || slugify(form.title), [form.slug, form.title]);
 
@@ -57,6 +59,39 @@ export default function AdminBlogsPage() {
 
   useEffect(() => {
     refresh().catch((err) => setError(err instanceof Error ? err.message : "Failed to load blogs."));
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    async function loadHelper() {
+      try {
+        const response = await fetch("/api/admin/helper-terms?scope=blog", { cache: "no-store" });
+        if (!response.ok) return;
+        const json = (await response.json()) as { items?: { name: string; aliases?: string[]; status?: string }[] };
+        if (!active) return;
+        const map: Record<string, string> = {};
+        const suggestions = new Set<string>();
+        (json.items || []).forEach((item) => {
+          if (item.status && item.status !== "approved") return;
+          const canonical = String(item.name || "").trim();
+          if (!canonical) return;
+          suggestions.add(canonical);
+          const all = [canonical, ...(item.aliases || [])];
+          all.forEach((alias) => {
+            const key = normalizeLookupKey(alias);
+            if (key) map[key] = canonical;
+          });
+        });
+        setHelperAliasMap(map);
+        setHelperSuggestions(Array.from(suggestions).sort((a, b) => a.localeCompare(b)));
+      } catch {
+        // ignore
+      }
+    }
+    loadHelper().catch(() => undefined);
+    return () => {
+      active = false;
+    };
   }, []);
 
   useEffect(() => {
@@ -115,19 +150,48 @@ export default function AdminBlogsPage() {
     });
   }
 
+  function normalizeLookupKey(value: string): string {
+    return String(value || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+  }
+
+  function normalizeTextToken(value: string): string {
+    const compact = String(value || "").trim().replace(/\s+/g, " ");
+    if (!compact) return "";
+    const alias = helperAliasMap[normalizeLookupKey(compact)];
+    return alias || compact;
+  }
+
+  function normalizeCsvArray(values: string[]): string[] {
+    const out: string[] = [];
+    const seen = new Set<string>();
+    values.forEach((item) => {
+      const normalized = normalizeTextToken(item);
+      if (!normalized) return;
+      const key = normalizeLookupKey(normalized);
+      if (seen.has(key)) return;
+      seen.add(key);
+      out.push(normalized);
+    });
+    return out;
+  }
+
   const buildPayload = useCallback((mode: SaveMode): BlogPost => {
+    const normalizedTitle = normalizeTextToken(form.title);
+    const normalizedTags = normalizeCsvArray(form.tags || []);
+    const normalizedCategories = normalizeCsvArray(form.categories || []);
     return {
       ...form,
+      title: normalizedTitle,
       slug: finalSlug,
-      tags: (form.tags || []).filter(Boolean),
-      categories: (form.categories || []).filter(Boolean),
+      tags: normalizedTags,
+      categories: normalizedCategories,
       status: mode === "autosave" && !editingId ? "draft" : form.status,
       workflow: {
         ...(form.workflow || {}),
         lastAutoSavedAt: mode === "autosave" ? new Date().toISOString() : form.workflow?.lastAutoSavedAt,
       },
     };
-  }, [editingId, finalSlug, form]);
+  }, [editingId, finalSlug, form, helperAliasMap]);
 
   const saveBlog = useCallback(async (mode: SaveMode): Promise<boolean> => {
     if (saveInFlightRef.current) return false;
@@ -241,14 +305,45 @@ export default function AdminBlogsPage() {
         <div className="space-y-4">
           <section className="panel grid gap-3 p-4 sm:p-5">
             <h2 className="text-sm font-bold uppercase tracking-wide text-slate-700">Basic Info</h2>
-            <input value={form.title} onChange={(e) => setField("title", e.target.value)} placeholder="Title" className="rounded-lg border border-slate-200 px-3 py-2" required />
+            <input
+              value={form.title}
+              onChange={(e) => setField("title", e.target.value)}
+              onBlur={(e) => {
+                const normalized = normalizeTextToken(e.target.value);
+                if (normalized && normalized !== e.target.value) setField("title", normalized);
+              }}
+              list={helperSuggestions.length ? "suggest-helper" : undefined}
+              placeholder="Title"
+              className="rounded-lg border border-slate-200 px-3 py-2"
+              required
+            />
             <input value={form.slug} onChange={(e) => setField("slug", slugify(e.target.value))} placeholder="Slug (optional)" className="rounded-lg border border-slate-200 px-3 py-2" />
             <p className="text-xs text-slate-500">Final slug: {finalSlug || "-"}</p>
             <textarea value={form.excerpt || ""} onChange={(e) => setField("excerpt", e.target.value)} placeholder="Excerpt" className="min-h-20 rounded-lg border border-slate-200 px-3 py-2" />
             <input value={form.featuredImage || ""} onChange={(e) => setField("featuredImage", e.target.value)} placeholder="Featured image URL" className="rounded-lg border border-slate-200 px-3 py-2" />
             <textarea value={form.content || ""} onChange={(e) => setField("content", e.target.value)} placeholder="HTML content" className="min-h-56 rounded-lg border border-slate-200 px-3 py-2 font-mono text-sm" />
-            <input value={(form.tags || []).join(", ")} onChange={(e) => setField("tags", e.target.value.split(",").map((x) => x.trim()))} placeholder="Tags (comma separated)" className="rounded-lg border border-slate-200 px-3 py-2" />
-            <input value={(form.categories || []).join(", ")} onChange={(e) => setField("categories", e.target.value.split(",").map((x) => x.trim()))} placeholder="Categories (comma separated)" className="rounded-lg border border-slate-200 px-3 py-2" />
+            <input
+              value={(form.tags || []).join(", ")}
+              onChange={(e) => setField("tags", e.target.value.split(",").map((x) => x.trim()))}
+              onBlur={(e) => {
+                const normalized = normalizeCsvArray(e.target.value.split(",").map((x) => x.trim()));
+                setField("tags", normalized);
+              }}
+              list={helperSuggestions.length ? "suggest-helper" : undefined}
+              placeholder="Tags (comma separated)"
+              className="rounded-lg border border-slate-200 px-3 py-2"
+            />
+            <input
+              value={(form.categories || []).join(", ")}
+              onChange={(e) => setField("categories", e.target.value.split(",").map((x) => x.trim()))}
+              onBlur={(e) => {
+                const normalized = normalizeCsvArray(e.target.value.split(",").map((x) => x.trim()));
+                setField("categories", normalized);
+              }}
+              list={helperSuggestions.length ? "suggest-helper" : undefined}
+              placeholder="Categories (comma separated)"
+              className="rounded-lg border border-slate-200 px-3 py-2"
+            />
           </section>
 
           <section className="panel grid gap-3 p-4 sm:p-5">
@@ -294,6 +389,13 @@ export default function AdminBlogsPage() {
             <input type="date" value={form.workflow?.dueDate || ""} onChange={(e) => setWorkflowField("dueDate", e.target.value)} className="rounded-lg border border-slate-200 px-3 py-2" />
             <textarea value={form.workflow?.notes || ""} onChange={(e) => setWorkflowField("notes", e.target.value)} placeholder="Workflow notes" className="min-h-20 rounded-lg border border-slate-200 px-3 py-2" />
           </section>
+          {helperSuggestions.length ? (
+            <datalist id="suggest-helper">
+              {helperSuggestions.map((item) => (
+                <option key={item} value={item} />
+              ))}
+            </datalist>
+          ) : null}
         </div>
 
         <aside className="space-y-4 lg:sticky lg:top-4 lg:h-fit">

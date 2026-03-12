@@ -7,10 +7,25 @@ import ProcessorNameLabel, { getProcessorLabelLines } from "@/components/Process
 import ProcessorCompareMoreSection from "@/components/ProcessorCompareMoreSection";
 import { getProcessorDetailBySlug } from "@/lib/processors/details";
 import { listProcessorProfiles, type ProcessorProfile } from "@/lib/processors/profiles";
+import { getPublicSiteUrl } from "@/lib/seo/site";
 
 type Props = {
   params: Promise<{ slug: string }>;
 };
+
+export async function generateStaticParams() {
+  const profiles = await listProcessorProfiles();
+  const top = profiles.slice(0, 12);
+  const params: Array<{ slug: string }> = [];
+  for (let i = 0; i < top.length; i += 1) {
+    for (let j = i + 1; j < top.length; j += 1) {
+      if (params.length >= 40) break;
+      params.push({ slug: `${top[i].slug}-vs-${top[j].slug}` });
+    }
+    if (params.length >= 40) break;
+  }
+  return params;
+}
 
 type SpecRow = {
   label: string;
@@ -157,6 +172,7 @@ function num(value?: number, digits = 1): string {
 function toMonthYear(value?: string): string {
   const raw = String(value || "").trim();
   if (!raw) return "-";
+  if (raw.toLowerCase() === "upcoming") return "Upcoming";
   const date = new Date(raw);
   if (!Number.isNaN(date.getTime())) {
     return date.toLocaleDateString("en-US", { month: "long", year: "numeric" });
@@ -216,7 +232,6 @@ function formatCoreConfigForCompare(detail?: Awaited<ReturnType<typeof getProces
   const rows = config
     .split(",")
     .map((item) => item.trim())
-    .map((item) => item.replace(/\bCortex-/gi, "ARM Cortex-"))
     .filter(Boolean);
   return rows.length ? rows.join("\n") : config;
 }
@@ -351,19 +366,52 @@ function formatNetwork(detail: Awaited<ReturnType<typeof getProcessorDetailBySlu
   return maxNet || "-";
 }
 
+function sortMemoryTypes(values: string[]): string[] {
+  const rank = (v: string) => {
+    const t = v.toUpperCase().replace(/\s+/g, "");
+    const m = t.match(/LPDDR(\d+)(X?)/);
+    if (!m) return -1;
+    const gen = Number(m[1] || 0);
+    const x = m[2] === "X" ? 0.1 : 0;
+    return gen + x;
+  };
+  return [...values].sort((a, b) => rank(b) - rank(a) || a.localeCompare(b));
+}
+
+function sortStorageTypes(values: string[]): string[] {
+  const rank = (v: string) => {
+    const t = v.toUpperCase().replace(/\s+/g, "");
+    if (t.includes("NVME")) return 300;
+    const ufs = t.match(/UFS(\d+(?:\.\d+)?)/);
+    if (ufs) return 100 + Number(ufs[1]);
+    if (t.includes("EMMC")) return 10;
+    return 0;
+  };
+  return [...values].sort((a, b) => rank(b) - rank(a) || a.localeCompare(b));
+}
+
 function formatMemoryTypes(detail: Awaited<ReturnType<typeof getProcessorDetailBySlug>>): string {
   if (!detail) return "-";
   const values = detail.memoryTypes?.length ? detail.memoryTypes : (detail.memoryType ? [detail.memoryType] : []);
-  return values.length ? values.join(", ") : "-";
+  return values.length ? sortMemoryTypes(values).join(", ") : "-";
 }
 
 function getMemoryFrequencyRows(detail: Awaited<ReturnType<typeof getProcessorDetailBySlug>>): string {
   if (!detail) return "-";
   const map = detail.memoryFreqByType || {};
+  const rank = (v: string) => {
+    const t = v.toUpperCase().replace(/\s+/g, "");
+    const m = t.match(/LPDDR(\d+)(X?)/);
+    if (!m) return -1;
+    const gen = Number(m[1] || 0);
+    const x = m[2] === "X" ? 0.1 : 0;
+    return gen + x;
+  };
   const rows = Object.entries(map)
     .filter(([k, v]) => String(k).trim() && Number.isFinite(Number(v)))
+    .sort((a, b) => rank(String(b[0])) - rank(String(a[0])) || String(a[0]).localeCompare(String(b[0])))
     .map(([k, v]) => `${k}: ${Number(v)} MHz`);
-  if (rows.length) return rows.join(", ");
+  if (rows.length) return rows.join("\n");
   if (Number.isFinite(detail.memoryFreqMhz)) return `${detail.memoryFreqMhz} MHz`;
   return "-";
 }
@@ -371,7 +419,7 @@ function getMemoryFrequencyRows(detail: Awaited<ReturnType<typeof getProcessorDe
 function formatStorageTypes(detail: Awaited<ReturnType<typeof getProcessorDetailBySlug>>): string {
   if (!detail) return "-";
   const values = detail.storageTypes?.length ? detail.storageTypes : (detail.storageType ? [detail.storageType] : []);
-  return values.length ? values.join(", ") : "-";
+  return values.length ? sortStorageTypes(values).join(", ") : "-";
 }
 
 function formatWifi(value?: string): string {
@@ -561,25 +609,70 @@ function channelsScore(value: string): number {
 }
 
 function normalizeCameraMode(raw: string): string {
-  const text = String(raw || "").trim();
+  const original = String(raw || "").trim();
+  if (!original) return original;
+  const text = original.includes(":") ? original.split(":").slice(1).join(":").trim() : original;
   if (!text) return text;
+  const parseMpNumber = (value: string): number => {
+    const cleaned = String(value || "").trim();
+    if (!cleaned) return NaN;
+    const m = cleaned.match(/([\d.]+)(?:\s*mp)?/i);
+    if (!m?.[1]) return NaN;
+    return Number(m[1]);
+  };
   const parts = text.split("+").map((p) => p.trim()).filter(Boolean);
-  if (parts.length < 2) return text;
-  const parsed = parts.map((p) => {
-    const m = p.match(/^(\d+)\s*mp?$/i);
-    return m ? Number(m[1]) : NaN;
-  });
+  if (parts.length < 2) {
+    const n = parseMpNumber(text);
+    if (Number.isFinite(n)) return `Up to ${Number.isInteger(n) ? n : n}MP`;
+    return text;
+  }
+  const parsed = parts.map((p) => parseMpNumber(p));
   if (parsed.some((n) => !Number.isFinite(n))) return text;
   const first = parsed[0];
-  if (parsed.every((n) => n === first)) return `${parts.length}x${first}MP`;
-  return text;
+  const same = parsed.every((n) => n === first);
+  if (same) {
+    const value = Number.isInteger(first) ? first : first;
+    return `${parsed.length}x${value}MP`;
+  }
+  return parsed
+    .map((n) => `${Number.isInteger(n) ? n : n}MP`)
+    .join(" + ");
 }
 
 function formatCameraSupportModes(detail: Awaited<ReturnType<typeof getProcessorDetailBySlug>>): string {
   if (!detail) return "-";
   const list = (detail.cameraSupportModes || []).map((m) => normalizeCameraMode(m)).filter(Boolean);
-  if (list.length) return list.join(", ");
+  if (list.length) return list.join("\n");
   return normalizeCameraMode(String(detail.maxCameraSupport || detail.cameraSupport || "-"));
+}
+
+function formatVideoRows(raw: string): string {
+  const text = String(raw || "").trim();
+  if (!text || text === "-") return "-";
+  return text
+    .split(/\s*,\s*/)
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .join("\n");
+}
+
+function stripResolutionFromMode(value: string): string {
+  return String(value || "")
+    .replace(/\(\s*\d{3,5}\s*[xX*]\s*\d{3,5}\s*\)/g, "")
+    .replace(/\s{2,}/g, " ")
+    .replace(/\s+:/g, ":")
+    .trim();
+}
+
+function formatDisplayRows(raw: string): string {
+  const text = String(raw || "").trim();
+  if (!text || text === "-") return "-";
+  return text
+    .split(/\s*,\s*/)
+    .map((item) => stripResolutionFromMode(item))
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .join("\n");
 }
 
 function buildSections(
@@ -752,9 +845,6 @@ function buildSections(
       rows: [
         { label: "Memory Type", left: formatMemoryTypes(leftDetail), right: formatMemoryTypes(rightDetail), leftNum: memoryTypeScore(formatMemoryTypes(leftDetail)), rightNum: memoryTypeScore(formatMemoryTypes(rightDetail)) },
         { label: "Memory Frequency", left: getMemoryFrequencyRows(leftDetail), right: getMemoryFrequencyRows(rightDetail), leftNum: memoryFreqScore(getMemoryFrequencyRows(leftDetail)), rightNum: memoryFreqScore(getMemoryFrequencyRows(rightDetail)) },
-        { label: "Memory Channels", left: asText(leftDetail?.memoryChannels), right: asText(rightDetail?.memoryChannels), leftNum: channelsScore(asText(leftDetail?.memoryChannels)), rightNum: channelsScore(asText(rightDetail?.memoryChannels)) },
-        { label: "Memory Bus Width", left: Number.isFinite(leftDetail?.memoryBusWidthBits) ? `${leftDetail?.memoryBusWidthBits}-bit` : "-", right: Number.isFinite(rightDetail?.memoryBusWidthBits) ? `${rightDetail?.memoryBusWidthBits}-bit` : "-", leftNum: Number(leftDetail?.memoryBusWidthBits), rightNum: Number(rightDetail?.memoryBusWidthBits) },
-        { label: "Bandwidth", left: Number.isFinite(leftDetail?.bandwidthGbps) ? `${num(leftDetail?.bandwidthGbps, 1)} GB/s` : "-", right: Number.isFinite(rightDetail?.bandwidthGbps) ? `${num(rightDetail?.bandwidthGbps, 1)} GB/s` : "-", leftNum: Number(leftDetail?.bandwidthGbps), rightNum: Number(rightDetail?.bandwidthGbps) },
         { label: "Max Memory", left: leftDetail?.maxMemoryGb ? `${leftDetail.maxMemoryGb}GB` : "-", right: rightDetail?.maxMemoryGb ? `${rightDetail.maxMemoryGb}GB` : "-", leftNum: Number(leftDetail?.maxMemoryGb), rightNum: Number(rightDetail?.maxMemoryGb) },
         { label: "Storage Type", left: formatStorageTypes(leftDetail), right: formatStorageTypes(rightDetail), leftNum: storageTypeScore(formatStorageTypes(leftDetail)), rightNum: storageTypeScore(formatStorageTypes(rightDetail)) },
       ],
@@ -765,16 +855,38 @@ function buildSections(
         { label: "Camera ISP", left: asText(leftDetail?.cameraIsp), right: asText(rightDetail?.cameraIsp) },
         { label: "Camera Support Modes", left: formatCameraSupportModes(leftDetail), right: formatCameraSupportModes(rightDetail), leftNum: maxMpScore(formatCameraSupportModes(leftDetail)), rightNum: maxMpScore(formatCameraSupportModes(rightDetail)) },
         { label: "Other Camera Features", left: leftDetail?.cameraFeatures?.length ? leftDetail.cameraFeatures.join(", ") : "-", right: rightDetail?.cameraFeatures?.length ? rightDetail.cameraFeatures.join(", ") : "-" },
-        { label: "Video Recording Modes", left: leftDetail?.videoRecordingModes?.length ? leftDetail.videoRecordingModes.join(", ") : asText(leftDetail?.maxVideoCapture || leftDetail?.videoCapture), right: rightDetail?.videoRecordingModes?.length ? rightDetail.videoRecordingModes.join(", ") : asText(rightDetail?.maxVideoCapture || rightDetail?.videoCapture), leftNum: mediaCapabilityScore(leftDetail?.videoRecordingModes?.length ? leftDetail.videoRecordingModes.join(", ") : asText(leftDetail?.maxVideoCapture || leftDetail?.videoCapture)), rightNum: mediaCapabilityScore(rightDetail?.videoRecordingModes?.length ? rightDetail.videoRecordingModes.join(", ") : asText(rightDetail?.maxVideoCapture || rightDetail?.videoCapture)) },
+        {
+          label: "Video Recording Modes",
+          left: formatVideoRows(leftDetail?.videoRecordingModes?.length ? leftDetail.videoRecordingModes.join(", ") : asText(leftDetail?.maxVideoCapture || leftDetail?.videoCapture)),
+          right: formatVideoRows(rightDetail?.videoRecordingModes?.length ? rightDetail.videoRecordingModes.join(", ") : asText(rightDetail?.maxVideoCapture || rightDetail?.videoCapture)),
+          leftNum: mediaCapabilityScore(leftDetail?.videoRecordingModes?.length ? leftDetail.videoRecordingModes.join(", ") : asText(leftDetail?.maxVideoCapture || leftDetail?.videoCapture)),
+          rightNum: mediaCapabilityScore(rightDetail?.videoRecordingModes?.length ? rightDetail.videoRecordingModes.join(", ") : asText(rightDetail?.maxVideoCapture || rightDetail?.videoCapture)),
+        },
         { label: "Other Video Features", left: leftDetail?.videoFeatures?.length ? leftDetail.videoFeatures.join(", ") : "-", right: rightDetail?.videoFeatures?.length ? rightDetail.videoFeatures.join(", ") : "-" },
-        { label: "Video Playback", left: asText(leftDetail?.videoPlayback), right: asText(rightDetail?.videoPlayback), leftNum: mediaCapabilityScore(asText(leftDetail?.videoPlayback)), rightNum: mediaCapabilityScore(asText(rightDetail?.videoPlayback)) },
+        {
+          label: "Video Playback",
+          left: formatVideoRows(asText(leftDetail?.videoPlayback)),
+          right: formatVideoRows(asText(rightDetail?.videoPlayback)),
+          leftNum: mediaCapabilityScore(asText(leftDetail?.videoPlayback)),
+          rightNum: mediaCapabilityScore(asText(rightDetail?.videoPlayback)),
+        },
       ],
     },
     {
       title: "Display & Multimedia",
       rows: [
-        { label: "Display Modes", left: leftDetail?.displayModes?.length ? leftDetail.displayModes.join(", ") : asText((leftDetail?.maxDisplayResolution || leftDetail?.maxRefreshRateHz) ? `${leftDetail?.maxDisplayResolution || "-"}${leftDetail?.maxRefreshRateHz ? ` @ ${leftDetail.maxRefreshRateHz}Hz` : ""}` : "-"), right: rightDetail?.displayModes?.length ? rightDetail.displayModes.join(", ") : asText((rightDetail?.maxDisplayResolution || rightDetail?.maxRefreshRateHz) ? `${rightDetail?.maxDisplayResolution || "-"}${rightDetail?.maxRefreshRateHz ? ` @ ${rightDetail.maxRefreshRateHz}Hz` : ""}` : "-"), leftNum: mediaCapabilityScore(leftDetail?.displayModes?.length ? leftDetail.displayModes.join(", ") : asText((leftDetail?.maxDisplayResolution || leftDetail?.maxRefreshRateHz) ? `${leftDetail?.maxDisplayResolution || "-"}${leftDetail?.maxRefreshRateHz ? ` @ ${leftDetail.maxRefreshRateHz}Hz` : ""}` : "-")), rightNum: mediaCapabilityScore(rightDetail?.displayModes?.length ? rightDetail.displayModes.join(", ") : asText((rightDetail?.maxDisplayResolution || rightDetail?.maxRefreshRateHz) ? `${rightDetail?.maxDisplayResolution || "-"}${rightDetail?.maxRefreshRateHz ? ` @ ${rightDetail.maxRefreshRateHz}Hz` : ""}` : "-")) },
-        { label: "Output Display", left: asText(leftDetail?.outputDisplay), right: asText(rightDetail?.outputDisplay) },
+        {
+          label: "Display Modes",
+          left: formatDisplayRows(leftDetail?.displayModes?.length ? leftDetail.displayModes.join(", ") : asText((leftDetail?.maxDisplayResolution || leftDetail?.maxRefreshRateHz) ? `${leftDetail?.maxDisplayResolution || "-"}${leftDetail?.maxRefreshRateHz ? ` @ ${leftDetail.maxRefreshRateHz}Hz` : ""}` : "-")),
+          right: formatDisplayRows(rightDetail?.displayModes?.length ? rightDetail.displayModes.join(", ") : asText((rightDetail?.maxDisplayResolution || rightDetail?.maxRefreshRateHz) ? `${rightDetail?.maxDisplayResolution || "-"}${rightDetail?.maxRefreshRateHz ? ` @ ${rightDetail.maxRefreshRateHz}Hz` : ""}` : "-")),
+          leftNum: mediaCapabilityScore(leftDetail?.displayModes?.length ? leftDetail.displayModes.join(", ") : asText((leftDetail?.maxDisplayResolution || leftDetail?.maxRefreshRateHz) ? `${leftDetail?.maxDisplayResolution || "-"}${leftDetail?.maxRefreshRateHz ? ` @ ${leftDetail.maxRefreshRateHz}Hz` : ""}` : "-")),
+          rightNum: mediaCapabilityScore(rightDetail?.displayModes?.length ? rightDetail.displayModes.join(", ") : asText((rightDetail?.maxDisplayResolution || rightDetail?.maxRefreshRateHz) ? `${rightDetail?.maxDisplayResolution || "-"}${rightDetail?.maxRefreshRateHz ? ` @ ${rightDetail.maxRefreshRateHz}Hz` : ""}` : "-")),
+        },
+        {
+          label: "Output Display",
+          left: formatDisplayRows(asText(leftDetail?.outputDisplay)),
+          right: formatDisplayRows(asText(rightDetail?.outputDisplay)),
+        },
         { label: "Display Features", left: leftDetail?.displayFeatures?.length ? leftDetail.displayFeatures.join(", ") : "-", right: rightDetail?.displayFeatures?.length ? rightDetail.displayFeatures.join(", ") : "-" },
         { label: "Audio Codecs", left: leftDetail?.audioCodecs?.length ? leftDetail.audioCodecs.join(", ") : "-", right: rightDetail?.audioCodecs?.length ? rightDetail.audioCodecs.join(", ") : "-" },
         { label: "Multimedia Features", left: leftDetail?.multimediaFeatures?.length ? leftDetail.multimediaFeatures.join(", ") : "-", right: rightDetail?.multimediaFeatures?.length ? rightDetail.multimediaFeatures.join(", ") : "-" },
@@ -835,10 +947,13 @@ function buildSections(
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { slug } = await params;
   const { leftSlug, rightSlug } = parseCompareSlug(slug);
+  const siteUrl = getPublicSiteUrl();
+  const canonicalUrl = `${siteUrl}/processors/compare/${slug}`;
   if (!leftSlug || !rightSlug) {
     return {
       title: "Processor Comparison",
       description: "Compare processor specs side-by-side.",
+      alternates: { canonical: canonicalUrl },
     };
   }
   const profiles = await listProcessorProfiles();
@@ -849,11 +964,27 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     return {
       title: "Processor Comparison",
       description: "Compare processor specs side-by-side.",
+      alternates: { canonical: canonicalUrl },
     };
   }
+  const title = `${left.name} vs ${right.name}`;
+  const description = `Detailed processor comparison: ${left.name} vs ${right.name}.`;
   return {
-    title: `${left.name} vs ${right.name}`,
-    description: `Detailed processor comparison: ${left.name} vs ${right.name}.`,
+    title,
+    description,
+    alternates: { canonical: canonicalUrl },
+    openGraph: {
+      title,
+      description,
+      url: canonicalUrl,
+      type: "article",
+      siteName: "Technology Stuff",
+    },
+    twitter: {
+      card: "summary",
+      title,
+      description,
+    },
   };
 }
 
@@ -861,6 +992,8 @@ export default async function ProcessorCompareSlugPage({ params }: Props) {
   const { slug } = await params;
   const { leftSlug, rightSlug } = parseCompareSlug(slug);
   if (!leftSlug || !rightSlug) notFound();
+  const siteUrl = getPublicSiteUrl();
+  const canonicalUrl = `${siteUrl}/processors/compare/${slug}`;
 
   const profiles = await listProcessorProfiles();
   const bySlug = new Map(profiles.map((p) => [p.slug, p]));
@@ -874,9 +1007,33 @@ export default async function ProcessorCompareSlugPage({ params }: Props) {
   ]);
   const sections = buildSections(left, right, leftDetail, rightDetail);
   const moreMatchups = buildMoreMatchups(left, right, profiles);
+  const breadcrumbJsonLd = {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    itemListElement: [
+      { "@type": "ListItem", position: 1, name: "Home", item: siteUrl },
+      { "@type": "ListItem", position: 2, name: "Processors", item: `${siteUrl}/processors` },
+      { "@type": "ListItem", position: 3, name: "Compare", item: canonicalUrl },
+    ],
+  };
+  const webPageJsonLd = {
+    "@context": "https://schema.org",
+    "@type": "WebPage",
+    name: `${left.name} vs ${right.name}`,
+    description: `Detailed processor comparison: ${left.name} vs ${right.name}.`,
+    url: canonicalUrl,
+  };
 
   return (
     <main className="mobile-container py-6 sm:py-8">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbJsonLd) }}
+      />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(webPageJsonLd) }}
+      />
       <section className="mb-3">
         <div className="inline-flex items-center gap-2 text-sm font-semibold text-slate-500">
           <Link href="/" className="rounded px-1 py-0.5 text-slate-600 transition-colors hover:bg-blue-50 hover:text-blue-700 active:bg-blue-100">Home</Link>

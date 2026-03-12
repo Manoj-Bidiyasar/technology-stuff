@@ -1,8 +1,8 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import type { ProcessorProfile } from "@/lib/processors/profiles";
 
 type Props = {
@@ -11,6 +11,13 @@ type Props = {
 
 type SortKey = "antutu" | "score" | "nm" | "clock" | "phones";
 type ClassKey = "all" | "ultra-flagship" | "flagship" | "upper-midrange" | "midrange" | "budget" | "entry";
+
+function splitCompareParam(value: string): { left: string; right: string } {
+  const raw = String(value || "").trim();
+  if (!raw.includes("-vs-")) return { left: raw, right: "" };
+  const parts = raw.split("-vs-").map((v) => v.trim()).filter(Boolean);
+  return { left: parts[0] || "", right: parts[1] || "" };
+}
 
 function antutuLabel(value?: number): string {
   if (!value || value <= 0) return "NA";
@@ -45,6 +52,42 @@ function startsWithToken(text: string, query: string): boolean {
   return normalized.split(/[\s\-_/]+/).some((token) => token.startsWith(q));
 }
 
+function levenshtein(a: string, b: string): number {
+  const alen = a.length;
+  const blen = b.length;
+  if (!alen) return blen;
+  if (!blen) return alen;
+  const dp = Array.from({ length: alen + 1 }, (_, i) => i);
+  for (let j = 1; j <= blen; j += 1) {
+    let prev = dp[0];
+    dp[0] = j;
+    for (let i = 1; i <= alen; i += 1) {
+      const temp = dp[i];
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      dp[i] = Math.min(dp[i] + 1, dp[i - 1] + 1, prev + cost);
+      prev = temp;
+    }
+  }
+  return dp[alen];
+}
+
+function normalizeQuery(input: string): string {
+  return input.toLowerCase().replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ").trim();
+}
+
+function fuzzyMatchName(target: string, query: string): boolean {
+  const q = normalizeQuery(query);
+  if (!q) return false;
+  const t = normalizeQuery(target);
+  if (!t) return false;
+  if (t.includes(q)) return true;
+  const qTokens = q.split(" ");
+  const tTokens = t.split(" ");
+  return qTokens.every((qt) =>
+    tTokens.some((tt) => tt.startsWith(qt) || levenshtein(tt, qt) <= 1),
+  );
+}
+
 function processorClass(value?: number): Exclude<ClassKey, "all"> {
   const score = Number(value || 0);
   if (score >= 2800000) return "ultra-flagship";
@@ -58,11 +101,15 @@ function processorClass(value?: number): Exclude<ClassKey, "all"> {
 export default function ProcessorsLandingClient({ processors }: Props) {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const pathname = usePathname();
 
   const bySlug = useMemo(() => new Map(processors.map((p) => [p.slug, p])), [processors]);
   const vendors = useMemo(() => ["All", ...Array.from(new Set(processors.map((p) => p.vendor))).sort()], [processors]);
-  const initialLeftSlug = String(searchParams.get("left") || "").trim();
-  const initialRightSlug = String(searchParams.get("right") || "").trim();
+  const rawLeftParam = String(searchParams.get("left") || "").trim();
+  const rawRightParam = String(searchParams.get("right") || "").trim();
+  const splitLeft = splitCompareParam(rawLeftParam);
+  const initialLeftSlug = splitLeft.left;
+  const initialRightSlug = rawRightParam || splitLeft.right;
 
   const [q, setQ] = useState("");
   const [vendor, setVendor] = useState("All");
@@ -75,10 +122,61 @@ export default function ProcessorsLandingClient({ processors }: Props) {
   const [rightText, setRightText] = useState(bySlug.get(initialRightSlug) ? fullProcessorName(bySlug.get(initialRightSlug) as ProcessorProfile) : "");
   const [leftFocused, setLeftFocused] = useState(false);
   const [rightFocused, setRightFocused] = useState(false);
-  const [isTrayVisible, setIsTrayVisible] = useState(true);
+  const [leftTrayFocused, setLeftTrayFocused] = useState(false);
+  const [rightTrayFocused, setRightTrayFocused] = useState(false);
+  const [isTrayVisible, setIsTrayVisible] = useState(Boolean(initialLeftSlug || initialRightSlug));
+  const [trayDismissed, setTrayDismissed] = useState(false);
 
   const left = bySlug.get(leftSlug);
   const right = bySlug.get(rightSlug);
+  const syncKey = `${leftSlug}|${rightSlug}|${pathname || ""}|${trayDismissed ? "1" : "0"}|${searchParams.toString()}`;
+
+  useEffect(() => {
+    if (trayDismissed) {
+      setIsTrayVisible(false);
+      return;
+    }
+    if (leftSlug || rightSlug) {
+      setIsTrayVisible(true);
+    } else {
+      setIsTrayVisible(false);
+    }
+  }, [leftSlug, rightSlug, trayDismissed]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const dismissed = window.localStorage.getItem("processorsCompareTrayDismissed") === "1";
+    setTrayDismissed(dismissed);
+    if (dismissed && (leftSlug || rightSlug)) {
+      setLeftSlug("");
+      setRightSlug("");
+      setLeftText("");
+      setRightText("");
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!pathname) return;
+    const current = searchParams.toString();
+    const params = new URLSearchParams(current);
+    if (leftSlug) {
+      params.set("left", leftSlug);
+    } else {
+      params.delete("left");
+    }
+    if (rightSlug) {
+      params.set("right", rightSlug);
+    } else {
+      params.delete("right");
+    }
+    if (trayDismissed) {
+      params.delete("left");
+      params.delete("right");
+    }
+    const next = params.toString();
+    if (next === current) return;
+    router.replace(next ? `${pathname}?${next}` : pathname, { scroll: false });
+  }, [syncKey, router, pathname, searchParams]);
 
   const filtered = useMemo(() => {
     const query = q.trim().toLowerCase();
@@ -102,22 +200,62 @@ export default function ProcessorsLandingClient({ processors }: Props) {
 
   const top = useMemo(() => [...processors].sort((a, b) => (b.antutu || 0) - (a.antutu || 0))[0], [processors]);
   const maxAntutu = useMemo(() => Math.max(...processors.map((p) => p.antutu || 0), 1), [processors]);
+  const formatProcessLabel = (value?: string) => {
+    const raw = String(value || "").trim();
+    if (!raw) return "NA";
+    if (/^\d+(\.\d+)?$/.test(raw)) return `${raw}nm`;
+    return raw;
+  };
   const bestNm = useMemo(() => {
     const values = processors.map((p) => Number(p.fabricationNm || 0)).filter((v) => v > 0);
     return values.length ? Math.min(...values) : undefined;
   }, [processors]);
+  const bestProcess = useMemo(() => {
+    if (bestNm) return undefined;
+    const found = processors.find((p) => String(p.process || "").trim());
+    return found ? String(found.process || "").trim() : undefined;
+  }, [processors, bestNm]);
 
   const canCompare = Boolean(left && right && left.slug !== right.slug);
-  const leftSuggestions = useMemo(() => {
-    const t = leftText.trim().toLowerCase();
+  const duplicateSelection = Boolean(leftSlug && rightSlug && leftSlug === rightSlug);
+  const leftMatches = useMemo(() => {
+    const t = leftText.trim();
     if (!t) return [];
-    return processors.filter((p) => startsWithToken(fullProcessorName(p), t) || startsWithToken(p.name, t) || startsWithToken(p.vendor, t)).slice(0, 8);
-  }, [processors, leftText]);
-  const rightSuggestions = useMemo(() => {
-    const t = rightText.trim().toLowerCase();
+    return processors
+      .filter((p) => p.slug !== rightSlug)
+      .filter(
+        (p) =>
+          startsWithToken(fullProcessorName(p), t) ||
+          startsWithToken(p.name, t) ||
+          startsWithToken(p.vendor, t) ||
+          fuzzyMatchName(fullProcessorName(p), t) ||
+          fuzzyMatchName(p.name, t),
+      );
+  }, [processors, leftText, rightSlug]);
+  const rightMatches = useMemo(() => {
+    const t = rightText.trim();
     if (!t) return [];
-    return processors.filter((p) => startsWithToken(fullProcessorName(p), t) || startsWithToken(p.name, t) || startsWithToken(p.vendor, t)).slice(0, 8);
-  }, [processors, rightText]);
+    return processors
+      .filter((p) => p.slug !== leftSlug)
+      .filter(
+        (p) =>
+          startsWithToken(fullProcessorName(p), t) ||
+          startsWithToken(p.name, t) ||
+          startsWithToken(p.vendor, t) ||
+          fuzzyMatchName(fullProcessorName(p), t) ||
+          fuzzyMatchName(p.name, t),
+      );
+  }, [processors, rightText, leftSlug]);
+
+  const leftSuggestions = useMemo(() => leftMatches.slice(0, 8), [leftMatches]);
+  const rightSuggestions = useMemo(() => rightMatches.slice(0, 8), [rightMatches]);
+
+  const leftNotFound = Boolean(leftText.trim() && leftSuggestions.length === 0 && !leftSlug);
+  const rightNotFound = Boolean(rightText.trim() && rightSuggestions.length === 0 && !rightSlug);
+  const leftNotFoundWarning = leftNotFound && leftText.trim().length >= 3 && !leftFocused;
+  const rightNotFoundWarning = rightNotFound && rightText.trim().length >= 3 && !rightFocused;
+  const leftTrayNotFoundWarning = leftNotFound && leftText.trim().length >= 3 && !leftTrayFocused;
+  const rightTrayNotFoundWarning = rightNotFound && rightText.trim().length >= 3 && !rightTrayFocused;
 
   function openCompare() {
     if (!canCompare || !left || !right) return;
@@ -127,6 +265,16 @@ export default function ProcessorsLandingClient({ processors }: Props) {
   function addToCompare(slug: string) {
     const item = bySlug.get(slug);
     if (!item) return;
+    if (trayDismissed) {
+      setTrayDismissed(false);
+      if (typeof window !== "undefined") {
+        window.localStorage.setItem("processorsCompareTrayDismissed", "0");
+      }
+      setLeftSlug("");
+      setRightSlug("");
+      setLeftText("");
+      setRightText("");
+    }
     setIsTrayVisible(true);
 
     if (!leftSlug) {
@@ -162,6 +310,15 @@ export default function ProcessorsLandingClient({ processors }: Props) {
     clearRightSelection();
   }
 
+  function dismissTray() {
+    clearAllSelection();
+    setIsTrayVisible(false);
+    setTrayDismissed(true);
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem("processorsCompareTrayDismissed", "1");
+    }
+  }
+
   return (
     <main className="mobile-container pb-28 pt-4 sm:pb-24 sm:pt-5">
       <section className="relative overflow-hidden rounded-3xl border border-slate-200 bg-gradient-to-br from-[#fefefe] via-[#f7fbff] to-[#eef6ff] text-slate-900 shadow-lg">
@@ -190,7 +347,7 @@ export default function ProcessorsLandingClient({ processors }: Props) {
             <div className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 shadow-sm">
               <div className="flex items-center justify-between gap-2">
                 <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Best Node</p>
-                <p className="text-sm font-extrabold text-slate-900">{bestNm ? `${bestNm}nm` : "NA"}</p>
+                <p className="text-sm font-extrabold text-slate-900">{bestNm ? `${bestNm}nm` : formatProcessLabel(bestProcess)}</p>
               </div>
             </div>
           </div>
@@ -208,7 +365,7 @@ export default function ProcessorsLandingClient({ processors }: Props) {
             </article>
             <article className="rounded-xl border border-slate-200 bg-white p-2.5 shadow-sm">
               <p className="text-[11px] uppercase tracking-wide text-slate-500">Best Node</p>
-              <p className="mt-0.5 text-lg font-extrabold text-slate-900">{bestNm ? `${bestNm}nm` : "NA"}</p>
+              <p className="mt-0.5 text-lg font-extrabold text-slate-900">{bestNm ? `${bestNm}nm` : formatProcessLabel(bestProcess)}</p>
               <p className="text-xs text-slate-600">Lower is generally better efficiency</p>
             </article>
           </div>
@@ -271,6 +428,7 @@ export default function ProcessorsLandingClient({ processors }: Props) {
                   )}
                 </div>
               ) : null}
+              {leftNotFoundWarning ? <p className="mt-1 text-xs font-semibold text-amber-600">No exact processor found.</p> : null}
             </div>
             <button
               type="button"
@@ -333,6 +491,7 @@ export default function ProcessorsLandingClient({ processors }: Props) {
                   )}
                 </div>
               ) : null}
+              {rightNotFoundWarning ? <p className="mt-1 text-xs font-semibold text-amber-600">No exact processor found.</p> : null}
             </div>
           </div>
 
@@ -346,6 +505,9 @@ export default function ProcessorsLandingClient({ processors }: Props) {
               <p>Pick two processors to open a full, detailed comparison page.</p>
             )}
           </div>
+          {duplicateSelection ? (
+            <p className="mt-2 text-xs font-semibold text-red-600">Both selections are the same. Pick two different processors.</p>
+          ) : null}
 
           <button
             type="button"
@@ -449,7 +611,7 @@ export default function ProcessorsLandingClient({ processors }: Props) {
                   </div>
                   <div className="rounded-lg bg-slate-50 p-1 sm:p-2">
                     <p className="text-slate-500">Fabrication</p>
-                    <p className="font-extrabold text-slate-900">{p.fabricationNm ? `${num(p.fabricationNm)}nm` : "NA"}</p>
+                    <p className="font-extrabold text-slate-900">{p.fabricationNm ? `${num(p.fabricationNm)}nm` : formatProcessLabel(p.process)}</p>
                   </div>
                   <div className="rounded-lg bg-slate-50 p-1 sm:p-2">
                     <p className="text-slate-500">Peak Clock</p>
@@ -509,7 +671,7 @@ export default function ProcessorsLandingClient({ processors }: Props) {
                 </button>
                 <button
                   type="button"
-                  onClick={() => setIsTrayVisible(false)}
+                  onClick={dismissTray}
                   aria-label="Close compare tray"
                   className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-slate-300 text-slate-500 hover:text-slate-700"
                 >
@@ -521,20 +683,54 @@ export default function ProcessorsLandingClient({ processors }: Props) {
             </div>
           <div className="grid items-center gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
             <div className="grid grid-cols-[minmax(0,1fr)_24px_minmax(0,1fr)] items-center gap-2 rounded-xl bg-slate-50 px-2 py-2">
-              <div className="min-w-0 rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs font-semibold text-slate-700">
-                <div className="flex items-center gap-1">
-                  <span className="block min-w-0 flex-1 truncate">{left ? fullProcessorName(left) : "Pick Left Processor"}</span>
-                  {left ? (
-                    <button
-                      type="button"
-                      onClick={clearLeftSelection}
-                      aria-label="Remove left processor"
-                      className="inline-flex h-4 w-4 items-center justify-center rounded-full border border-slate-300 text-[10px] text-slate-500 hover:text-slate-700"
-                    >
-                      x
-                    </button>
-                  ) : null}
-                </div>
+              <div className="relative">
+                <input
+                  value={leftText}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    if (trayDismissed) {
+                      setTrayDismissed(false);
+                      if (typeof window !== "undefined") {
+                        window.localStorage.setItem("processorsCompareTrayDismissed", "0");
+                      }
+                    }
+                    setLeftText(value);
+                    const exact = processors.find((p) => {
+                      const t = value.trim().toLowerCase();
+                      return p.name.toLowerCase() === t || fullProcessorName(p).toLowerCase() === t;
+                    });
+                    setLeftSlug(exact?.slug || "");
+                  }}
+                  onFocus={() => setLeftTrayFocused(true)}
+                  onBlur={() => setTimeout(() => setLeftTrayFocused(false), 100)}
+                  placeholder="Pick left processor"
+                  className="h-9 w-full rounded-lg border border-slate-200 bg-white px-2 text-xs font-semibold text-slate-700 outline-none ring-blue-200 focus:border-blue-400 focus:ring-2"
+                />
+                {leftTrayFocused && leftText.trim() ? (
+                  <div className="absolute bottom-full z-20 mb-1 max-h-52 w-full overflow-auto rounded-xl border border-slate-200 bg-white shadow-lg">
+                    {leftSuggestions.length > 0 ? (
+                      leftSuggestions.map((p) => (
+                        <button
+                          key={`left-tray-sg-${p.slug}`}
+                          type="button"
+                          onMouseDown={(e) => e.preventDefault()}
+                          onClick={() => {
+                            setLeftSlug(p.slug);
+                            setLeftText(fullProcessorName(p));
+                            setLeftTrayFocused(false);
+                          }}
+                          className="flex w-full items-center justify-between gap-2 border-b border-slate-100 px-3 py-2 text-left last:border-b-0 hover:bg-blue-50"
+                        >
+                          <span className="truncate text-xs font-semibold text-slate-800">{fullProcessorName(p)}</span>
+                          <span className="text-[10px] font-semibold text-slate-500">{p.vendor}</span>
+                        </button>
+                      ))
+                    ) : (
+                      <div className="px-3 py-2 text-xs font-semibold text-slate-500">No matching processor</div>
+                    )}
+                  </div>
+                ) : null}
+                {leftTrayNotFoundWarning ? <p className="mt-1 text-[11px] font-semibold text-amber-600">No exact processor found.</p> : null}
               </div>
               <button
                 type="button"
@@ -558,20 +754,54 @@ export default function ProcessorsLandingClient({ processors }: Props) {
                   <path d="M17 17H6M10 14l-4 3 4 3" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
               </button>
-              <div className="min-w-0 rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs font-semibold text-slate-700">
-                <div className="flex items-center gap-1">
-                  <span className="block min-w-0 flex-1 truncate">{right ? fullProcessorName(right) : "Pick Right Processor"}</span>
-                  {right ? (
-                    <button
-                      type="button"
-                      onClick={clearRightSelection}
-                      aria-label="Remove right processor"
-                      className="inline-flex h-4 w-4 items-center justify-center rounded-full border border-slate-300 text-[10px] text-slate-500 hover:text-slate-700"
-                    >
-                      x
-                    </button>
-                  ) : null}
-                </div>
+              <div className="relative">
+                <input
+                  value={rightText}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    if (trayDismissed) {
+                      setTrayDismissed(false);
+                      if (typeof window !== "undefined") {
+                        window.localStorage.setItem("processorsCompareTrayDismissed", "0");
+                      }
+                    }
+                    setRightText(value);
+                    const exact = processors.find((p) => {
+                      const t = value.trim().toLowerCase();
+                      return p.name.toLowerCase() === t || fullProcessorName(p).toLowerCase() === t;
+                    });
+                    setRightSlug(exact?.slug || "");
+                  }}
+                  onFocus={() => setRightTrayFocused(true)}
+                  onBlur={() => setTimeout(() => setRightTrayFocused(false), 100)}
+                  placeholder="Pick right processor"
+                  className="h-9 w-full rounded-lg border border-slate-200 bg-white px-2 text-xs font-semibold text-slate-700 outline-none ring-blue-200 focus:border-blue-400 focus:ring-2"
+                />
+                {rightTrayFocused && rightText.trim() ? (
+                  <div className="absolute bottom-full z-20 mb-1 max-h-52 w-full overflow-auto rounded-xl border border-slate-200 bg-white shadow-lg">
+                    {rightSuggestions.length > 0 ? (
+                      rightSuggestions.map((p) => (
+                        <button
+                          key={`right-tray-sg-${p.slug}`}
+                          type="button"
+                          onMouseDown={(e) => e.preventDefault()}
+                          onClick={() => {
+                            setRightSlug(p.slug);
+                            setRightText(fullProcessorName(p));
+                            setRightTrayFocused(false);
+                          }}
+                          className="flex w-full items-center justify-between gap-2 border-b border-slate-100 px-3 py-2 text-left last:border-b-0 hover:bg-blue-50"
+                        >
+                          <span className="truncate text-xs font-semibold text-slate-800">{fullProcessorName(p)}</span>
+                          <span className="text-[10px] font-semibold text-slate-500">{p.vendor}</span>
+                        </button>
+                      ))
+                    ) : (
+                      <div className="px-3 py-2 text-xs font-semibold text-slate-500">No matching processor</div>
+                    )}
+                  </div>
+                ) : null}
+                {rightTrayNotFoundWarning ? <p className="mt-1 text-[11px] font-semibold text-amber-600">No exact processor found.</p> : null}
               </div>
             </div>
 
@@ -586,6 +816,9 @@ export default function ProcessorsLandingClient({ processors }: Props) {
               </button>
             </div>
           </div>
+          {duplicateSelection ? (
+            <p className="mt-2 text-xs font-semibold text-red-600">Both selections are the same. Pick two different processors.</p>
+          ) : null}
           </div>
         </section>
       ) : null}

@@ -57,6 +57,8 @@ export default function AdminProductsPage() {
   const [flipkartAffiliateId, setFlipkartAffiliateId] = useState(DEFAULT_FLIPKART_AFFILIATE_ID);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const [helperAliasMap, setHelperAliasMap] = useState<Record<string, string>>({});
+  const [helperSuggestions, setHelperSuggestions] = useState<string[]>([]);
 
   const finalSlug = useMemo(() => slugify(form.name), [form.name]);
 
@@ -71,8 +73,67 @@ export default function AdminProductsPage() {
     refresh(listDeviceType).catch((err) => setError(err instanceof Error ? err.message : "Failed to load products."));
   }, [listDeviceType, refresh]);
 
+  useEffect(() => {
+    let active = true;
+    async function loadHelper() {
+      try {
+        const scope = (form.deviceType || "smartphone").toLowerCase();
+        const response = await fetch(`/api/admin/helper-terms?scope=${scope}`, { cache: "no-store" });
+        if (!response.ok) return;
+        const json = (await response.json()) as { items?: { name: string; aliases?: string[]; status?: string }[] };
+        if (!active) return;
+        const map: Record<string, string> = {};
+        const suggestions = new Set<string>();
+        (json.items || []).forEach((item) => {
+          if (item.status && item.status !== "approved") return;
+          const canonical = String(item.name || "").trim();
+          if (!canonical) return;
+          suggestions.add(canonical);
+          const all = [canonical, ...(item.aliases || [])];
+          all.forEach((alias) => {
+            const key = normalizeLookupKey(alias);
+            if (key) map[key] = canonical;
+          });
+        });
+        setHelperAliasMap(map);
+        setHelperSuggestions(Array.from(suggestions).sort((a, b) => a.localeCompare(b)));
+      } catch {
+        // ignore
+      }
+    }
+    loadHelper().catch(() => undefined);
+    return () => {
+      active = false;
+    };
+  }, [form.deviceType]);
+
   function setField<K extends keyof Product>(key: K, value: Product[K]) {
     setForm((prev) => ({ ...prev, [key]: value }));
+  }
+
+  function normalizeLookupKey(value: string): string {
+    return String(value || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+  }
+
+  function normalizeTextToken(value: string): string {
+    const compact = String(value || "").trim().replace(/\s+/g, " ");
+    if (!compact) return "";
+    const alias = helperAliasMap[normalizeLookupKey(compact)];
+    return alias || compact;
+  }
+
+  function normalizeCsvArray(values: string[]): string[] {
+    const out: string[] = [];
+    const seen = new Set<string>();
+    values.forEach((item) => {
+      const normalized = normalizeTextToken(item);
+      if (!normalized) return;
+      const key = normalizeLookupKey(normalized);
+      if (seen.has(key)) return;
+      seen.add(key);
+      out.push(normalized);
+    });
+    return out;
   }
 
   function editRow(row: Product) {
@@ -148,13 +209,18 @@ export default function AdminProductsPage() {
     setMessage("");
     setError("");
 
+    const normalizedName = normalizeTextToken(form.name);
+    const normalizedBrand = normalizeTextToken(form.brand);
+    const normalizedTags = normalizeCsvArray(form.tags || []);
     const payload: Product = {
       ...form,
       deviceType: form.deviceType || "smartphone",
+      name: normalizedName,
+      brand: normalizedBrand,
       slug: finalSlug,
       pros: form.pros?.filter(Boolean) || [],
       cons: form.cons?.filter(Boolean) || [],
-      tags: form.tags?.filter(Boolean) || [],
+      tags: normalizedTags,
       images: form.images?.filter(Boolean) || [],
     };
 
@@ -205,7 +271,18 @@ export default function AdminProductsPage() {
       </section>
 
       <form onSubmit={onSubmit} className="panel grid gap-3 p-4 sm:p-5">
-        <input value={form.name} onChange={(e) => setField("name", e.target.value)} placeholder="Name" className="rounded-lg border border-slate-200 px-3 py-2" required />
+        <input
+          value={form.name}
+          onChange={(e) => setField("name", e.target.value)}
+          onBlur={(e) => {
+            const normalized = normalizeTextToken(e.target.value);
+            if (normalized && normalized !== e.target.value) setField("name", normalized);
+          }}
+          list={helperSuggestions.length ? "suggest-helper" : undefined}
+          placeholder="Name"
+          className="rounded-lg border border-slate-200 px-3 py-2"
+          required
+        />
         <input value={finalSlug} readOnly placeholder="Slug" className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-slate-600" />
         <p className="text-xs text-slate-500">Final slug: {finalSlug || "-"}</p>
 
@@ -214,7 +291,18 @@ export default function AdminProductsPage() {
             <option value="smartphone">Smartphone</option>
             <option value="tablet">Tablet</option>
           </select>
-          <input value={form.brand} onChange={(e) => setField("brand", e.target.value)} placeholder="Brand" className="rounded-lg border border-slate-200 px-3 py-2" required />
+          <input
+            value={form.brand}
+            onChange={(e) => setField("brand", e.target.value)}
+            onBlur={(e) => {
+              const normalized = normalizeTextToken(e.target.value);
+              if (normalized && normalized !== e.target.value) setField("brand", normalized);
+            }}
+            list={helperSuggestions.length ? "suggest-helper" : undefined}
+            placeholder="Brand"
+            className="rounded-lg border border-slate-200 px-3 py-2"
+            required
+          />
           <input type="number" min={0} value={form.price} onChange={(e) => setField("price", Number(e.target.value || 0))} placeholder="Price" className="rounded-lg border border-slate-200 px-3 py-2" required />
           <select value={form.status} onChange={(e) => setField("status", e.target.value as Product["status"])} className="rounded-lg border border-slate-200 px-3 py-2">
             <option value="draft">Draft</option>
@@ -268,12 +356,12 @@ export default function AdminProductsPage() {
         <textarea value={form.shortDescription || ""} onChange={(e) => setField("shortDescription", e.target.value)} placeholder="Short description" className="min-h-20 rounded-lg border border-slate-200 px-3 py-2" />
 
         <div className="grid gap-3 sm:grid-cols-2">
-          <input value={form.specs.processor || ""} onChange={(e) => setField("specs", { ...form.specs, processor: e.target.value })} placeholder="Processor" className="rounded-lg border border-slate-200 px-3 py-2" />
-          <input value={form.specs.ram || ""} onChange={(e) => setField("specs", { ...form.specs, ram: e.target.value })} placeholder="RAM (e.g. 8 GB)" className="rounded-lg border border-slate-200 px-3 py-2" />
-          <input value={form.specs.storage || ""} onChange={(e) => setField("specs", { ...form.specs, storage: e.target.value })} placeholder="Storage" className="rounded-lg border border-slate-200 px-3 py-2" />
-          <input value={form.specs.battery || ""} onChange={(e) => setField("specs", { ...form.specs, battery: e.target.value })} placeholder="Battery" className="rounded-lg border border-slate-200 px-3 py-2" />
-          <input value={form.specs.display || ""} onChange={(e) => setField("specs", { ...form.specs, display: e.target.value })} placeholder="Display" className="rounded-lg border border-slate-200 px-3 py-2" />
-          <input value={form.specs.camera || ""} onChange={(e) => setField("specs", { ...form.specs, camera: e.target.value })} placeholder="Camera" className="rounded-lg border border-slate-200 px-3 py-2" />
+          <input value={form.specs.processor || ""} onChange={(e) => setField("specs", { ...form.specs, processor: e.target.value })} list={helperSuggestions.length ? "suggest-helper" : undefined} placeholder="Processor" className="rounded-lg border border-slate-200 px-3 py-2" />
+          <input value={form.specs.ram || ""} onChange={(e) => setField("specs", { ...form.specs, ram: e.target.value })} list={helperSuggestions.length ? "suggest-helper" : undefined} placeholder="RAM (e.g. 8 GB)" className="rounded-lg border border-slate-200 px-3 py-2" />
+          <input value={form.specs.storage || ""} onChange={(e) => setField("specs", { ...form.specs, storage: e.target.value })} list={helperSuggestions.length ? "suggest-helper" : undefined} placeholder="Storage" className="rounded-lg border border-slate-200 px-3 py-2" />
+          <input value={form.specs.battery || ""} onChange={(e) => setField("specs", { ...form.specs, battery: e.target.value })} list={helperSuggestions.length ? "suggest-helper" : undefined} placeholder="Battery" className="rounded-lg border border-slate-200 px-3 py-2" />
+          <input value={form.specs.display || ""} onChange={(e) => setField("specs", { ...form.specs, display: e.target.value })} list={helperSuggestions.length ? "suggest-helper" : undefined} placeholder="Display" className="rounded-lg border border-slate-200 px-3 py-2" />
+          <input value={form.specs.camera || ""} onChange={(e) => setField("specs", { ...form.specs, camera: e.target.value })} list={helperSuggestions.length ? "suggest-helper" : undefined} placeholder="Camera" className="rounded-lg border border-slate-200 px-3 py-2" />
         </div>
         <div className="grid gap-3 rounded-lg border border-slate-200 bg-slate-50 p-3">
           <p className="text-xs font-bold uppercase tracking-wide text-slate-600">Performance (Advanced)</p>
@@ -365,7 +453,17 @@ export default function AdminProductsPage() {
             Auto Suggest Pros/Cons
           </button>
         </div>
-        <input value={(form.tags || []).join(", ")} onChange={(e) => setField("tags", e.target.value.split(",").map((x) => x.trim()))} placeholder="Tags (comma separated)" className="rounded-lg border border-slate-200 px-3 py-2" />
+        <input
+          value={(form.tags || []).join(", ")}
+          onChange={(e) => setField("tags", e.target.value.split(",").map((x) => x.trim()))}
+          onBlur={(e) => {
+            const normalized = normalizeCsvArray(e.target.value.split(",").map((x) => x.trim()));
+            setField("tags", normalized);
+          }}
+          list={helperSuggestions.length ? "suggest-helper" : undefined}
+          placeholder="Tags (comma separated)"
+          className="rounded-lg border border-slate-200 px-3 py-2"
+        />
 
         <label className="text-sm font-semibold text-slate-700">Upload image to Cloudinary</label>
         <input type="file" accept="image/*" onChange={(e) => uploadImage(e.target.files?.[0] || null)} className="rounded-lg border border-slate-200 px-3 py-2" />
@@ -399,6 +497,13 @@ export default function AdminProductsPage() {
             </button>
           ) : null}
         </div>
+        {helperSuggestions.length ? (
+          <datalist id="suggest-helper">
+            {helperSuggestions.map((item) => (
+              <option key={item} value={item} />
+            ))}
+          </datalist>
+        ) : null}
       </form>
 
       {message ? <p className="text-sm font-semibold text-emerald-700">{message}</p> : null}

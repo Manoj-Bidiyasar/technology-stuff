@@ -5,12 +5,7 @@ import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 
 const navItems = [
-  { href: "/", label: "Home" },
-  { href: "/mobile", label: "Mobiles" },
-  { href: "/tablets", label: "Tablets" },
   { href: "/processors", label: "Processors" },
-  { href: "/blog", label: "Blog" },
-  { href: "/admin", label: "Admin" },
 ];
 
 export default function MainNav() {

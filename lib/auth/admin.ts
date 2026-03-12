@@ -26,6 +26,39 @@ export type AdminViewer = {
   status: string;
 };
 
+export async function getAdminViewerFromSessionToken(sessionToken: string): Promise<AdminViewer | null> {
+  const token = String(sessionToken || "").trim();
+  if (!token) return null;
+
+  try {
+    const doc = await adminDb.collection(ADMIN_SESSIONS_COLLECTION).doc(token).get();
+    if (!doc.exists) return null;
+    if (Boolean(doc.get("revoked"))) return null;
+    const expiresAtMs = Number(doc.get("expiresAtMs") || 0);
+    if (!Number.isFinite(expiresAtMs) || expiresAtMs < Date.now()) {
+      await destroyAdminSession(token);
+      return null;
+    }
+
+    const uid = String(doc.get("uid") || "");
+    if (!uid) return null;
+    const userSnap = await adminDb.collection(ADMIN_USERS_COLLECTION).doc(uid).get();
+    if (!userSnap.exists) return null;
+    const status = String(userSnap.get("status") || "active").toLowerCase();
+    const role = String(userSnap.get("role") || "");
+    if (!isValidRole(role)) return null;
+    if (status !== "active") return null;
+    return {
+      uid,
+      email: String(userSnap.get("email") || doc.get("email") || ""),
+      role,
+      status,
+    };
+  } catch {
+    return null;
+  }
+}
+
 function toMillis(value: unknown): number {
   if (!value) return 0;
   if (typeof (value as { toDate?: () => Date }).toDate === "function") {
@@ -195,33 +228,5 @@ export async function isAdminAuthenticatedRequest(request: NextRequest): Promise
 
 export async function getAdminViewerFromRequest(request: NextRequest): Promise<AdminViewer | null> {
   const token = request.cookies.get(ADMIN_SESSION_COOKIE)?.value || "";
-  if (!token) return null;
-
-  try {
-    const doc = await adminDb.collection(ADMIN_SESSIONS_COLLECTION).doc(token).get();
-    if (!doc.exists) return null;
-    if (Boolean(doc.get("revoked"))) return null;
-    const expiresAtMs = Number(doc.get("expiresAtMs") || 0);
-    if (!Number.isFinite(expiresAtMs) || expiresAtMs < Date.now()) {
-      await destroyAdminSession(token);
-      return null;
-    }
-
-    const uid = String(doc.get("uid") || "");
-    if (!uid) return null;
-    const userSnap = await adminDb.collection(ADMIN_USERS_COLLECTION).doc(uid).get();
-    if (!userSnap.exists) return null;
-    const status = String(userSnap.get("status") || "active").toLowerCase();
-    const role = String(userSnap.get("role") || "");
-    if (!isValidRole(role)) return null;
-    if (status !== "active") return null;
-    return {
-      uid,
-      email: String(userSnap.get("email") || doc.get("email") || ""),
-      role,
-      status,
-    };
-  } catch {
-    return null;
-  }
+  return getAdminViewerFromSessionToken(token);
 }

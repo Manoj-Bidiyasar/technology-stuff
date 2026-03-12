@@ -1,6 +1,6 @@
 import { initializeApp, getApps, getApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
-import { getFirestore } from "firebase/firestore";
+import { connectFirestoreEmulator, getFirestore } from "firebase/firestore";
 
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -16,3 +16,19 @@ const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
 
 export const db = getFirestore(app);
 export const auth = getAuth(app);
+
+const firestoreEmulatorHost =
+  process.env.NODE_ENV === "production"
+    ? undefined
+    : process.env.NEXT_PUBLIC_FIRESTORE_EMULATOR_HOST || process.env.FIRESTORE_EMULATOR_HOST;
+let emulatorConnected = false;
+
+if (!emulatorConnected && firestoreEmulatorHost && typeof window !== "undefined") {
+  const normalizedHost = firestoreEmulatorHost.replace(/^https?:\/\//, "");
+  const [host, port] = normalizedHost.split(":");
+  const portNumber = Number(port || 8080);
+  if (!Number.isNaN(portNumber)) {
+    connectFirestoreEmulator(db, host, portNumber);
+    emulatorConnected = true;
+  }
+}

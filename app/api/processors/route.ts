@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { revalidateTag } from "next/cache";
 import { createProcessor, listAllProcessorsAdmin, type ProcessorAdmin } from "@/lib/firestore/processors";
 import { requireAdminCapability } from "@/lib/auth/adminApi";
 
@@ -26,6 +27,8 @@ export async function POST(request: NextRequest) {
 
     const body = (await request.json()) as ProcessorAdmin;
     const id = await createProcessor(body);
+    revalidateTag("processor-profiles", "max");
+    revalidateTag("processor-custom-details", "max");
     return NextResponse.json({ id }, { status: 201 });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to create processor.";

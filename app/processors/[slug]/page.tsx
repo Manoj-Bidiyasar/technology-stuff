@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Poppins } from "next/font/google";
+import { cookies } from "next/headers";
 import { notFound } from "next/navigation";
 import { isValidElement, type ReactNode } from "react";
 import ProcessorComments from "@/components/ProcessorComments";
@@ -10,10 +11,22 @@ import SectionChipNav from "@/components/SectionChipNav";
 import SimilarProcessorsGrid from "@/components/SimilarProcessorsGrid";
 import { getProcessorDetailBySlug, type ProcessorDetail } from "@/lib/processors/details";
 import { listProcessorProfiles, type ProcessorProfile } from "@/lib/processors/profiles";
+import { getProcessorAdminById } from "@/lib/firestore/processors";
+import { getAdminViewerFromSessionToken } from "@/lib/auth/admin";
+import { hasCapability } from "@/lib/admin/permissions";
+import { ADMIN_SESSION_COOKIE } from "@/lib/auth/constants";
+import { getPublicSiteUrl } from "@/lib/seo/site";
+import { slugify } from "@/utils/slugify";
 
 type Props = {
   params: Promise<{ slug: string }>;
+  searchParams?: Promise<{ [key: string]: string | string[] | undefined }>;
 };
+
+export async function generateStaticParams() {
+  const profiles = await listProcessorProfiles();
+  return profiles.slice(0, 60).map((p) => ({ slug: p.slug }));
+}
 
 const poppins = Poppins({
   subsets: ["latin"],
@@ -164,12 +177,14 @@ function ModernSpecCards({
   title,
   titleIcon = "chip",
   rows,
+  showEmptyRows = false,
 }: {
   title?: string;
   titleIcon?: "bench" | "cpu" | "memory" | "graphics" | "display" | "connectivity" | "camera" | "power" | "chip";
   rows: Array<{ label: string; value: ReactNode; valueAlign?: "left" | "center"; labelAlign?: "top" | "center" }>;
+  showEmptyRows?: boolean;
 }) {
-  const visibleRows = rows.filter((row) => hasValueNode(row.value));
+  const visibleRows = showEmptyRows ? rows : rows.filter((row) => hasValueNode(row.value));
   if (!visibleRows.length) return null;
 
   return (
@@ -182,7 +197,10 @@ function ModernSpecCards({
           <h3 className="text-[13px] font-extrabold uppercase tracking-wide text-blue-700">{title}</h3>
         </div>
       ) : null}
-      {visibleRows.map((row, idx) => (
+      {visibleRows.map((row, idx) => {
+        const hasValue = hasValueNode(row.value);
+        const displayValue = hasValue ? row.value : (showEmptyRows ? "" : "-");
+        return (
         <div
           key={`${row.label}-${idx}`}
           className={`grid grid-cols-2 items-stretch gap-0 sm:grid-cols-[230px_minmax(0,1fr)] ${
@@ -190,9 +208,10 @@ function ModernSpecCards({
           }`}
         >
           <div className="flex items-center justify-start bg-slate-100 px-3 py-2 text-left text-sm font-medium leading-6 text-slate-600 sm:px-4">{row.label}</div>
-          <div className={`px-3 py-2 text-center text-[13px] font-semibold leading-5 text-slate-900 sm:px-4 sm:text-sm sm:leading-6 ${row.valueAlign === "center" ? "sm:text-center" : "sm:text-left"}`}>{row.value || "-"}</div>
+          <div className={`px-3 py-2 text-center text-[13px] font-semibold leading-5 text-slate-900 sm:px-4 sm:text-sm sm:leading-6 ${row.valueAlign === "center" ? "sm:text-center" : "sm:text-left"}`}>{displayValue}</div>
         </div>
-      ))}
+      );
+      })}
     </div>
   );
 }
@@ -249,14 +268,25 @@ function toMonthYear(value?: string): string {
   return "Upcoming";
 }
 
-function cameraTopLabel(value?: string): string {
-  const text = String(value || "").trim();
-  if (!text) return "";
-  const match = text.match(/up to\s*\d+\s*mp/i);
-  if (match) return match[0].replace(/\s+/g, " ").replace(/^u/i, "U");
-  const mp = text.match(/(\d+)\s*mp/i);
-  if (mp) return `Up to ${mp[1]}MP`;
-  return text;
+function cameraTopLabel(detail?: ProcessorDetail): string {
+  const maxCameraSupport = String(detail?.maxCameraSupport || "").trim();
+  const cameraSupportModes = (detail?.cameraSupportModes || []).map((item) => String(item || "").trim()).filter(Boolean);
+  const rawParts = [
+    maxCameraSupport,
+    ...cameraSupportModes,
+  ].filter(Boolean);
+
+  if (!rawParts.length) return "";
+
+  const allNumberMatches = rawParts
+    .flatMap((part) => [...part.matchAll(/([\d.]+)/g)].map((m) => Number(m[1])))
+    .filter((n) => Number.isFinite(n));
+  if (allNumberMatches.length) {
+    const max = Math.max(...allNumberMatches);
+    return `Up to ${Number.isInteger(max) ? max : max}MP`;
+  }
+
+  return "";
 }
 
 function inferCoreCount(detail?: { coreCount?: number; cores?: string }): string {
@@ -530,25 +560,40 @@ function getChipSeriesInfo(
 }
 
 function normalizeCameraMode(raw: string): string {
-  const text = String(raw || "").trim();
+  const original = String(raw || "").trim();
+  if (!original) return original;
+  const text = original.includes(":") ? original.split(":").slice(1).join(":").trim() : original;
   if (!text) return text;
+  const parseMpNumber = (value: string): number => {
+    const cleaned = String(value || "").trim();
+    if (!cleaned) return NaN;
+    const m = cleaned.match(/([\d.]+)(?:\s*mp)?/i);
+    if (!m?.[1]) return NaN;
+    return Number(m[1]);
+  };
   const parts = text
     .split("+")
     .map((p) => p.trim())
     .filter(Boolean);
-  if (parts.length < 2) return text;
-  const parsed = parts.map((p) => {
-    const m = p.match(/^(\d+)\s*mp?$/i);
-    return m ? Number(m[1]) : NaN;
-  });
+  if (parts.length < 2) {
+    const n = parseMpNumber(text);
+    if (Number.isFinite(n)) return `Up to ${Number.isInteger(n) ? n : n}MP`;
+    return text;
+  }
+  const parsed = parts.map((p) => parseMpNumber(p));
   if (parsed.some((n) => !Number.isFinite(n))) return text;
   const first = parsed[0];
   const same = parsed.every((n) => n === first);
-  if (!same) return text;
-  return `${parts.length}x${first}MP`;
+  if (same) {
+    const value = Number.isInteger(first) ? first : first;
+    return `${parsed.length}x${value}MP`;
+  }
+  return parsed
+    .map((n) => `${Number.isInteger(n) ? n : n}MP`)
+    .join(" + ");
 }
 
-function formatCameraSupportModes(modes: string[] | undefined, fallback?: string): string {
+function formatCameraSupportModes(modes: string[] | undefined, fallback?: string | number): string {
   const list = (modes || []).map((m) => normalizeCameraMode(m)).filter(Boolean);
   if (list.length > 0) return list.join(", ");
   return normalizeCameraMode(String(fallback || "-"));
@@ -570,6 +615,22 @@ function clusterRows(value: string): ReactNode {
       ))}
     </div>
   );
+}
+
+function stripResolutionFromMode(value: string): string {
+  return String(value || "")
+    .replace(/\(\s*\d{3,5}\s*[xX*]\s*\d{3,5}\s*\)/g, "")
+    .replace(/\s{2,}/g, " ")
+    .replace(/\s+:/g, ":")
+    .trim();
+}
+
+function formatDisplayModeLines(values: string[]): string {
+  const rows = values
+    .map((item) => stripResolutionFromMode(item))
+    .map((item) => item.trim())
+    .filter(Boolean);
+  return rows.length ? rows.join(", ") : "-";
 }
 
 function mobileClusterRows(value: string): ReactNode {
@@ -661,6 +722,7 @@ function sortMemoryTypes(values: string[]): string[] {
 function sortStorageTypes(values: string[]): string[] {
   const rank = (v: string) => {
     const t = v.toUpperCase().replace(/\s+/g, "");
+    if (t.includes("NVME")) return 300;
     const ufs = t.match(/UFS(\d+(?:\.\d+)?)/);
     if (ufs) return 100 + Number(ufs[1]);
     if (t.includes("EMMC")) return 10;
@@ -922,21 +984,132 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const all = await listProcessorProfiles();
   const p = all.find((item) => item.slug === slug);
   if (!p) return { title: "Processor not found" };
+  const detail = await getProcessorDetailBySlug(slug);
+  const seo = detail?.seo;
   const displayName = formatProcessorDisplayName(p.name, p.vendor);
+  const siteUrl = getPublicSiteUrl();
+  const metaTitle = String(seo?.metaTitle || "").trim();
+  const fallbackParts = [
+    p.fabricationNm ? `${p.fabricationNm}nm` : String(detail?.process || "").trim(),
+    p.maxCpuGhz ? `${p.maxCpuGhz} GHz` : "",
+    p.gpu ? p.gpu : "",
+  ].filter(Boolean);
+  const fallbackDesc = `${displayName} specs, benchmarks${fallbackParts.length ? `, ${fallbackParts.join(", ")}` : ""}.`;
+  const metaDescription = String(seo?.metaDescription || "").trim() || String(seo?.summary || "").trim() || fallbackDesc;
+  const canonicalUrl = String(seo?.canonicalUrl || "").trim() || `${siteUrl}/processors/${p.slug}`;
+  const keywords = [
+    ...(Array.isArray(seo?.tags) ? seo?.tags : []),
+    String(seo?.focusKeyword || "").trim(),
+  ].filter(Boolean);
+  const ogImage = String(seo?.ogImage || "").trim();
+  const noIndex = Boolean(seo?.noIndex);
   return {
-    title: `${displayName} - Processor Details`,
-    description: `${displayName} benchmark profile, architecture hints, efficiency score, and similar chip alternatives.`,
+    title: metaTitle || `${displayName} - Processor Details`,
+    description: metaDescription,
+    keywords: keywords.length ? keywords : undefined,
+    alternates: { canonical: canonicalUrl },
+    openGraph: {
+      title: metaTitle || `${displayName} - Processor Details`,
+      description: metaDescription,
+      url: canonicalUrl,
+      images: ogImage ? [{ url: ogImage }] : undefined,
+      type: "article",
+      siteName: "Technology Stuff",
+    },
+    twitter: {
+      card: ogImage ? "summary_large_image" : "summary",
+      title: metaTitle || `${displayName} - Processor Details`,
+      description: metaDescription,
+      images: ogImage ? [ogImage] : undefined,
+    },
+    robots: noIndex ? { index: false, follow: false } : undefined,
   };
 }
 
-export default async function ProcessorDetailPage({ params }: Props) {
+export default async function ProcessorDetailPage({ params, searchParams }: Props) {
   const { slug } = await params;
+  const query = searchParams ? await searchParams : {};
+  const previewFlag = String(query?.preview || "").trim() === "1";
+  const previewId = String(query?.id || slug || "").trim();
+
   const all = await listProcessorProfiles();
-  const p = all.find((item) => item.slug === slug);
+  let p = all.find((item) => item.slug === slug);
+  let detail = await getProcessorDetailBySlug(slug);
+  let previewMode = false;
+
+  if (previewFlag && previewId) {
+    const cookieStore = await cookies();
+    const token = cookieStore.get(ADMIN_SESSION_COOKIE)?.value || "";
+    const viewer = await getAdminViewerFromSessionToken(token);
+    const canPreview = Boolean(viewer && hasCapability(viewer.role, "processors"));
+    if (canPreview) {
+      const draft = await getProcessorAdminById(previewId);
+      if (draft && draft.name) {
+        const previewSlug = slugify(String(draft.id || draft.name || slug));
+        p = {
+          slug: previewSlug,
+          name: draft.name,
+          vendor: draft.vendor || "Other",
+          antutu: Number(draft.antutu || 0),
+          fabricationNm: draft.fabricationNm,
+          maxCpuGhz: draft.maxCpuGhz,
+          gpu: draft.gpu,
+          phoneCount: 0,
+          avgPhoneScore: Number(draft.avgPhoneScore || 0),
+          topPhones: [],
+        };
+        detail = draft.detail;
+        previewMode = true;
+      }
+    }
+  }
+
   if (!p) notFound();
 
-  const detail = await getProcessorDetailBySlug(slug);
-  const similar = neighbors(p, all);
+  const siteUrl = getPublicSiteUrl();
+  const canonicalUrl = String(detail?.seo?.canonicalUrl || "").trim() || `${siteUrl}/processors/${p.slug}`;
+  const breadcrumbJsonLd = {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    itemListElement: [
+      {
+        "@type": "ListItem",
+        position: 1,
+        name: "Home",
+        item: siteUrl,
+      },
+      {
+        "@type": "ListItem",
+        position: 2,
+        name: "Processors",
+        item: `${siteUrl}/processors`,
+      },
+      {
+        "@type": "ListItem",
+        position: 3,
+        name: formatFullProcessorName(p.name, p.vendor),
+        item: canonicalUrl,
+      },
+    ],
+  };
+
+  const seo = detail?.seo || {};
+  const productName = formatFullProcessorName(p.name, p.vendor);
+
+  const productSchema = {
+    "@context": "https://schema.org",
+    "@type": "Product",
+    name: productName,
+    brand: p.vendor ? { "@type": "Brand", name: p.vendor } : undefined,
+    category: "Mobile Processor",
+    sku: p.slug,
+    description: String(seo?.metaDescription || seo?.summary || "").trim() || `${productName} specs and benchmark details.`,
+    url: canonicalUrl,
+    image: seo?.ogImage ? [String(seo.ogImage).trim()] : undefined,
+  };
+
+  const allForSimilar = all.some((item) => item.slug === p.slug) ? all : [p, ...all];
+  const similar = neighbors(p, allForSimilar);
   const perf = perfIndex(p.antutu || 0);
   const eff = efficiency(p.fabricationNm);
   const game = gaming(p);
@@ -1023,7 +1196,6 @@ export default async function ProcessorDetailPage({ params }: Props) {
   const coreConfigRows = coreConfig
     .split(",")
     .map((item) => item.trim())
-    .map((item) => item.replace(/\bCortex-/gi, "ARM Cortex-"))
     .filter(Boolean);
   const clockMhz = p.maxCpuGhz ? Math.round(p.maxCpuGhz * 1000) : null;
   const gpuName = detail?.gpuName || p.gpu || "-";
@@ -1213,19 +1385,35 @@ export default async function ProcessorDetailPage({ params }: Props) {
         : { fontSize: "clamp(8px, 7cqw, 10px)" }
       : undefined;
   const orderedTopSpecs = [
-    { label: "GPU", value: p.gpu || "", kind: "gpu" },
+    { label: "GPU", value: detail?.gpuName || p.gpu || "", kind: "gpu" },
     { label: "Fabrication Process", value: p.fabricationNm ? `${p.fabricationNm}nm` : (detail?.process || ""), kind: "fabrication" },
     { label: "Cores", value: coreCount !== "-" ? coreCount : "", kind: "cores" },
     { label: "Max. Clock Speed", value: clockMhz ? `${clockMhz} MHz` : "", kind: "clock" },
-    { label: "Camera", value: cameraTopLabel(detail?.cameraSupport), kind: "camera" },
-    { label: "RAM", value: detail?.memoryType || "", kind: "ram" },
-    { label: "Storage", value: detail?.storageType || "", kind: "storage" },
+    { label: "Camera", value: cameraTopLabel(detail), kind: "camera" },
+    {
+      label: "RAM",
+      value: (() => {
+        const list = toUnique([...(detail?.memoryTypes || []), String(detail?.memoryType || "")]);
+        const best = sortMemoryTypes(list)[0];
+        return best || "";
+      })(),
+      kind: "ram",
+    },
+    {
+      label: "Storage",
+      value: (() => {
+        const list = toUnique([...(detail?.storageTypes || []), String(detail?.storageType || "")]);
+        const best = sortStorageTypes(list)[0];
+        return best || "";
+      })(),
+      kind: "storage",
+    },
   ]
-    .filter((row) => String(row.value || "").trim().length > 0)
+    .filter((row) => previewMode || String(row.value || "").trim().length > 0)
     .slice(0, 5);
   const announcedValue = toMonthYear(detail?.announced);
   const modelValue = String(detail?.model || "").trim() || "-";
-  const manufacturerValue = String(detail?.manufacturer || p.vendor || "").trim() || "-";
+  const manufacturerValue = String(detail?.manufacturer || "").trim() || "-";
   const infoRows = [
     {
       key: "announced",
@@ -1278,7 +1466,7 @@ export default async function ProcessorDetailPage({ params }: Props) {
         </svg>
       ),
     },
-  ].filter((row) => hasValueNode(row.value));
+  ].filter((row) => previewMode || hasValueNode(row.value));
   const competitorRows = similar.slice(0, 6);
   const similarCards = similar.map((item) => ({
     slug: item.slug,
@@ -1304,6 +1492,14 @@ export default async function ProcessorDetailPage({ params }: Props) {
 
   return (
     <main className="mobile-container py-6 sm:py-8">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbJsonLd) }}
+      />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(productSchema) }}
+      />
       <section className="mb-3">
         <div className="inline-flex max-w-full items-center gap-2 whitespace-nowrap text-xs font-semibold text-slate-500 sm:text-sm">
           <Link href="/" className="rounded px-1 py-0.5 text-slate-600 transition-colors hover:bg-blue-50 hover:text-blue-700 active:bg-blue-100">Home</Link>
@@ -1391,14 +1587,14 @@ export default async function ProcessorDetailPage({ params }: Props) {
               <aside className="rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
                 <div className="divide-y divide-slate-100">
                   {infoRows.map((row) => (
-                    <div key={row.key} className={`flex items-center justify-between gap-3 py-2 ${row.hideOnDesktop ? "sm:hidden" : ""}`}>
+                    <div key={row.key} className={`flex items-start justify-between gap-3 py-2 ${row.hideOnDesktop ? "sm:hidden" : ""}`}>
                       <div className="inline-flex items-center gap-2 text-slate-500">
                         <span className={`inline-flex h-6 w-6 items-center justify-center rounded-full ${row.iconBg} ${row.iconColor}`}>
                           {row.icon}
                         </span>
                         <span className="text-[11px] font-bold uppercase tracking-wide">{row.label}</span>
                       </div>
-                      <span className="text-sm font-semibold text-slate-900">{row.value}</span>
+                      <span className="ml-auto max-w-[58%] break-words text-right text-sm font-semibold leading-5 text-slate-900">{row.value}</span>
                     </div>
                   ))}
                 </div>
@@ -1435,6 +1631,7 @@ export default async function ProcessorDetailPage({ params }: Props) {
               <ModernSpecCards
                 title="Benchmarks"
                 titleIcon="bench"
+                showEmptyRows={previewMode}
                 rows={benchmarkRows}
               />
 
@@ -1472,6 +1669,7 @@ export default async function ProcessorDetailPage({ params }: Props) {
             <ModernSpecCards
               title="CPU Architecture"
               titleIcon="cpu"
+              showEmptyRows={previewMode}
               rows={[
                 { label: "Cores", value: coreCount || "-" },
                 {
@@ -1504,6 +1702,7 @@ export default async function ProcessorDetailPage({ params }: Props) {
             <ModernSpecCards
               title="Graphics (GPU)"
               titleIcon="graphics"
+              showEmptyRows={previewMode}
               rows={[
                 { label: "GPU Name", value: gpuName },
                 { label: "Architecture (GPU)", value: detail?.gpuArchitecture || "-" },
@@ -1521,6 +1720,7 @@ export default async function ProcessorDetailPage({ params }: Props) {
             <ModernSpecCards
               title="AI"
               titleIcon="chip"
+              showEmptyRows={previewMode}
               rows={[
                 { label: "AI Engine", value: detail?.aiEngine || "-" },
                 { label: "AI Performance", value: Number.isFinite(detail?.aiPerformanceTops) ? `${detail?.aiPerformanceTops} TOPS` : "-" },
@@ -1534,6 +1734,7 @@ export default async function ProcessorDetailPage({ params }: Props) {
             <ModernSpecCards
               title="Memory & Storage Support"
               titleIcon="memory"
+              showEmptyRows={previewMode}
               rows={[
                 { label: "Memory Type", value: mobileClusterRows(formatMemoryTypes(detail || {})) },
                 {
@@ -1547,9 +1748,6 @@ export default async function ProcessorDetailPage({ params }: Props) {
                     </div>
                   ),
                 },
-                { label: "Memory Channels", value: detail?.memoryChannels || "-" },
-                { label: "Memory Bus Width", value: Number.isFinite(detail?.memoryBusWidthBits) ? `${detail?.memoryBusWidthBits}-bit` : "-" },
-                { label: "Bandwidth", value: detail?.bandwidthGbps ? `${decimal(detail.bandwidthGbps, 1)} GB/s` : "-" },
                 { label: "Max Memory", value: detail?.maxMemoryGb ? `${detail.maxMemoryGb}GB` : "-" },
                 { label: "Storage Type", value: mobileClusterRows(formatStorageTypes(detail || {})) },
               ]}
@@ -1560,6 +1758,7 @@ export default async function ProcessorDetailPage({ params }: Props) {
             <ModernSpecCards
               title="Camera & Video Recording"
               titleIcon="camera"
+              showEmptyRows={previewMode}
               rows={[
                 { label: "Camera ISP", value: detail?.cameraIsp || "-" },
                 {
@@ -1583,7 +1782,7 @@ export default async function ProcessorDetailPage({ params }: Props) {
                   labelAlign: "center",
                 },
                 { label: "Other Video Features", value: detail?.videoFeatures?.length ? detail.videoFeatures.join(", ") : "-" },
-                { label: "Video Playback", value: detail?.videoPlayback || "-" },
+                { label: "Video Playback", value: clusterRows(detail?.videoPlayback || "-"), labelAlign: "center" },
               ]}
             />
           </article>
@@ -1592,19 +1791,31 @@ export default async function ProcessorDetailPage({ params }: Props) {
             <ModernSpecCards
               title="Display & Multimedia"
               titleIcon="display"
+              showEmptyRows={previewMode}
               rows={[
                 {
                   label: "Display Modes",
                   value: clusterRows(
                     detail?.displayModes?.length
-                      ? detail.displayModes.join(", ")
+                      ? formatDisplayModeLines(detail.displayModes)
                       : ((detail?.maxDisplayResolution || detail?.maxRefreshRateHz)
                           ? `${detail?.maxDisplayResolution || "-"}${detail?.maxRefreshRateHz ? ` @ ${detail.maxRefreshRateHz}Hz` : ""}`
                           : "-")
                   ),
                   labelAlign: "center",
                 },
-                { label: "Output Display", value: detail?.outputDisplay || "-" },
+                {
+                  label: "Output Display",
+                  value: clusterRows(
+                    formatDisplayModeLines(
+                      String(detail?.outputDisplay || "-")
+                        .split(",")
+                        .map((item) => item.trim())
+                        .filter(Boolean)
+                    )
+                  ),
+                  labelAlign: "center",
+                },
                 { label: "Display Features", value: detail?.displayFeatures?.length ? detail.displayFeatures.join(", ") : "-" },
                 { label: "Audio Codecs", value: detail?.audioCodecs?.length ? detail.audioCodecs.join(", ") : "-" },
                 { label: "Multimedia Features", value: detail?.multimediaFeatures?.length ? detail.multimediaFeatures.join(", ") : "-" },
@@ -1616,6 +1827,7 @@ export default async function ProcessorDetailPage({ params }: Props) {
             <ModernSpecCards
               title="Connectivity"
               titleIcon="connectivity"
+              showEmptyRows={previewMode}
               rows={[
                 { label: "Modem Name", value: formatModemName(detail?.modem) },
                 { label: "Network Support", value: formatNetworkSupport(detail || {}) },
@@ -1630,7 +1842,7 @@ export default async function ProcessorDetailPage({ params }: Props) {
 
           {supportRows.length > 0 ? (
             <article id="support-links" className="scroll-mt-28">
-              <ModernSpecCards title="Support & Links" titleIcon="power" rows={supportRows} />
+              <ModernSpecCards title="Support & Links" titleIcon="power" showEmptyRows={previewMode} rows={supportRows} />
             </article>
           ) : null}
         </div>

@@ -5,11 +5,30 @@ import type { ProcessorDetail } from "@/lib/processors/details";
 import { slugify } from "@/utils/slugify";
 
 const processorsRef = adminDb.collection("processors");
+const RESERVED_PROCESSOR_KEYS = new Set([
+  "name",
+  "vendor",
+  "type",
+  "antutu",
+  "fabricationNm",
+  "maxCpuGhz",
+  "gpu",
+  "avgPhoneScore",
+  "detail",
+  "createdBy",
+  "status",
+  "scheduledAt",
+  "createdAt",
+  "updatedAt",
+  "id",
+  "slug",
+]);
 
 export type ProcessorAdmin = {
   id?: string;
   name: string;
   vendor: string;
+  type?: string;
   antutu: number;
   fabricationNm?: number;
   maxCpuGhz?: number;
@@ -33,6 +52,7 @@ function normalize(input: Partial<ProcessorAdmin>): ProcessorAdmin {
   return {
     name: String(input.name || "").trim(),
     vendor: String(input.vendor || "").trim() || "Other",
+    type: String(input.type || "processor").trim() || "processor",
     antutu: Number(input.antutu || 0),
     fabricationNm: Number.isFinite(Number(input.fabricationNm)) && Number(input.fabricationNm) > 0 ? Number(input.fabricationNm) : undefined,
     maxCpuGhz: Number.isFinite(Number(input.maxCpuGhz)) && Number(input.maxCpuGhz) > 0 ? Number(input.maxCpuGhz) : undefined,
@@ -47,6 +67,21 @@ function normalize(input: Partial<ProcessorAdmin>): ProcessorAdmin {
 
 function stripUndefined<T extends Record<string, unknown>>(input: T): Partial<T> {
   return Object.fromEntries(Object.entries(input).filter(([, value]) => value !== undefined)) as Partial<T>;
+}
+
+function extractNm(text?: string): number | undefined {
+  const raw = String(text || "");
+  const match = raw.match(/(\d+(\.\d+)?)\s*nm/i);
+  if (match) {
+    const n = Number(match[1]);
+    return Number.isFinite(n) ? n : undefined;
+  }
+  const numericOnly = raw.trim();
+  if (/^\d+(\.\d+)?$/.test(numericOnly)) {
+    const n = Number(numericOnly);
+    return Number.isFinite(n) ? n : undefined;
+  }
+  return undefined;
 }
 
 function hydrate(id: string, input: Partial<ProcessorAdmin>): ProcessorAdmin {
@@ -87,14 +122,27 @@ export async function createProcessor(data: ProcessorAdmin): Promise<string> {
 }
 
 export async function updateProcessor(id: string, data: Partial<ProcessorAdmin>): Promise<void> {
-  const payload = normalize(data);
+  const ref = processorsRef.doc(id);
+  const existingSnap = await ref.get();
+  if (!existingSnap.exists) throw new Error("Processor not found.");
+
+  const existingRaw = (existingSnap.data() || {}) as Partial<ProcessorAdmin> & { createdAt?: unknown };
+  const hasDetail = Object.prototype.hasOwnProperty.call(data, "detail");
+  const mergedInput: Partial<ProcessorAdmin> = {
+    ...existingRaw,
+    ...data,
+    detail: hasDetail ? data.detail : existingRaw.detail,
+  };
+
+  const payload = normalize(mergedInput);
   if (!payload.name) throw new Error("Processor name is required.");
-  await processorsRef.doc(id).set(
+  await ref.set(
     {
       ...stripUndefined(payload as unknown as Record<string, unknown>),
+      createdAt: existingRaw.createdAt || FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp(),
     },
-    { merge: true }
+    { merge: false }
   );
 }
 
@@ -111,32 +159,62 @@ export async function getProcessorAdminById(id: string): Promise<ProcessorAdmin 
 export async function listPublishedCustomProcessorProfiles(): Promise<ProcessorProfile[]> {
   const snapshot = await processorsRef.where("status", "==", "published").limit(1000).get();
   return snapshot.docs
-    .map((doc) => hydrate(doc.id, doc.data() as Partial<ProcessorAdmin>))
+    .map((doc) => {
+      const raw = (doc.data() || {}) as Partial<ProcessorAdmin> & Record<string, unknown>;
+      const row = hydrate(doc.id, raw);
+      const detail = (raw.detail && typeof raw.detail === "object" && !Array.isArray(raw.detail))
+        ? (raw.detail as Record<string, unknown>)
+        : {};
+      const processRaw = String(detail.process ?? raw.process ?? row.detail?.process ?? "").trim();
+      const fabricationNm = row.fabricationNm ?? extractNm(processRaw);
+      return {
+        slug: slugify(String(row.id || row.name || "")),
+        name: row.name,
+        vendor: row.vendor,
+        antutu: Number(row.antutu || 0),
+        fabricationNm,
+        process: processRaw || undefined,
+        maxCpuGhz: row.maxCpuGhz,
+        gpu: row.gpu,
+        phoneCount: 0,
+        avgPhoneScore: Number(row.avgPhoneScore || 0),
+        topPhones: [],
+      };
+    })
     .filter((row) => Boolean(row.name))
-    .map((row) => ({
-      slug: "",
-      name: row.name,
-      vendor: row.vendor,
-      antutu: Number(row.antutu || 0),
-      fabricationNm: row.fabricationNm,
-      maxCpuGhz: row.maxCpuGhz,
-      gpu: row.gpu,
-      phoneCount: 0,
-      avgPhoneScore: Number(row.avgPhoneScore || 0),
-      topPhones: [],
-    }))
     .sort((a, b) => (b.antutu || 0) - (a.antutu || 0));
 }
 
 export async function listPublishedCustomProcessorDetailsBySlug(): Promise<Record<string, ProcessorDetail>> {
   const snapshot = await processorsRef.where("status", "==", "published").limit(1000).get();
   const out: Record<string, ProcessorDetail> = {};
-  snapshot.docs
-    .map((doc) => hydrate(doc.id, doc.data() as Partial<ProcessorAdmin>))
-    .forEach((row) => {
-      const key = slugify(String(row.name || ""));
-      if (!key || !row.detail || typeof row.detail !== "object") return;
-      out[key] = row.detail;
+  snapshot.docs.forEach((doc) => {
+    const raw = (doc.data() || {}) as Record<string, unknown>;
+    const row = hydrate(doc.id, raw as Partial<ProcessorAdmin>);
+
+    const nestedDetail =
+      raw.detail && typeof raw.detail === "object" && !Array.isArray(raw.detail)
+        ? (raw.detail as Record<string, unknown>)
+        : {};
+    const topLevelDetail = Object.fromEntries(
+      Object.entries(raw).filter(([key]) => !RESERVED_PROCESSOR_KEYS.has(key))
+    );
+    const mergedDetail = {
+      ...topLevelDetail,
+      ...nestedDetail,
+    } as ProcessorDetail;
+
+    if (!mergedDetail || typeof mergedDetail !== "object" || Object.keys(mergedDetail as Record<string, unknown>).length === 0) return;
+
+    const keys = new Set<string>([
+      slugify(String(row.name || "")),
+      slugify(String(row.id || "")),
+      slugify(String(raw.slug || "")),
+    ]);
+    keys.forEach((key) => {
+      if (!key) return;
+      out[key] = mergedDetail;
     });
+  });
   return out;
 }

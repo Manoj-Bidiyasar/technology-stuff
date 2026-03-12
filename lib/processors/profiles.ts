@@ -10,6 +10,7 @@ export type ProcessorProfile = {
   vendor: string;
   antutu: number;
   fabricationNm?: number;
+  process?: string;
   maxCpuGhz?: number;
   gpu?: string;
   phoneCount: number;
@@ -52,9 +53,16 @@ const DUMMY_PROCESSORS: Omit<ProcessorProfile, "slug">[] = [
 function extractNm(text?: string): number | undefined {
   const raw = String(text || "");
   const match = raw.match(/(\d+(\.\d+)?)\s*nm/i);
-  if (!match) return undefined;
-  const n = Number(match[1]);
-  return Number.isFinite(n) ? n : undefined;
+  if (match) {
+    const n = Number(match[1]);
+    return Number.isFinite(n) ? n : undefined;
+  }
+  const numericOnly = raw.trim();
+  if (/^\d+(\.\d+)?$/.test(numericOnly)) {
+    const n = Number(numericOnly);
+    return Number.isFinite(n) ? n : undefined;
+  }
+  return undefined;
 }
 
 function extractMaxGhz(lines?: string[]): number | undefined {
@@ -81,17 +89,22 @@ function vendorFromChip(name: string): string {
 }
 
 async function buildProcessorProfiles(): Promise<ProcessorProfile[]> {
+  // Keep public processor list fully controlled by Firebase `processors` collection.
+  // Product-derived profile generation is intentionally disabled.
+  const includeProductDerived = false;
   let products: Awaited<ReturnType<typeof listPublishedProducts>>["items"] = [];
-  try {
-    const rows = await listPublishedProducts({
-      page: 1,
-      pageSize: 500,
-      deviceType: "smartphone",
-      sort: "popularity",
-    });
-    products = rows.items;
-  } catch {
-    products = [];
+  if (includeProductDerived) {
+    try {
+      const rows = await listPublishedProducts({
+        page: 1,
+        pageSize: 500,
+        deviceType: "smartphone",
+        sort: "popularity",
+      });
+      products = rows.items;
+    } catch {
+      products = [];
+    }
   }
 
   type Agg = {
@@ -99,6 +112,7 @@ async function buildProcessorProfiles(): Promise<ProcessorProfile[]> {
     vendor: string;
     antutuBest: number;
     nmBest?: number;
+    processBest?: string;
     maxCpuGhz?: number;
     gpuCount: Record<string, number>;
     phoneCount: number;
@@ -123,7 +137,8 @@ async function buildProcessorProfiles(): Promise<ProcessorProfile[]> {
     if (!name) continue;
     const key = name.toLowerCase();
     const antutu = Number(p.performance?.antutu?.total || 0);
-    const nm = extractNm(p.performance?.fabrication);
+    const process = String(p.performance?.fabrication || "").trim();
+    const nm = extractNm(process);
     const ghz = extractMaxGhz(p.performance?.cpu);
     const gpu = String(p.performance?.gpu || "").trim();
     const score = calculateOverallScore100(p) / 10;
@@ -135,6 +150,7 @@ async function buildProcessorProfiles(): Promise<ProcessorProfile[]> {
         vendor: vendorFromChip(name),
         antutuBest: antutu > 0 ? antutu : 0,
         nmBest: nm,
+        processBest: process || undefined,
         maxCpuGhz: ghz,
         gpuCount: gpu ? { [gpu]: 1 } : {},
         phoneCount: 1,
@@ -159,6 +175,7 @@ async function buildProcessorProfiles(): Promise<ProcessorProfile[]> {
     if (Number.isFinite(nm) && (!existing.nmBest || (nm as number) < existing.nmBest)) existing.nmBest = nm;
     if (Number.isFinite(ghz) && (!existing.maxCpuGhz || (ghz as number) > existing.maxCpuGhz)) existing.maxCpuGhz = ghz;
     if (gpu) existing.gpuCount[gpu] = (existing.gpuCount[gpu] || 0) + 1;
+    if (process && !existing.processBest) existing.processBest = process;
     if (Number.isFinite(score)) {
       existing.scoreSum += score;
       existing.scoreCount += 1;
@@ -197,6 +214,7 @@ async function buildProcessorProfiles(): Promise<ProcessorProfile[]> {
         vendor: item.vendor,
         antutu: item.antutuBest,
         fabricationNm: item.nmBest,
+        process: item.processBest,
         maxCpuGhz: item.maxCpuGhz,
         gpu,
         phoneCount: item.phoneCount,
@@ -207,9 +225,12 @@ async function buildProcessorProfiles(): Promise<ProcessorProfile[]> {
     .sort((a, b) => (b.antutu || 0) - (a.antutu || 0));
 
   const existing = new Set(fromProducts.map((item) => item.name.toLowerCase()));
-  const mergedDummy: ProcessorProfile[] = DUMMY_PROCESSORS
-    .filter((item) => !existing.has(item.name.toLowerCase()))
-    .map((item) => ({ ...item, slug: slugify(item.name) }));
+  const includeDummy = process.env.ENABLE_DUMMY_PROCESSORS === "1";
+  const mergedDummy: ProcessorProfile[] = includeDummy
+    ? DUMMY_PROCESSORS
+      .filter((item) => !existing.has(item.name.toLowerCase()))
+      .map((item) => ({ ...item, slug: slugify(item.name) }))
+    : [];
 
   let custom: ProcessorProfile[] = [];
   try {
@@ -221,7 +242,7 @@ async function buildProcessorProfiles(): Promise<ProcessorProfile[]> {
   const merged = new Map<string, ProcessorProfile>();
   [...fromProducts, ...mergedDummy].forEach((item) => merged.set(item.name.toLowerCase(), item));
   custom.forEach((item) => {
-    const slug = slugify(item.name);
+    const slug = slugify(item.slug || item.name);
     merged.set(item.name.toLowerCase(), {
       ...item,
       slug,
@@ -239,8 +260,11 @@ const processorProfilesCacheSeconds = (() => {
 
 const getCachedProcessorProfiles = unstable_cache(
   async () => buildProcessorProfiles(),
-  ["processor-profiles-v5"],
-  { revalidate: processorProfilesCacheSeconds }
+  ["processor-profiles-v10"],
+  {
+    revalidate: processorProfilesCacheSeconds,
+    tags: ["processor-profiles"],
+  }
 );
 
 export async function listProcessorProfiles(): Promise<ProcessorProfile[]> {

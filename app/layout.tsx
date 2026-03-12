@@ -36,7 +36,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
         <header className="sticky top-0 z-40 border-b border-white/70 bg-white/85 backdrop-blur">
           <div className="mobile-container py-3">
             <div className="flex flex-wrap items-center justify-between gap-3">
-              <Link href="/" className="flex items-center gap-2">
+              <Link href="/processors" className="flex items-center gap-2">
                 <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-blue-700 text-sm font-bold text-white">
                   TS
                 </span>

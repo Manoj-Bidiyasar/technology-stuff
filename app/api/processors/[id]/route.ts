@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { revalidateTag } from "next/cache";
 import { deleteProcessor, getProcessorAdminById, updateProcessor, type ProcessorAdmin } from "@/lib/firestore/processors";
 import { requireAdminCapability } from "@/lib/auth/adminApi";
 
@@ -14,6 +15,8 @@ export async function PUT(request: NextRequest, { params }: Props) {
     const { id } = await params;
     const body = (await request.json()) as Partial<ProcessorAdmin>;
     await updateProcessor(id, body);
+    revalidateTag("processor-profiles", "max");
+    revalidateTag("processor-custom-details", "max");
     return NextResponse.json({ ok: true });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to update processor.";
@@ -43,6 +46,8 @@ export async function DELETE(_request: NextRequest, { params }: Props) {
 
     const { id } = await params;
     await deleteProcessor(id);
+    revalidateTag("processor-profiles", "max");
+    revalidateTag("processor-custom-details", "max");
     return NextResponse.json({ ok: true });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to delete processor.";
