@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextResponse, type NextRequest } from "next/server";
 import { promises as fs } from "fs";
 import path from "path";
 import { requireAdminCapability } from "@/lib/auth/adminApi";
@@ -46,7 +46,7 @@ async function writeStore(store: HelperStore) {
   await fs.writeFile(DATA_PATH, JSON.stringify(store, null, 2));
 }
 
-export async function GET(request: Request) {
+export async function GET(request: NextRequest) {
   const { unauthorized } = await requireAdminCapability(request, "helper");
   if (unauthorized) return unauthorized;
   const { searchParams } = new URL(request.url);
@@ -55,7 +55,7 @@ export async function GET(request: Request) {
   return NextResponse.json({ scope, items: store[scope] || [] });
 }
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   const { unauthorized } = await requireAdminCapability(request, "helper");
   if (unauthorized) return unauthorized;
   const body = (await request.json()) as { scope: HelperScope; items: HelperTerm[] };

@@ -5,7 +5,7 @@ function isAuthenticated(request: NextRequest): boolean {
   return Boolean(request.cookies.get(ADMIN_SESSION_COOKIE)?.value);
 }
 
-export function middleware(request: NextRequest) {
+export function proxy(request: NextRequest) {
   const { pathname, search } = request.nextUrl;
   const loggedIn = isAuthenticated(request);
 

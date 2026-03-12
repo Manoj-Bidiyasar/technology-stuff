@@ -15,14 +15,14 @@ type Props = {
 
 export async function generateStaticParams() {
   const profiles = await listProcessorProfiles();
-  const top = profiles.slice(0, 12);
+  const top = profiles.slice(0, 20);
   const params: Array<{ slug: string }> = [];
   for (let i = 0; i < top.length; i += 1) {
     for (let j = i + 1; j < top.length; j += 1) {
-      if (params.length >= 40) break;
+      if (params.length >= 100) break;
       params.push({ slug: `${top[i].slug}-vs-${top[j].slug}` });
     }
-    if (params.length >= 40) break;
+    if (params.length >= 100) break;
   }
   return params;
 }

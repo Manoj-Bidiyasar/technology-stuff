@@ -25,7 +25,7 @@ type Props = {
 
 export async function generateStaticParams() {
   const profiles = await listProcessorProfiles();
-  return profiles.slice(0, 60).map((p) => ({ slug: p.slug }));
+  return profiles.slice(0, 100).map((p) => ({ slug: p.slug }));
 }
 
 const poppins = Poppins({
