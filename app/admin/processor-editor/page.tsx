@@ -4324,7 +4324,7 @@ export default function ProcessorEditorPage() {
                         onChange={(e) => {
                           const next = privateFields.map((item, i) =>
                             i === rowIndex
-                              ? { ...item, value: e.target.value, type: "string", sourceSection: section.title }
+                              ? { ...item, value: e.target.value, type: item.type, sourceSection: section.title }
                               : item
                           );
                           setPrivateFields(next);
@@ -4390,7 +4390,7 @@ export default function ProcessorEditorPage() {
                     value={formatPrivateFieldValue(row.value, row.type)}
                     onChange={(e) => {
                       const next = privateFields.map((item, i) =>
-                        i === idx ? { ...item, value: e.target.value, type: "string" } : item
+                        i === idx ? { ...item, value: e.target.value, type: item.type } : item
                       );
                       setPrivateFields(next);
                       setDetailField("adminPrivateFields", next);
