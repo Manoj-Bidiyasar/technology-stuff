@@ -1,6 +1,104 @@
 {
   "processor": [
     {
+      "section": "Camera",
+      "name": "Qualcomm Spectra ISP (triple 12-bit)",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-03-17T19:32:34.547Z"
+    },
+    {
+      "section": "Video",
+      "name": "H.264, H.265/HEVC, VP9",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-03-17T18:21:34.718Z"
+    },
+    {
+      "section": "Camera",
+      "name": "Qualcomm Spectra ISP (dual 12-bit)",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-03-17T18:19:56.527Z"
+    },
+    {
+      "section": "Connectivity",
+      "name": "Snapdragon® 5G Modem",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-03-17T17:40:09.042Z"
+    },
+    {
+      "section": "AI",
+      "name": "Qualcomm AI Engine",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-03-17T12:38:10.713Z"
+    },
+    {
+      "section": "Graphics (GPU)",
+      "name": "Vulkan® 1.1",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-03-17T12:18:03.213Z"
+    },
+    {
+      "section": "Graphics (GPU)",
+      "name": "OpenCL™ 2.0",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-03-17T12:17:41.080Z"
+    },
+    {
+      "section": "Graphics (GPU)",
+      "name": "OpenGL® ES 3.2",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-03-17T12:17:30.344Z"
+    },
+    {
+      "section": "Charging",
+      "name": "Qualcomm® Quick Charge™ 5",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-03-15T12:18:08.026Z"
+    },
+    {
+      "section": "Storage",
+      "name": "2 lane",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-03-17T12:50:00.000Z"
+    },
+    {
+      "section": "Storage",
+      "name": "Dual channel",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-03-17T12:50:00.000Z"
+    },
+    {
+      "section": "Storage",
+      "name": "4 lane",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-03-17T12:50:00.000Z"
+    },
+    {
+      "section": "Storage",
+      "name": "4 channel",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-03-17T12:50:00.000Z"
+    },
+    {
+      "section": "Other",
+      "name": "TSMC",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-03-15T12:16:22.479Z"
+    },
+    {
       "section": "CPU",
       "name": "Arm Cortex A",
       "aliases": [],

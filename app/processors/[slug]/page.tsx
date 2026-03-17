@@ -617,6 +617,21 @@ function clusterRows(value: string): ReactNode {
   );
 }
 
+function formatCodecList(value: string[] | string | undefined): string {
+  if (!value) return "-";
+  const list = Array.isArray(value) ? value : String(value).split(/\s*,\s*/);
+  const cleaned = list.map((item) => String(item).trim()).filter(Boolean);
+  return cleaned.length ? cleaned.join(", ") : "-";
+}
+
+function formatFlops(value?: string): string {
+  const raw = String(value || "").trim();
+  if (!raw) return "-";
+  if (/\bflops\b/i.test(raw)) return raw;
+  if (/^\d+(\.\d+)?$/.test(raw)) return `${raw} Gigaflops`;
+  return `${raw} Gigaflops`;
+}
+
 function stripResolutionFromMode(value: string): string {
   return String(value || "")
     .replace(/\(\s*\d{3,5}\s*[xX*]\s*\d{3,5}\s*\)/g, "")
@@ -625,9 +640,17 @@ function stripResolutionFromMode(value: string): string {
     .trim();
 }
 
+function normalizeDisplayRefresh(value: string): string {
+  const text = String(value || "").trim();
+  if (!text) return text;
+  if (/@/.test(text)) return text.replace(/\s*@\s*/g, " @ ");
+  return text.replace(/\s*:\s*/g, " @ ");
+}
+
 function formatDisplayModeLines(values: string[]): string {
   const rows = values
     .map((item) => stripResolutionFromMode(item))
+    .map((item) => normalizeDisplayRefresh(item))
     .map((item) => item.trim())
     .filter(Boolean);
   return rows.length ? rows.join(", ") : "-";
@@ -762,6 +785,15 @@ function formatMemoryFrequency(detail: {
   const byType = detail.memoryFreqByType || {};
   const typeKeys = sortMemoryTypes(Object.keys(byType).filter(Boolean));
   if (typeKeys.length > 0) {
+    const parsed = typeKeys.map((type) => {
+      const raw = byType[type];
+      if (typeof raw === "number") return raw;
+      const n = Number.parseFloat(String(raw || "").replace(/[^\d.]+/g, ""));
+      return Number.isFinite(n) ? n : NaN;
+    });
+    if (parsed.length > 0 && parsed.every((n) => Number.isFinite(n)) && parsed.every((n) => n === parsed[0])) {
+      return `${parsed[0]} MHz`;
+    }
     return typeKeys
       .map((type) => {
         const raw = byType[type];
@@ -787,6 +819,15 @@ function getMemoryFrequencyRows(detail: {
   const byType = detail.memoryFreqByType || {};
   const typeKeys = sortMemoryTypes(Object.keys(byType).filter(Boolean));
   if (typeKeys.length > 0) {
+    const parsed = typeKeys.map((type) => {
+      const raw = byType[type];
+      if (typeof raw === "number") return raw;
+      const n = Number.parseFloat(String(raw || "").replace(/[^\d.]+/g, ""));
+      return Number.isFinite(n) ? n : NaN;
+    });
+    if (parsed.length > 0 && parsed.every((n) => Number.isFinite(n)) && parsed.every((n) => n === parsed[0])) {
+      return [`${parsed[0]} MHz`];
+    }
     return typeKeys.map((type) => {
       const raw = byType[type];
       const value = typeof raw === "number" ? `${raw} MHz` : `${String(raw).trim()}`;
@@ -1615,8 +1656,8 @@ export default async function ProcessorDetailPage({ params, searchParams }: Prop
           { id: "cpu-memory", label: "CPU & Memory" },
           { id: "graphics", label: "Graphics & Gaming" },
           { id: "ai", label: "AI" },
-          { id: "camera-media", label: "Camera & Video" },
           { id: "display-multimedia", label: "Display & Multimedia" },
+          { id: "camera-media", label: "Camera & Video" },
           { id: "connectivity", label: "Connectivity" },
           ...(supportRows.length > 0 ? [{ id: "support-links", label: "Support & Links" }] : []),
           { id: "devices", label: "Devices" },
@@ -1708,9 +1749,8 @@ export default async function ProcessorDetailPage({ params, searchParams }: Prop
                 { label: "Architecture (GPU)", value: detail?.gpuArchitecture || "-" },
                 { label: "GPU Cores", value: gpuCores },
                 { label: "GPU Frequency", value: detail?.gpuFrequencyMhz ? `${detail.gpuFrequencyMhz} MHz` : "-" },
-                { label: "Vulkan Version", value: detail?.vulkanVersion || "-" },
-                { label: "OpenCL Version", value: detail?.openclVersion || "-" },
-                { label: "DirectX Version", value: detail?.directxVersion || "-" },
+                { label: "APIs", value: detail?.gpuApis?.length ? detail.gpuApis.join(", ") : "-" },
+                { label: "FLOPS", value: formatFlops(detail?.gpuFlops) },
                 { label: "Other GPU Features", value: detail?.gpuFeatures?.length ? detail.gpuFeatures.join(", ") : "-" },
               ]}
             />
@@ -1750,39 +1790,7 @@ export default async function ProcessorDetailPage({ params, searchParams }: Prop
                 },
                 { label: "Max Memory", value: detail?.maxMemoryGb ? `${detail.maxMemoryGb}GB` : "-" },
                 { label: "Storage Type", value: mobileClusterRows(formatStorageTypes(detail || {})) },
-              ]}
-            />
-          </article>
-
-          <article id="camera-media" className="scroll-mt-28">
-            <ModernSpecCards
-              title="Camera & Video Recording"
-              titleIcon="camera"
-              showEmptyRows={previewMode}
-              rows={[
-                { label: "Camera ISP", value: detail?.cameraIsp || "-" },
-                {
-                  label: "Camera Support Modes",
-                  value: clusterRows(
-                    formatCameraSupportModes(
-                      detail?.cameraSupportModes,
-                      detail?.maxCameraSupport || detail?.cameraSupport || "-"
-                    )
-                  ),
-                  labelAlign: "center",
-                },
-                { label: "Other Camera Features", value: detail?.cameraFeatures?.length ? detail.cameraFeatures.join(", ") : "-" },
-                {
-                  label: "Video Recording Modes",
-                  value: clusterRows(
-                    detail?.videoRecordingModes?.length
-                      ? detail.videoRecordingModes.join(", ")
-                      : (detail?.maxVideoCapture || detail?.videoCapture || "-")
-                  ),
-                  labelAlign: "center",
-                },
-                { label: "Other Video Features", value: detail?.videoFeatures?.length ? detail.videoFeatures.join(", ") : "-" },
-                { label: "Video Playback", value: clusterRows(detail?.videoPlayback || "-"), labelAlign: "center" },
+                { label: "Storage Channels / Lanes", value: detail?.storageChannels || "-" },
               ]}
             />
           </article>
@@ -1819,6 +1827,47 @@ export default async function ProcessorDetailPage({ params, searchParams }: Prop
                 { label: "Display Features", value: detail?.displayFeatures?.length ? detail.displayFeatures.join(", ") : "-" },
                 { label: "Audio Codecs", value: detail?.audioCodecs?.length ? detail.audioCodecs.join(", ") : "-" },
                 { label: "Multimedia Features", value: detail?.multimediaFeatures?.length ? detail.multimediaFeatures.join(", ") : "-" },
+              ]}
+            />
+          </article>
+
+          <article id="camera-media" className="scroll-mt-28">
+            <ModernSpecCards
+              title="Camera & Video Recording"
+              titleIcon="camera"
+              showEmptyRows={previewMode}
+              rows={[
+                { label: "Camera ISP", value: detail?.cameraIsp || "-" },
+                {
+                  label: "Camera Support Modes",
+                  value: clusterRows(
+                    formatCameraSupportModes(
+                      detail?.cameraSupportModes,
+                      detail?.maxCameraSupport || detail?.cameraSupport || "-"
+                    )
+                  ),
+                  labelAlign: "center",
+                },
+                { label: "Other Camera Features", value: detail?.cameraFeatures?.length ? detail.cameraFeatures.join(", ") : "-" },
+                {
+                  label: "Video Recording Modes",
+                  value: clusterRows(
+                    detail?.videoRecordingModes?.length
+                      ? detail.videoRecordingModes.join(", ")
+                      : (detail?.maxVideoCapture || detail?.videoCapture || "-")
+                  ),
+                  labelAlign: "center",
+                },
+                {
+                  label: "Video Recording Codecs",
+                  value: formatCodecList(detail?.videoRecordingCodecs),
+                },
+                { label: "Other Video Features", value: detail?.videoFeatures?.length ? detail.videoFeatures.join(", ") : "-" },
+                { label: "Video Playback", value: clusterRows(detail?.videoPlayback || "-"), labelAlign: "center" },
+                {
+                  label: "Video Playback Codecs",
+                  value: formatCodecList(detail?.videoPlaybackCodecs),
+                },
               ]}
             />
           </article>

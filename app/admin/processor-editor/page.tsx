@@ -114,10 +114,12 @@ const DISPLAY_MODE_NAME_OPTIONS = [
   "WQHD+",
   "2K",
   "4K",
+  "8K",
 ];
 const CSV_TEXT_FIELDS = [
   "cpuFeatures",
   "gpuFeatures",
+  "gpuApis",
   "aiFeatures",
   "cameraFeatures",
   "videoRecordingModes",
@@ -174,6 +176,7 @@ const NORMALIZE_ALIASES: Record<string, string> = {
 };
 let HELPER_ALIAS_MAP: Record<string, string> = {};
 let HELPER_SUGGESTIONS: string[] = [];
+let HELPER_SUGGESTIONS_BY_SECTION: Record<string, string[]> = {};
 
 function setHelperAliasMap(next: Record<string, string>) {
   HELPER_ALIAS_MAP = next;
@@ -181,6 +184,9 @@ function setHelperAliasMap(next: Record<string, string>) {
 
 function setHelperSuggestions(next: string[]) {
   HELPER_SUGGESTIONS = next;
+}
+function setHelperSectionSuggestions(next: Record<string, string[]>) {
+  HELPER_SUGGESTIONS_BY_SECTION = next;
 }
 
 const DETAIL_SECTIONS: DetailSection[] = [
@@ -206,11 +212,9 @@ const DETAIL_SECTIONS: DetailSection[] = [
       { key: "gpuName", label: "GPU Name", type: "text" },
       { key: "gpuArchitecture", label: "GPU Architecture", type: "text" },
       { key: "pipelines", label: "GPU Cores", type: "number" },
-      { key: "shadingUnits", label: "GPU Shading Units", type: "number" },
       { key: "gpuFrequencyMhz", label: "GPU Frequency (MHz)", type: "number" },
-      { key: "vulkanVersion", label: "Vulkan", type: "text" },
-      { key: "openclVersion", label: "OpenCL", type: "text" },
-      { key: "directxVersion", label: "DirectX", type: "text" },
+      { key: "gpuApis", label: "APIs", type: "csv" },
+      { key: "gpuFlops", label: "FLOPS", type: "text" },
       { key: "gpuFeatures", label: "GPU Features", type: "csv" },
     ],
   },
@@ -231,25 +235,12 @@ const DETAIL_SECTIONS: DetailSection[] = [
       { key: "memoryFreqMhz", label: "Memory Frequency (MHz)", type: "number" },
       { key: "memoryFreqByType", label: "Memory Freq by Type", type: "kv", placeholder: "LPDDR5X:8533" },
       { key: "memoryChannels", label: "Memory Channels", type: "text" },
+      { key: "storageChannels", label: "Storage Channels / Lanes", type: "text" },
       { key: "memoryBusWidthBits", label: "Memory Bus Width (bits)", type: "number" },
       { key: "maxMemoryGb", label: "Max Memory (GB)", type: "number" },
       { key: "storageType", label: "Storage Type", type: "text" },
       { key: "storageTypes", label: "Storage Types", type: "csv" },
       { key: "bandwidthGbps", label: "Bandwidth (GB/s)", type: "number" },
-    ],
-  },
-  {
-    title: "Camera & Video",
-    fields: [
-      { key: "cameraIsp", label: "Camera ISP", type: "text" },
-      { key: "maxCameraSupport", label: "Max Camera Support", type: "text" },
-      { key: "cameraSupportModes", label: "Camera Support Modes", type: "csv" },
-      { key: "cameraFeatures", label: "Camera Features", type: "csv" },
-      { key: "maxVideoCapture", label: "Max Video Capture", type: "text" },
-      { key: "videoCapture", label: "Video Capture", type: "text" },
-      { key: "videoRecordingModes", label: "Video Recording Modes", type: "csv" },
-      { key: "videoFeatures", label: "Video Features", type: "csv" },
-      { key: "videoPlayback", label: "Video Playback", type: "text" },
     ],
   },
   {
@@ -262,6 +253,22 @@ const DETAIL_SECTIONS: DetailSection[] = [
       { key: "displayFeatures", label: "Display Features", type: "csv" },
       { key: "audioCodecs", label: "Audio Codecs", type: "csv" },
       { key: "multimediaFeatures", label: "Multimedia Features", type: "csv" },
+    ],
+  },
+  {
+    title: "Camera & Video",
+    fields: [
+      { key: "cameraIsp", label: "Camera ISP", type: "text" },
+      { key: "maxCameraSupport", label: "Max Camera Support", type: "text" },
+      { key: "cameraSupportModes", label: "Camera Support Modes", type: "csv" },
+      { key: "cameraFeatures", label: "Camera Features", type: "csv" },
+      { key: "maxVideoCapture", label: "Max Video Capture", type: "text" },
+      { key: "videoCapture", label: "Video Capture", type: "text" },
+      { key: "videoRecordingModes", label: "Video Recording Modes", type: "csv" },
+      { key: "videoRecordingCodecs", label: "Video Recording Codecs", type: "csv" },
+      { key: "videoFeatures", label: "Video Features", type: "csv" },
+      { key: "videoPlayback", label: "Video Playback", type: "text" },
+      { key: "videoPlaybackCodecs", label: "Video Playback Codecs", type: "csv" },
     ],
   },
   {
@@ -363,16 +370,19 @@ const FIELD_HELP: Record<string, string> = {
   "Graphics (GPU).gpuName": "GPU marketing name (example: Adreno 750).",
   "Graphics (GPU).gpuArchitecture": "GPU architecture family/gen.",
   "Graphics (GPU).pipelines": "GPU pipeline count if available.",
-  "Graphics (GPU).shadingUnits": "Total shader/shading units.",
   "Graphics (GPU).gpuFrequencyMhz": "Peak GPU clock in MHz.",
-  "Graphics (GPU).vulkanVersion": "Supported Vulkan API version.",
-  "Graphics (GPU).openclVersion": "Supported OpenCL version.",
-  "Graphics (GPU).directxVersion": "Supported DirectX feature level/version.",
+  "Graphics (GPU).gpuApis": "Comma separated graphics APIs (Vulkan/OpenGL/DirectX/etc).",
+  "Graphics (GPU).gpuFlops": "Peak GPU throughput (e.g. 5.6 TFLOPS).",
   "Graphics (GPU).gpuFeatures": "Comma separated GPU features.",
   "AI.aiEngine": "NPU/AI engine name.",
   "AI.aiPerformanceTops": "Peak AI throughput in TOPS.",
   "AI.aiPrecision": "Supported AI precision formats (INT8/FP16/etc).",
   "AI.aiFeatures": "Comma separated AI capabilities.",
+  "Camera & Video.cameraIsp": "Format: Brand ISP name (dual 12-bit / triple 18-bit).",
+  "Camera & Video.videoRecordingModes": "Video recording modes (what the camera can record).",
+  "Camera & Video.videoPlayback": "Video playback modes (what the chip can decode).",
+  "Camera & Video.videoRecordingCodecs": "Comma separated recording codecs (H.264, H.265/HEVC, AV1).",
+  "Camera & Video.videoPlaybackCodecs": "Comma separated playback codecs (H.264, H.265/HEVC, AV1).",
 };
 
 const BULK_ALLOWED_FIELDS = new Set<string>([
@@ -403,11 +413,9 @@ const BULK_ALLOWED_FIELDS = new Set<string>([
   "gpuName",
   "gpuArchitecture",
   "pipelines",
-  "shadingUnits",
   "gpuFrequencyMhz",
-  "vulkanVersion",
-  "openclVersion",
-  "directxVersion",
+  "gpuApis",
+  "gpuFlops",
   "gpuFeatures",
   "aiEngine",
   "aiPerformanceTops",
@@ -418,6 +426,7 @@ const BULK_ALLOWED_FIELDS = new Set<string>([
   "memoryFreqMhz",
   "memoryFreqByType",
   "memoryChannels",
+  "storageChannels",
   "memoryBusWidthBits",
   "maxMemoryGb",
   "storageType",
@@ -430,8 +439,10 @@ const BULK_ALLOWED_FIELDS = new Set<string>([
   "maxVideoCapture",
   "videoCapture",
   "videoRecordingModes",
+  "videoRecordingCodecs",
   "videoFeatures",
   "videoPlayback",
+  "videoPlaybackCodecs",
   "maxDisplayResolution",
   "maxRefreshRateHz",
   "displayModes",
@@ -485,6 +496,10 @@ function normalizeLookupKey(value: string): string {
   return String(value || "").toLowerCase().replace(/[^a-z0-9]/g, "");
 }
 
+function normalizeSectionKey(value: string): string {
+  return normalizeLookupKey(value || "");
+}
+
 function getAliasCorrection(value: string): string | undefined {
   const compact = String(value || "").trim().replace(/\s+/g, " ");
   if (!compact) return undefined;
@@ -516,6 +531,18 @@ function normalizeCsvArray(values: string[]): string[] {
   return out;
 }
 
+function replaceLastCsvToken(value: string, nextToken: string): string {
+  const parts = String(value || "").split(",").map((item) => item.trim());
+  if (parts.length === 0) return nextToken;
+  parts[parts.length - 1] = nextToken;
+  return parts.filter(Boolean).join(", ");
+}
+
+function getLastCsvToken(value: string): string {
+  const parts = String(value || "").split(",");
+  return (parts[parts.length - 1] || "").trim();
+}
+
 function isEmptyValue(value: unknown): boolean {
   if (value === null || value === undefined) return true;
   if (typeof value === "string") return value.trim() === "";
@@ -527,8 +554,17 @@ function isEmptyValue(value: unknown): boolean {
 }
 
 function getSuggestionListId(key: string): string | undefined {
-  if (FIELD_SUGGESTIONS[key]) return `suggest-${key}`;
+  if (FIELD_SUGGESTIONS[key]) {
+    return HELPER_SUGGESTIONS.length ? `suggest-${key}-merged` : `suggest-${key}`;
+  }
   return HELPER_SUGGESTIONS.length ? "suggest-helper" : undefined;
+}
+
+function getSectionSuggestionListId(section: string): string | undefined {
+  const key = normalizeSectionKey(section);
+  if (!key) return undefined;
+  const list = HELPER_SUGGESTIONS_BY_SECTION[key];
+  return list && list.length ? `suggest-helper-section-${key}` : undefined;
 }
 
 function parsePrivateFieldValue(raw: string, type: PrivateFieldType): string | number | boolean | string[] {
@@ -966,6 +1002,9 @@ export default function ProcessorEditorPage() {
   const [videoPlaybackDraft, setVideoPlaybackDraft] = useState<VideoRecordingProfile[]>([{ id: "vp1", mode: "", fps: "" }]);
   const [displayModesDraft, setDisplayModesDraft] = useState<DisplayModeProfile[]>([{ id: "dm1", mode: "", resolution: "", rr: "" }]);
   const [outputDisplaysDraft, setOutputDisplaysDraft] = useState<DisplayModeProfile[]>([{ id: "od1", mode: "", resolution: "", rr: "" }]);
+  const [csvSuggestKey, setCsvSuggestKey] = useState<string | null>(null);
+  const [csvSuggestTerm, setCsvSuggestTerm] = useState("");
+  const [csvSuggestOpen, setCsvSuggestOpen] = useState(false);
   const [privateFields, setPrivateFields] = useState<PrivateFieldEntry[]>([]);
   const [privateFieldDraft, setPrivateFieldDraft] = useState<PrivateFieldDraft>({ section: "", label: "", subField: "", value: "", type: "string" });
   const [privateFieldGlobalDraft, setPrivateFieldGlobalDraft] = useState<PrivateFieldSimpleDraft>({ section: "", label: "", value: "" });
@@ -1088,6 +1127,77 @@ export default function ProcessorEditorPage() {
     return modes.map((item) => String(item).trim()).filter(Boolean).join(", ");
   })();
   const appliedVideoPlaybackSummary = (() => String(getDetailField("videoPlayback") || "").trim())();
+  const csvSuggestionPool = useMemo(() => {
+    const out = new Set<string>();
+    HELPER_SUGGESTIONS.forEach((item) => {
+      const trimmed = String(item || "").trim();
+      if (!trimmed) return;
+      const parts = parseCsv(trimmed);
+      if (parts.length <= 1) {
+        out.add(trimmed);
+        return;
+      }
+      parts.forEach((part) => {
+        if (part) out.add(part);
+      });
+      out.add(trimmed);
+    });
+    return Array.from(out).sort((a, b) => a.localeCompare(b));
+  }, [helperAliasVersion]);
+  const helperSectionSuggestions = useMemo(() => {
+    return HELPER_SUGGESTIONS_BY_SECTION;
+  }, [helperAliasVersion]);
+  const csvSuggestions = useMemo(() => {
+    const term = csvSuggestTerm.trim().toLowerCase();
+    if (!csvSuggestOpen || !term) return [];
+    return csvSuggestionPool.filter((item) => item.toLowerCase().startsWith(term)).slice(0, 8);
+  }, [csvSuggestTerm, csvSuggestOpen, csvSuggestionPool]);
+
+  const renderCsvInput = (fieldKey: string, placeholder?: string) => {
+    const currentValue = csvInputValue(getDetailField(fieldKey));
+    return (
+      <div className="relative">
+        <input
+          value={currentValue}
+          onChange={(e) => {
+            const next = e.target.value;
+            setDetailField(fieldKey, next);
+            setCsvSuggestKey(fieldKey);
+            setCsvSuggestTerm(getLastCsvToken(next));
+            setCsvSuggestOpen(true);
+          }}
+          onFocus={() => {
+            setCsvSuggestKey(fieldKey);
+            setCsvSuggestTerm(getLastCsvToken(currentValue));
+            setCsvSuggestOpen(true);
+          }}
+          onBlur={() => setTimeout(() => setCsvSuggestOpen(false), 120)}
+          placeholder={placeholder}
+          className="h-9 w-full rounded-lg border border-slate-200 px-3 text-sm"
+        />
+        {csvSuggestOpen && csvSuggestKey === fieldKey && csvSuggestions.length > 0 ? (
+          <div className="absolute z-20 mt-1 max-h-48 w-full overflow-auto rounded-lg border border-slate-200 bg-white shadow-lg">
+            {csvSuggestions.map((item) => (
+              <button
+                key={item}
+                type="button"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => {
+                  const next = replaceLastCsvToken(currentValue, item);
+                  setDetailField(fieldKey, next);
+                  setCsvSuggestTerm("");
+                  setCsvSuggestOpen(false);
+                }}
+                className="flex w-full items-center justify-between gap-2 border-b border-slate-100 px-3 py-2 text-left text-sm font-medium text-slate-700 last:border-b-0 hover:bg-blue-50"
+              >
+                {item}
+              </button>
+            ))}
+          </div>
+        ) : null}
+      </div>
+    );
+  };
   const currentCanonical = useMemo(() => String(getDetailField("seo.canonicalUrl") || "").trim(), [form.detail]);
   const currentSeoTitle = useMemo(() => String(getDetailField("seo.metaTitle") || "").trim(), [form.detail]);
   const currentSeoDescription = useMemo(() => String(getDetailField("seo.metaDescription") || "").trim(), [form.detail]);
@@ -1140,15 +1250,22 @@ export default function ProcessorEditorPage() {
       try {
         const response = await fetch("/api/admin/helper-terms?scope=processor", { cache: "no-store" });
         if (!response.ok) return;
-        const json = (await response.json()) as { items?: { name: string; aliases?: string[]; status?: string }[] };
+        const json = (await response.json()) as { items?: { name: string; aliases?: string[]; status?: string; section?: string }[] };
         if (!active) return;
         const map: Record<string, string> = {};
         const suggestions = new Set<string>();
+        const sectionMap: Record<string, Set<string>> = {};
         (json.items || []).forEach((item) => {
           if (item.status && item.status !== "approved") return;
           const canonical = String(item.name || "").trim();
           if (!canonical) return;
           suggestions.add(canonical);
+          const sectionKey = normalizeSectionKey(item.section || "");
+          if (sectionKey) {
+            const bucket = sectionMap[sectionKey] || new Set<string>();
+            bucket.add(canonical);
+            sectionMap[sectionKey] = bucket;
+          }
           const all = [canonical, ...(item.aliases || [])];
           all.forEach((alias) => {
             const key = normalizeLookupKey(alias);
@@ -1157,6 +1274,10 @@ export default function ProcessorEditorPage() {
         });
         setHelperAliasMap(map);
         setHelperSuggestions(Array.from(suggestions).sort((a, b) => a.localeCompare(b)));
+        const sectionSuggestions = Object.fromEntries(
+          Object.entries(sectionMap).map(([key, set]) => [key, Array.from(set).sort((a, b) => a.localeCompare(b))])
+        );
+        setHelperSectionSuggestions(sectionSuggestions);
         setHelperAliasVersion((v) => v + 1);
       } catch {
         // ignore
@@ -1600,62 +1721,64 @@ export default function ProcessorEditorPage() {
           coreCount: 8,
           coreConfiguration: "1x Arm Cortex-X4 @ 3.2GHz, 3x Arm Cortex-A720 @ 2.8GHz, 4x Arm Cortex-A520 @ 2.0GHz",
           cores: "1+3+4",
-          instructionSet: "ARMv9.2-A",
-          architectureBits: "64bit",
+          instructionSet: "ARMv9.2-A /* ARMv9-A | ARMv8.2-A */",
+          architectureBits: "64bit /* 32bit */",
           process: "3nm",
           transistorCount: "17.5 billion",
           l2Cache: "2MB",
           l3Cache: "6MB",
-          cpuFeatures: ["AV1 decode", "SMT", "HDR processing", "AI acceleration"],
+          cpuFeatures: ["AV1 decode /* SMT | HDR processing */", "SMT", "HDR processing", "AI acceleration"],
           tdpW: 6,
           gpuName: "Adreno 750",
           gpuArchitecture: "Adreno",
           pipelines: 6,
-          shadingUnits: 1536,
           gpuFrequencyMhz: 900,
-          vulkanVersion: "1.3",
-          openclVersion: "2.0",
-          directxVersion: "12",
-          gpuFeatures: ["Ray tracing", "Variable Rate Shading", "HDR rendering"],
+          gpuApis: ["Vulkan /* OpenGL | DirectX */", "OpenGL", "DirectX"],
+          gpuFlops: "5.6 TFLOPS",
+          gpuFeatures: ["Ray tracing /* Variable Rate Shading | HDR rendering */", "Variable Rate Shading", "HDR rendering"],
           aiEngine: "Hexagon NPU",
           aiPerformanceTops: 45,
-          aiPrecision: "INT8/FP16",
-          aiFeatures: ["INT8", "FP16", "INT4"],
-          memoryType: "LPDDR6",
-          memoryTypes: ["LPDDR5X", "LPDDR6", "LPDDR6X"],
+          aiPrecision: "INT8/FP16 /* INT4 | FP32 */",
+          aiFeatures: ["INT8 /* FP16 | INT4 */", "FP16", "INT4"],
+          memoryType: "LPDDR6 /* LPDDR5X | LPDDR6X */",
+          memoryTypes: ["LPDDR5X /* LPDDR6 | LPDDR6X */", "LPDDR6", "LPDDR6X"],
           memoryFreqMhz: 8533,
           memoryFreqByType: { LPDDR5X: 8533, LPDDR6: 9999, LPDDR6X: 10667 },
-          memoryChannels: "Quad-channel",
+          memoryChannels: "Quad-channel /* Single-channel | Dual-channel */",
+          storageChannels: "2-lane /* Dual channel | 4-lane | 4 channel */",
           memoryBusWidthBits: 256,
           maxMemoryGb: 32,
-          storageType: "NVMe",
-          storageTypes: ["UFS 4.0", "UFS 4.1", "NVMe"],
+          storageType: "NVMe /* UFS 4.0 | UFS 4.1 */",
+          storageTypes: ["UFS 4.0 /* UFS 4.1 | NVMe */", "UFS 4.1", "NVMe"],
           bandwidthGbps: 58.3,
           cameraIsp: "Imagiq 890",
           maxCameraSupport: 240,
           cameraSupportModes: ["240", "200 + 50", "64 + 32 + 12", "32 + 32 + 32 + 32"],
-          cameraFeatures: ["HDR", "AI", "Night mode", "Multi-frame"],
+          cameraFeatures: ["HDR /* AI | Night mode */", "AI", "Night mode", "Multi-frame"],
           maxVideoCapture: "8K@30fps",
           videoCapture: "4K@120fps",
           videoRecordingModes: ["8K@30fps", "4K@120fps", "4K@60fps", "FHD+@240fps", "FHD@120fps"],
-          videoFeatures: ["HDR10", "EIS", "10-bit"],
+          videoRecordingCodecs: ["H.264 /* H.265/HEVC | AV1 */", "H.265/HEVC", "AV1"],
+          videoFeatures: ["HDR10 /* EIS | 10-bit */", "EIS", "10-bit"],
           videoPlayback: "8K@60fps,4K@240fps,4K@120fps",
+          videoPlaybackCodecs: ["H.264 /* H.265/HEVC | AV1 */", "H.265/HEVC", "AV1"],
           maxDisplayResolution: "3200x1440",
           maxRefreshRateHz: 144,
           displayModes: ["QHD+ (2960x3160):120Hz", "FHD+ (2160x1080):240Hz", "HD+ (1650x720):180Hz"],
           outputDisplay: "4K (2400x2160):60Hz, FHD+ (2060x1080):120Hz, FHD (1920x1080):120Hz",
-          displayFeatures: ["HDR10+", "Dolby Vision", "DC dimming"],
-          audioCodecs: ["HEVC", "ALC", "AAC", "FLAC"],
-          multimediaFeatures: ["Dolby Vision", "Dolby Atmos"],
+          displayFeatures: ["HDR10+ /* Dolby Vision | DC dimming */", "Dolby Vision", "DC dimming"],
+          audioCodecs: ["HEVC /* AAC | FLAC */", "ALC", "AAC", "FLAC"],
+          multimediaFeatures: ["Dolby Vision /* Dolby Atmos */", "Dolby Atmos"],
           modem: "Snapdragon X75",
-          networkSupport: ["5G", "4G", "3G", "2G"],
+          networkSupport: ["5G /* 4G | 3G | 2G */", "4G", "3G", "2G"],
+          dual5g: true,
           downloadMbps: 10000,
           uploadMbps: 3000,
-          wifi: "Wi-Fi 7",
-          bluetooth: "5.4",
-          bluetoothFeatures: ["LE Audio", "aptX", "LDAC"],
-          navigation: ["GPS", "GLONASS", "Galileo", "BeiDou"],
-          quickCharging: "Quick Charge 5",
+          wifi: "Wi-Fi 7 /* Wi-Fi 6E | Wi-Fi 6 */",
+          bluetooth: "5.4 /* 5.3 | 5.2 */",
+          bluetoothFeatures: ["LE Audio /* aptX | LDAC */", "aptX", "LDAC"],
+          navigation: ["GPS /* GLONASS | Galileo */", "GLONASS", "Galileo", "BeiDou"],
+          quickCharging: "Quick Charge 5 /* USB PD 3.1 | SuperVOOC */",
           chargingSpeed: "120W",
           sourceUrl: "https://example.com",
           benchmarks: {
@@ -1689,62 +1812,64 @@ export default function ProcessorEditorPage() {
           "coreCount,8,number",
           "coreConfiguration,1x Arm Cortex-X4 @ 3.2GHz|3x Arm Cortex-A720 @ 2.8GHz|4x Arm Cortex-A520 @ 2.0GHz,text",
           "cores,1+3+4,text",
-          "instructionSet,ARMv9.2-A,text",
-          "architectureBits,64bit,text",
+          "instructionSet,ARMv9.2-A /* ARMv9-A | ARMv8.2-A */,text",
+          "architectureBits,64bit /* 32bit */,text",
           "process,3nm,text",
           "transistorCount,17.5 billion,text",
           "l2Cache,2MB,text",
           "l3Cache,6MB,text",
-          "cpuFeatures,AV1 decode|SMT|HDR processing|AI acceleration,csv",
+          "cpuFeatures,AV1 decode /* SMT | HDR processing */|SMT|HDR processing|AI acceleration,csv",
           "tdpW,6,number",
           "gpuName,Adreno 750,text",
           "gpuArchitecture,Adreno,text",
           "pipelines,6,number",
-          "shadingUnits,1536,number",
           "gpuFrequencyMhz,900,number",
-          "vulkanVersion,1.3,text",
-          "openclVersion,2.0,text",
-          "directxVersion,12,text",
-          "gpuFeatures,Ray tracing|Variable Rate Shading|HDR rendering,csv",
+          "gpuApis,Vulkan /* OpenGL | DirectX */|OpenGL|DirectX,csv",
+          "gpuFlops,5.6 TFLOPS,text",
+          "gpuFeatures,Ray tracing /* Variable Rate Shading | HDR rendering */|Variable Rate Shading|HDR rendering,csv",
           "aiEngine,Hexagon NPU,text",
           "aiPerformanceTops,45,number",
-          "aiPrecision,INT8/FP16,text",
-          "aiFeatures,INT8|FP16|INT4,csv",
-          "memoryType,LPDDR6,text",
-          "memoryTypes,LPDDR5X|LPDDR6|LPDDR6X,csv",
+          "aiPrecision,INT8/FP16 /* INT4 | FP32 */,text",
+          "aiFeatures,INT8 /* FP16 | INT4 */|FP16|INT4,csv",
+          "memoryType,LPDDR6 /* LPDDR5X | LPDDR6X */,text",
+          "memoryTypes,LPDDR5X /* LPDDR6 | LPDDR6X */|LPDDR6|LPDDR6X,csv",
           "memoryFreqMhz,8533,number",
           "memoryFreqByType,LPDDR5X:8533|LPDDR6:9999|LPDDR6X:10667,kv",
-          "memoryChannels,Quad-channel,text",
+          "memoryChannels,Quad-channel /* Single-channel | Dual-channel */,text",
+          "storageChannels,2-lane /* Dual channel | 4-lane | 4 channel */,text",
           "memoryBusWidthBits,256,number",
           "maxMemoryGb,32,number",
-          "storageType,NVMe,text",
-          "storageTypes,UFS 4.0|UFS 4.1|NVMe,csv",
+          "storageType,NVMe /* UFS 4.0 | UFS 4.1 */,text",
+          "storageTypes,UFS 4.0 /* UFS 4.1 | NVMe */|UFS 4.1|NVMe,csv",
           "bandwidthGbps,58.3,number",
           "cameraIsp,Imagiq 890,text",
           "maxCameraSupport,240,number",
           "cameraSupportModes,240|200 + 50|64 + 32 + 12|32 + 32 + 32 + 32,csv",
-          "cameraFeatures,HDR|AI|Night mode|Multi-frame,csv",
+          "cameraFeatures,HDR /* AI | Night mode */|AI|Night mode|Multi-frame,csv",
           "maxVideoCapture,8K@30fps,text",
           "videoCapture,4K@120fps,text",
           "videoRecordingModes,8K@30fps|4K@120fps|4K@60fps|FHD+@240fps|FHD@120fps,csv",
-          "videoFeatures,HDR10|EIS|10-bit,csv",
+          "videoRecordingCodecs,H.264 /* H.265/HEVC | AV1 */|H.265/HEVC|AV1,csv",
+          "videoFeatures,HDR10 /* EIS | 10-bit */|EIS|10-bit,csv",
           "videoPlayback,8K@60fps|4K@240fps|4K@120fps,csv",
+          "videoPlaybackCodecs,H.264 /* H.265/HEVC | AV1 */|H.265/HEVC|AV1,csv",
           "maxDisplayResolution,3200x1440,text",
           "maxRefreshRateHz,144,number",
           "displayModes,QHD+ (2960x3160):120Hz|FHD+ (2160x1080):240Hz|HD+ (1650x720):180Hz,csv",
           "outputDisplay,4K (2400x2160):60Hz|FHD+ (2060x1080):120Hz|FHD (1920x1080):120Hz,csv",
-          "displayFeatures,HDR10+|Dolby Vision|DC dimming,csv",
-          "audioCodecs,HEVC|ALC|AAC|FLAC,csv",
-          "multimediaFeatures,Dolby Vision|Dolby Atmos,csv",
+          "displayFeatures,HDR10+ /* Dolby Vision | DC dimming */|Dolby Vision|DC dimming,csv",
+          "audioCodecs,HEVC /* AAC | FLAC */|ALC|AAC|FLAC,csv",
+          "multimediaFeatures,Dolby Vision /* Dolby Atmos */|Dolby Atmos,csv",
           "modem,Snapdragon X75,text",
-          "networkSupport,5G|4G|3G|2G,csv",
+          "networkSupport,5G /* 4G | 3G | 2G */|4G|3G|2G,csv",
+          "dual5g,true,boolean",
           "downloadMbps,10000,number",
           "uploadMbps,3000,number",
-          "wifi,Wi-Fi 7,text",
-          "bluetooth,5.4,text",
-          "bluetoothFeatures,LE Audio|aptX|LDAC,csv",
-          "navigation,GPS|GLONASS|Galileo|BeiDou,csv",
-          "quickCharging,Quick Charge 5,text",
+          "wifi,Wi-Fi 7 /* Wi-Fi 6E | Wi-Fi 6 */,text",
+          "bluetooth,5.4 /* 5.3 | 5.2 */,text",
+          "bluetoothFeatures,LE Audio /* aptX | LDAC */|aptX|LDAC,csv",
+          "navigation,GPS /* GLONASS | Galileo */|GLONASS|Galileo|BeiDou,csv",
+          "quickCharging,Quick Charge 5 /* USB PD 3.1 | SuperVOOC */,text",
           "chargingSpeed,120W,text",
           "sourceUrl,https://example.com,text",
           "benchmarks.antutuVersion,v10,text",
@@ -2744,17 +2869,17 @@ export default function ProcessorEditorPage() {
                             className="h-9 rounded-lg border border-slate-200 px-2 text-sm"
                             title="Core count"
                           />
-                          <input
-                            list="cpu-core-options"
-                            value={row.core}
-                            onChange={(e) => setCpuClusters((prev) => prev.map((item) => (item.id === row.id ? { ...item, core: e.target.value } : item)))}
-                            className="h-9 rounded-lg border border-slate-200 px-2 text-sm"
-                            placeholder="Arm Cortex-X4"
-                          />
+                            <input
+                              list="cpu-core-options"
+                              value={row.core}
+                              onChange={(e) => setCpuClusters((prev) => prev.map((item) => (item.id === row.id ? { ...item, core: e.target.value } : item)))}
+                              className="h-9 rounded-lg border border-slate-200 px-2 text-sm"
+                              placeholder="Arm Cortex-X4"
+                            />
                           <div className="relative">
                             <input
                               type="number"
-                              step="0.1"
+                              step="0.01"
                               min={0.1}
                               value={row.ghz}
                               onChange={(e) => setCpuClusters((prev) => prev.map((item) => (item.id === row.id ? { ...item, ghz: Number(e.target.value || 0.1) } : item)))}
@@ -2785,6 +2910,9 @@ export default function ProcessorEditorPage() {
                       {CPU_CORE_OPTIONS.map((item) => (
                         <option key={item} value={item} />
                       ))}
+                      {HELPER_SUGGESTIONS.map((item) => (
+                        <option key={`helper-${item}`} value={item} />
+                      ))}
                     </datalist>
                       <div className="flex flex-wrap gap-2">
                         <button
@@ -2813,6 +2941,7 @@ export default function ProcessorEditorPage() {
                         <input
                           value={String(getDetailField("coreConfiguration") || "")}
                           onChange={(e) => setDetailField("coreConfiguration", e.target.value)}
+                          list={getSuggestionListId("coreConfiguration")}
                           className="h-9 w-full rounded-lg border border-slate-200 px-3 text-sm"
                         />
                       </label>
@@ -2821,6 +2950,7 @@ export default function ProcessorEditorPage() {
                         <input
                           value={String(getDetailField("cores") || "")}
                           onChange={(e) => setDetailField("cores", e.target.value)}
+                          list={getSuggestionListId("cores")}
                           className="h-9 w-full rounded-lg border border-slate-200 px-3 text-sm"
                         />
                       </label>
@@ -3025,12 +3155,7 @@ export default function ProcessorEditorPage() {
                   <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">
                     CPU Features <span className="normal-case font-medium text-slate-500">(comma separated)</span>
                   </span>
-                  <input
-                    value={csvInputValue(getDetailField("cpuFeatures"))}
-                    onChange={(e) => setDetailField("cpuFeatures", e.target.value)}
-                    placeholder="Comma separated (e.g. SMT, AV1 decode)"
-                    className="h-9 w-full rounded-lg border border-slate-200 px-3 text-sm"
-                  />
+                  {renderCsvInput("cpuFeatures", "Comma separated (e.g. SMT, AV1 decode)")}
                 </label>
               </div>
               </>
@@ -3082,39 +3207,26 @@ export default function ProcessorEditorPage() {
                     </div>
                   </label>
                 </div>
-                <div className="grid gap-3 lg:grid-cols-[2fr_1fr_1fr_1fr]">
+                <div className="grid gap-3 lg:grid-cols-[2fr_1fr_1fr]">
                   <label className="grid gap-1">
                     <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">Other GPU Feature</span>
-                    <input
-                      value={csvInputValue(getDetailField("gpuFeatures"))}
-                      onChange={(e) => setDetailField("gpuFeatures", e.target.value)}
-                      placeholder="Comma separated"
-                      className="h-9 w-full rounded-lg border border-slate-200 px-3 text-sm"
-                    />
+                    {renderCsvInput("gpuFeatures", "Comma separated")}
                   </label>
                   <label className="grid gap-1">
-                    <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">Vulkan</span>
-                    <input
-                      value={String(getDetailField("vulkanVersion") || "")}
-                      onChange={(e) => setDetailField("vulkanVersion", e.target.value)}
-                      className="h-9 w-full rounded-lg border border-slate-200 px-3 text-sm"
-                    />
+                    <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">APIs</span>
+                    {renderCsvInput("gpuApis", "Comma separated")}
                   </label>
                   <label className="grid gap-1">
-                    <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">OpenCL</span>
-                    <input
-                      value={String(getDetailField("openclVersion") || "")}
-                      onChange={(e) => setDetailField("openclVersion", e.target.value)}
-                      className="h-9 w-full rounded-lg border border-slate-200 px-3 text-sm"
-                    />
-                  </label>
-                  <label className="grid gap-1">
-                    <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">DirectX</span>
-                    <input
-                      value={String(getDetailField("directxVersion") || "")}
-                      onChange={(e) => setDetailField("directxVersion", e.target.value)}
-                      className="h-9 w-full rounded-lg border border-slate-200 px-3 text-sm"
-                    />
+                    <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">FLOPS</span>
+                    <div className="relative">
+                      <input
+                        value={String(getDetailField("gpuFlops") || "")}
+                        onChange={(e) => setDetailField("gpuFlops", e.target.value)}
+                        className="h-9 w-full rounded-lg border border-slate-200 px-3 pr-24 text-sm"
+                        placeholder="e.g. 5600"
+                      />
+                      <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-xs font-semibold text-slate-500">Gigaflops</span>
+                    </div>
                   </label>
                 </div>
               </div>
@@ -3127,17 +3239,27 @@ export default function ProcessorEditorPage() {
                     {FIELD_HELP[`AI.${field.key}`] ? (
                       <span className="text-[11px] leading-4 text-slate-500">{FIELD_HELP[`AI.${field.key}`]}</span>
                     ) : null}
-                    <div className="relative">
-                      <input
-                        type={field.type === 'number' ? 'number' : 'text'}
-                        value={String(getDetailField(field.key) ?? "")}
-                        onChange={(e) => setDetailField(field.key, field.type === 'number' ? (e.target.value === '' ? undefined : Number(e.target.value)) : e.target.value)}
-                        className={`h-9 w-full rounded-lg border border-slate-200 px-3 text-sm ${field.key === 'aiPerformanceTops' ? 'pr-14' : ''}`}
-                      />
-                      {field.key === 'aiPerformanceTops' && (
-                        <span className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3 text-sm text-slate-500">TOPS</span>
-                      )}
-                    </div>
+                    {field.type === "csv" ? (
+                      renderCsvInput(field.key, "Comma separated")
+                    ) : (
+                      <div className="relative">
+                        <input
+                          type={field.type === "number" ? "number" : "text"}
+                          value={String(getDetailField(field.key) ?? "")}
+                          onChange={(e) =>
+                            setDetailField(
+                              field.key,
+                              field.type === "number" ? (e.target.value === "" ? undefined : Number(e.target.value)) : e.target.value
+                            )
+                          }
+                          list={field.type === "text" ? getSuggestionListId(field.key) : undefined}
+                          className={`h-9 w-full rounded-lg border border-slate-200 px-3 text-sm ${field.key === "aiPerformanceTops" ? "pr-14" : ""}`}
+                        />
+                        {field.key === "aiPerformanceTops" ? (
+                          <span className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3 text-sm text-slate-500">TOPS</span>
+                        ) : null}
+                      </div>
+                    )}
                   </label>
                 ))}
               </div>
@@ -3145,7 +3267,7 @@ export default function ProcessorEditorPage() {
             {section.title === "Memory / Storage" ? (
               <div className="mt-3 space-y-3">
                 <div className="grid gap-3 lg:grid-cols-3">
-                  <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 lg:col-span-1">
+                  <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
                     <p className="text-xs font-semibold uppercase tracking-wide text-slate-600">RAM Type & Frequency</p>
                     <div className="mt-2 space-y-2">
                       {ramProfiles.map((row) => (
@@ -3202,8 +3324,9 @@ export default function ProcessorEditorPage() {
                       ) : null}
                     </div>
                   </div>
-                  <div className="rounded-lg border border-slate-200 bg-white p-3 lg:col-span-2">
-                    <div className="grid gap-3 lg:grid-cols-3">
+                  <div className="rounded-lg border border-slate-200 bg-white p-3">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-600">RAM Specs</p>
+                    <div className="mt-2 grid gap-3 sm:grid-cols-2">
                       <label className="grid gap-1">
                         <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">Max RAM Frequency</span>
                         <div className="relative">
@@ -3275,6 +3398,21 @@ export default function ProcessorEditorPage() {
                           <span className="inline-flex h-9 items-center justify-center rounded-lg border border-slate-200 bg-slate-50 px-2 text-xs font-semibold text-slate-600">GB/s</span>
                         </div>
                       </label>
+                    </div>
+                  </div>
+                  <div className="rounded-lg border border-slate-200 bg-white p-3">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-600">Storage</p>
+                    <div className="mt-2 grid gap-3">
+                      <label className="grid gap-1">
+                        <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">Storage Channels / Lanes</span>
+                        <input
+                          value={String(getDetailField("storageChannels") || "")}
+                          onChange={(e) => setDetailField("storageChannels", e.target.value)}
+                          list={getSectionSuggestionListId("storage")}
+                          placeholder="e.g. 2 lane, Dual channel"
+                          className="h-9 w-full rounded-lg border border-slate-200 px-3 text-sm"
+                        />
+                      </label>
                       <div className="grid gap-1">
                         <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">Storage Type</span>
                         <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-2">
@@ -3289,6 +3427,9 @@ export default function ProcessorEditorPage() {
                                 {item}
                               </option>
                             ))}
+                            {selectedStorageType && !STORAGE_TYPE_SUGGESTIONS.includes(selectedStorageType) ? (
+                              <option value={selectedStorageType}>{selectedStorageType}</option>
+                            ) : null}
                           </select>
                           <button
                             type="button"
@@ -3342,6 +3483,7 @@ export default function ProcessorEditorPage() {
                       value={String(getDetailField("cameraIsp") || "")}
                       onChange={(e) => setDetailField("cameraIsp", e.target.value)}
                       list={getSuggestionListId("cameraIsp")}
+                      placeholder="Qualcomm Spectra ISP (dual 12-bit)"
                       className="h-9 w-full rounded-lg border border-slate-200 px-3 text-sm"
                     />
                   </label>
@@ -3441,11 +3583,7 @@ export default function ProcessorEditorPage() {
                     </div>
                     <label className="grid gap-1">
                       <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">Other Camera Features <span className="normal-case tracking-normal text-slate-500">(comma separated)</span></span>
-                      <input
-                        value={csvInputValue(getDetailField("cameraFeatures"))}
-                        onChange={(e) => setDetailField("cameraFeatures", e.target.value)}
-                        className="h-9 w-full rounded-lg border border-slate-200 px-3 text-sm"
-                      />
+                      {renderCsvInput("cameraFeatures")}
                     </label>
                   </div>
 
@@ -3453,6 +3591,9 @@ export default function ProcessorEditorPage() {
                     <p className="text-xs font-semibold uppercase tracking-wide text-slate-600">Video</p>
                     <div className="grid gap-1">
                       <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">Video Recording Modes</span>
+                      {FIELD_HELP["Camera & Video.videoRecordingModes"] ? (
+                        <span className="text-[11px] leading-4 text-slate-500">{FIELD_HELP["Camera & Video.videoRecordingModes"]}</span>
+                      ) : null}
                       <div className="space-y-2">
                         {videoRecordingDraft.map((row) => (
                           <div key={row.id} className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_120px_auto]">
@@ -3520,8 +3661,18 @@ export default function ProcessorEditorPage() {
                         ) : null}
                       </div>
                     </div>
+                    <label className="grid gap-1">
+                      <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">Video Recording Codecs</span>
+                      {FIELD_HELP["Camera & Video.videoRecordingCodecs"] ? (
+                        <span className="text-[11px] leading-4 text-slate-500">{FIELD_HELP["Camera & Video.videoRecordingCodecs"]}</span>
+                      ) : null}
+                      {renderCsvInput("videoRecordingCodecs", "Comma separated (e.g. H.264, H.265/HEVC)")}
+                    </label>
                     <div className="grid gap-1">
                       <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">Video Playback</span>
+                      {FIELD_HELP["Camera & Video.videoPlayback"] ? (
+                        <span className="text-[11px] leading-4 text-slate-500">{FIELD_HELP["Camera & Video.videoPlayback"]}</span>
+                      ) : null}
                       <div className="space-y-2">
                         {videoPlaybackDraft.map((row) => (
                           <div key={row.id} className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_120px_auto]">
@@ -3590,12 +3741,15 @@ export default function ProcessorEditorPage() {
                       </div>
                     </div>
                     <label className="grid gap-1">
+                      <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">Video Playback Codecs</span>
+                      {FIELD_HELP["Camera & Video.videoPlaybackCodecs"] ? (
+                        <span className="text-[11px] leading-4 text-slate-500">{FIELD_HELP["Camera & Video.videoPlaybackCodecs"]}</span>
+                      ) : null}
+                      {renderCsvInput("videoPlaybackCodecs", "Comma separated (e.g. H.264, H.265/HEVC)")}
+                    </label>
+                    <label className="grid gap-1">
                       <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">Other Video Features <span className="normal-case tracking-normal text-slate-500">(comma separated)</span></span>
-                      <input
-                        value={csvInputValue(getDetailField("videoFeatures"))}
-                        onChange={(e) => setDetailField("videoFeatures", e.target.value)}
-                        className="h-9 w-full rounded-lg border border-slate-200 px-3 text-sm"
-                      />
+                      {renderCsvInput("videoFeatures")}
                     </label>
                   </div>
                 </div>
@@ -3827,27 +3981,15 @@ export default function ProcessorEditorPage() {
                       </label>
                       <label className="grid gap-1">
                         <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">Display Features <span className="normal-case tracking-normal text-slate-500">(comma separated)</span></span>
-                        <input
-                          value={csvInputValue(getDetailField("displayFeatures"))}
-                          onChange={(e) => setDetailField("displayFeatures", e.target.value)}
-                          className="h-9 w-full rounded-lg border border-slate-200 px-3 text-sm"
-                        />
+                        {renderCsvInput("displayFeatures")}
                       </label>
                       <label className="grid gap-1">
                         <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">Audio Codecs <span className="normal-case tracking-normal text-slate-500">(comma separated)</span></span>
-                        <input
-                          value={csvInputValue(getDetailField("audioCodecs"))}
-                          onChange={(e) => setDetailField("audioCodecs", e.target.value)}
-                          className="h-9 w-full rounded-lg border border-slate-200 px-3 text-sm"
-                        />
+                        {renderCsvInput("audioCodecs")}
                       </label>
                       <label className="grid gap-1">
                         <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">Multimedia Features <span className="normal-case tracking-normal text-slate-500">(comma separated)</span></span>
-                        <input
-                          value={csvInputValue(getDetailField("multimediaFeatures"))}
-                          onChange={(e) => setDetailField("multimediaFeatures", e.target.value)}
-                          className="h-9 w-full rounded-lg border border-slate-200 px-3 text-sm"
-                        />
+                        {renderCsvInput("multimediaFeatures")}
                       </label>
                     </div>
                   </div>
@@ -3941,12 +4083,7 @@ export default function ProcessorEditorPage() {
                   </label>
                   <label className="grid gap-1">
                     <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">Bluetooth Features</span>
-                    <input
-                      value={csvInputValue(getDetailField("bluetoothFeatures"))}
-                      onChange={(e) => setDetailField("bluetoothFeatures", e.target.value)}
-                      placeholder="Comma separated (e.g. LE Audio, aptX)"
-                      className="h-9 w-full rounded-lg border border-slate-200 px-3 text-sm"
-                    />
+                    {renderCsvInput("bluetoothFeatures", "Comma separated (e.g. LE Audio, aptX)")}
                   </label>
                   <label className="grid gap-1">
                     <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">Download Speed</span>
@@ -4046,6 +4183,7 @@ export default function ProcessorEditorPage() {
                     <input
                       value={String(getDetailField("quickCharging") || "")}
                       onChange={(e) => setDetailField("quickCharging", e.target.value)}
+                      list={getSuggestionListId("quickCharging")}
                       className="h-9 w-full rounded-lg border border-slate-200 px-3 text-sm"
                       placeholder="e.g. Qualcomm Quick Charge 5.0, USB PD 3.1"
                     />
@@ -4078,10 +4216,10 @@ export default function ProcessorEditorPage() {
                 if (section.title === "CPU / Core" && (field.key === "coreCount" || field.key === "instructionSet" || field.key === "architectureBits" || field.key === "process" || field.key === "tdpW" || field.key === "transistorCount" || field.key === "coreConfiguration" || field.key === "cores" || field.key === "l2Cache" || field.key === "l3Cache" || field.key === "cpuFeatures")) {
                   return null;
                 }
-                if (section.title === "Graphics (GPU)" && (field.key === "gpuName" || field.key === "gpuArchitecture" || field.key === "pipelines" || field.key === "gpuFrequencyMhz" || field.key === "gpuFeatures" || field.key === "vulkanVersion" || field.key === "openclVersion" || field.key === "directxVersion")) {
+                if (section.title === "Graphics (GPU)" && (field.key === "gpuName" || field.key === "gpuArchitecture" || field.key === "pipelines" || field.key === "gpuFrequencyMhz" || field.key === "gpuFeatures" || field.key === "gpuApis" || field.key === "gpuFlops")) {
                   return null;
                 }
-                if (section.title === "Memory / Storage" && (field.key === "memoryType" || field.key === "memoryTypes" || field.key === "memoryFreqMhz" || field.key === "memoryFreqByType" || field.key === "memoryChannels" || field.key === "maxMemoryGb" || field.key === "memoryBusWidthBits" || field.key === "bandwidthGbps" || field.key === "storageType" || field.key === "storageTypes")) {
+                if (section.title === "Memory / Storage" && (field.key === "memoryType" || field.key === "memoryTypes" || field.key === "memoryFreqMhz" || field.key === "memoryFreqByType" || field.key === "memoryChannels" || field.key === "storageChannels" || field.key === "maxMemoryGb" || field.key === "memoryBusWidthBits" || field.key === "bandwidthGbps" || field.key === "storageType" || field.key === "storageTypes")) {
                   return null;
                 }
                 if (section.title === "Display & Multimedia" && (field.key === "displayModes" || field.key === "outputDisplay" || field.key === "maxDisplayResolution" || field.key === "maxRefreshRateHz" || field.key === "displayFeatures" || field.key === "audioCodecs" || field.key === "multimediaFeatures")) {
@@ -4093,7 +4231,7 @@ export default function ProcessorEditorPage() {
                 if (section.title === "Charging & Source" && (field.key === "quickCharging" || field.key === "chargingSpeed" || field.key === "sourceUrl")) {
                   return null;
                 }
-                if (section.title === "Camera & Video" && (field.key === "cameraIsp" || field.key === "maxCameraSupport" || field.key === "cameraSupport" || field.key === "cameraSupportModes" || field.key === "cameraFeatures" || field.key === "maxVideoCapture" || field.key === "videoCapture" || field.key === "videoRecordingModes" || field.key === "videoFeatures" || field.key === "videoPlayback")) {
+                if (section.title === "Camera & Video" && (field.key === "cameraIsp" || field.key === "maxCameraSupport" || field.key === "cameraSupport" || field.key === "cameraSupportModes" || field.key === "cameraFeatures" || field.key === "maxVideoCapture" || field.key === "videoCapture" || field.key === "videoRecordingModes" || field.key === "videoRecordingCodecs" || field.key === "videoFeatures" || field.key === "videoPlayback" || field.key === "videoPlaybackCodecs")) {
                   return null;
                 }
                 const value = getDetailField(field.key);
@@ -4148,7 +4286,7 @@ export default function ProcessorEditorPage() {
                     ) : null}
                     {field.type === "text" && field.key !== "instructionSet" && field.key !== "architectureBits" && field.key !== "process" ? <input value={value ? String(value) : ""} onChange={(e) => setDetailField(field.key, e.target.value)} list={getSuggestionListId(field.key)} className="rounded-lg border border-slate-200 px-3 py-2" /> : null}
                     {field.type === "number" ? <input type="number" step="any" value={value === undefined ? "" : String(value)} onChange={(e) => setDetailField(field.key, e.target.value === "" ? undefined : Number(e.target.value))} className="rounded-lg border border-slate-200 px-3 py-2" /> : null}
-                    {field.type === "csv" ? <input value={csvInputValue(value)} onChange={(e) => setDetailField(field.key, e.target.value)} placeholder="Comma separated (e.g. HDR, Ray tracing)" className="rounded-lg border border-slate-200 px-3 py-2" /> : null}
+                    {field.type === "csv" ? renderCsvInput(field.key, "Comma separated (e.g. HDR, Ray tracing)") : null}
                     {field.type === "kv" ? <input value={formatKvNumber(value)} onChange={(e) => setDetailField(field.key, parseKvNumber(e.target.value))} className="rounded-lg border border-slate-200 px-3 py-2" /> : null}
                     {field.type === "boolean" ? (
                       <select
@@ -4499,13 +4637,19 @@ export default function ProcessorEditorPage() {
             </div>
           ) : null}
         </section>
-        {Object.entries(FIELD_SUGGESTIONS).map(([key, values]) => (
-          <datalist key={key} id={`suggest-${key}`}>
-            {values.map((item) => (
-              <option key={item} value={item} />
-            ))}
-          </datalist>
-        ))}
+        {Object.entries(FIELD_SUGGESTIONS).map(([key, values]) => {
+          const merged = HELPER_SUGGESTIONS.length
+            ? Array.from(new Set([...values, ...HELPER_SUGGESTIONS]))
+            : values;
+          const id = HELPER_SUGGESTIONS.length ? `suggest-${key}-merged` : `suggest-${key}`;
+          return (
+            <datalist key={id} id={id}>
+              {merged.map((item) => (
+                <option key={item} value={item} />
+              ))}
+            </datalist>
+          );
+        })}
         {HELPER_SUGGESTIONS.length ? (
           <datalist id="suggest-helper">
             {HELPER_SUGGESTIONS.map((item) => (
@@ -4513,6 +4657,13 @@ export default function ProcessorEditorPage() {
             ))}
           </datalist>
         ) : null}
+        {Object.entries(helperSectionSuggestions).map(([key, values]) => (
+          <datalist key={key} id={`suggest-helper-section-${key}`}>
+            {values.map((item) => (
+              <option key={item} value={item} />
+            ))}
+          </datalist>
+        ))}
 
         <div className="pb-8">
           <div className="flex flex-wrap items-center gap-2">
@@ -4529,6 +4680,29 @@ export default function ProcessorEditorPage() {
                 Live Preview
               </Link>
             ) : null}
+          </div>
+        </div>
+        <div className="pointer-events-none fixed bottom-6 right-6 z-40 flex flex-col gap-2">
+          <div className="pointer-events-auto rounded-xl border border-slate-200 bg-white/95 p-3 shadow-lg backdrop-blur">
+            <div className="flex flex-col gap-2">
+              <button
+                type="submit"
+                disabled={saving}
+                className="rounded-lg bg-blue-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
+              >
+                {saving ? "Saving..." : existingId ? "Update Processor" : "Create Processor"}
+              </button>
+              {docId ? (
+                <Link
+                  href={`/processors/${encodeURIComponent(docId)}?preview=1&id=${encodeURIComponent(docId)}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-center text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                >
+                  Live Preview
+                </Link>
+              ) : null}
+            </div>
           </div>
         </div>
       </form>

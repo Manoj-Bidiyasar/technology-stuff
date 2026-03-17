@@ -125,6 +125,14 @@ function renderTitleIcon(kind: "bench" | "cpu" | "memory" | "graphics" | "displa
   }
 }
 
+function formatFlops(value?: string): string {
+  const raw = String(value || "").trim();
+  if (!raw) return "-";
+  if (/\bflops\b/i.test(raw)) return raw;
+  if (/^\d+(\.\d+)?$/.test(raw)) return `${raw} Gigaflops`;
+  return `${raw} Gigaflops`;
+}
+
 function iconForSection(title: string): "bench" | "cpu" | "memory" | "graphics" | "display" | "connectivity" | "camera" | "power" | "chip" {
   if (title === "AnTuTu Benchmark Score") return "bench";
   if (title === "Geekbench Score") return "bench";
@@ -411,7 +419,13 @@ function getMemoryFrequencyRows(detail: Awaited<ReturnType<typeof getProcessorDe
     .filter(([k, v]) => String(k).trim() && Number.isFinite(Number(v)))
     .sort((a, b) => rank(String(b[0])) - rank(String(a[0])) || String(a[0]).localeCompare(String(b[0])))
     .map(([k, v]) => `${k}: ${Number(v)} MHz`);
-  if (rows.length) return rows.join("\n");
+  if (rows.length) {
+    const values = rows.map((row) => Number.parseFloat(row.replace(/[^\d.]+/g, ""))).filter((n) => Number.isFinite(n));
+    if (values.length === rows.length && values.every((n) => n === values[0])) {
+      return `${values[0]} MHz`;
+    }
+    return rows.join("\n");
+  }
   if (Number.isFinite(detail.memoryFreqMhz)) return `${detail.memoryFreqMhz} MHz`;
   return "-";
 }
@@ -656,6 +670,13 @@ function formatVideoRows(raw: string): string {
     .join("\n");
 }
 
+function formatCodecList(value: string[] | string | undefined): string {
+  if (!value) return "-";
+  const list = Array.isArray(value) ? value : String(value).split(/\s*,\s*/);
+  const cleaned = list.map((item) => String(item).trim()).filter(Boolean);
+  return cleaned.length ? cleaned.join(", ") : "-";
+}
+
 function stripResolutionFromMode(value: string): string {
   return String(value || "")
     .replace(/\(\s*\d{3,5}\s*[xX*]\s*\d{3,5}\s*\)/g, "")
@@ -664,12 +685,20 @@ function stripResolutionFromMode(value: string): string {
     .trim();
 }
 
+function normalizeDisplayRefresh(value: string): string {
+  const text = String(value || "").trim();
+  if (!text) return text;
+  if (/@/.test(text)) return text.replace(/\s*@\s*/g, " @ ");
+  return text.replace(/\s*:\s*/g, " @ ");
+}
+
 function formatDisplayRows(raw: string): string {
   const text = String(raw || "").trim();
   if (!text || text === "-") return "-";
   return text
     .split(/\s*,\s*/)
     .map((item) => stripResolutionFromMode(item))
+    .map((item) => normalizeDisplayRefresh(item))
     .map((item) => item.trim())
     .filter(Boolean)
     .join("\n");
@@ -825,9 +854,8 @@ function buildSections(
           leftNum: Number(leftDetail?.gpuFrequencyMhz),
           rightNum: Number(rightDetail?.gpuFrequencyMhz),
         },
-        { label: "Vulkan Version", left: asText(leftDetail?.vulkanVersion), right: asText(rightDetail?.vulkanVersion), leftNum: apiScore(asText(leftDetail?.vulkanVersion)), rightNum: apiScore(asText(rightDetail?.vulkanVersion)) },
-        { label: "OpenCL Version", left: asText(leftDetail?.openclVersion), right: asText(rightDetail?.openclVersion), leftNum: apiScore(asText(leftDetail?.openclVersion)), rightNum: apiScore(asText(rightDetail?.openclVersion)) },
-        { label: "DirectX Version", left: asText(leftDetail?.directxVersion), right: asText(rightDetail?.directxVersion), leftNum: apiScore(asText(leftDetail?.directxVersion)), rightNum: apiScore(asText(rightDetail?.directxVersion)) },
+        { label: "APIs", left: leftDetail?.gpuApis?.length ? leftDetail.gpuApis.join(", ") : "-", right: rightDetail?.gpuApis?.length ? rightDetail.gpuApis.join(", ") : "-" },
+        { label: "FLOPS", left: formatFlops(leftDetail?.gpuFlops), right: formatFlops(rightDetail?.gpuFlops) },
         { label: "Other GPU Features", left: leftDetail?.gpuFeatures?.length ? leftDetail.gpuFeatures.join(", ") : "-", right: rightDetail?.gpuFeatures?.length ? rightDetail.gpuFeatures.join(", ") : "-" },
       ],
     },
@@ -847,29 +875,7 @@ function buildSections(
         { label: "Memory Frequency", left: getMemoryFrequencyRows(leftDetail), right: getMemoryFrequencyRows(rightDetail), leftNum: memoryFreqScore(getMemoryFrequencyRows(leftDetail)), rightNum: memoryFreqScore(getMemoryFrequencyRows(rightDetail)) },
         { label: "Max Memory", left: leftDetail?.maxMemoryGb ? `${leftDetail.maxMemoryGb}GB` : "-", right: rightDetail?.maxMemoryGb ? `${rightDetail.maxMemoryGb}GB` : "-", leftNum: Number(leftDetail?.maxMemoryGb), rightNum: Number(rightDetail?.maxMemoryGb) },
         { label: "Storage Type", left: formatStorageTypes(leftDetail), right: formatStorageTypes(rightDetail), leftNum: storageTypeScore(formatStorageTypes(leftDetail)), rightNum: storageTypeScore(formatStorageTypes(rightDetail)) },
-      ],
-    },
-    {
-      title: "Camera & Video Recording",
-      rows: [
-        { label: "Camera ISP", left: asText(leftDetail?.cameraIsp), right: asText(rightDetail?.cameraIsp) },
-        { label: "Camera Support Modes", left: formatCameraSupportModes(leftDetail), right: formatCameraSupportModes(rightDetail), leftNum: maxMpScore(formatCameraSupportModes(leftDetail)), rightNum: maxMpScore(formatCameraSupportModes(rightDetail)) },
-        { label: "Other Camera Features", left: leftDetail?.cameraFeatures?.length ? leftDetail.cameraFeatures.join(", ") : "-", right: rightDetail?.cameraFeatures?.length ? rightDetail.cameraFeatures.join(", ") : "-" },
-        {
-          label: "Video Recording Modes",
-          left: formatVideoRows(leftDetail?.videoRecordingModes?.length ? leftDetail.videoRecordingModes.join(", ") : asText(leftDetail?.maxVideoCapture || leftDetail?.videoCapture)),
-          right: formatVideoRows(rightDetail?.videoRecordingModes?.length ? rightDetail.videoRecordingModes.join(", ") : asText(rightDetail?.maxVideoCapture || rightDetail?.videoCapture)),
-          leftNum: mediaCapabilityScore(leftDetail?.videoRecordingModes?.length ? leftDetail.videoRecordingModes.join(", ") : asText(leftDetail?.maxVideoCapture || leftDetail?.videoCapture)),
-          rightNum: mediaCapabilityScore(rightDetail?.videoRecordingModes?.length ? rightDetail.videoRecordingModes.join(", ") : asText(rightDetail?.maxVideoCapture || rightDetail?.videoCapture)),
-        },
-        { label: "Other Video Features", left: leftDetail?.videoFeatures?.length ? leftDetail.videoFeatures.join(", ") : "-", right: rightDetail?.videoFeatures?.length ? rightDetail.videoFeatures.join(", ") : "-" },
-        {
-          label: "Video Playback",
-          left: formatVideoRows(asText(leftDetail?.videoPlayback)),
-          right: formatVideoRows(asText(rightDetail?.videoPlayback)),
-          leftNum: mediaCapabilityScore(asText(leftDetail?.videoPlayback)),
-          rightNum: mediaCapabilityScore(asText(rightDetail?.videoPlayback)),
-        },
+        { label: "Storage Channels / Lanes", left: asText(leftDetail?.storageChannels), right: asText(rightDetail?.storageChannels) },
       ],
     },
     {
@@ -890,6 +896,39 @@ function buildSections(
         { label: "Display Features", left: leftDetail?.displayFeatures?.length ? leftDetail.displayFeatures.join(", ") : "-", right: rightDetail?.displayFeatures?.length ? rightDetail.displayFeatures.join(", ") : "-" },
         { label: "Audio Codecs", left: leftDetail?.audioCodecs?.length ? leftDetail.audioCodecs.join(", ") : "-", right: rightDetail?.audioCodecs?.length ? rightDetail.audioCodecs.join(", ") : "-" },
         { label: "Multimedia Features", left: leftDetail?.multimediaFeatures?.length ? leftDetail.multimediaFeatures.join(", ") : "-", right: rightDetail?.multimediaFeatures?.length ? rightDetail.multimediaFeatures.join(", ") : "-" },
+      ],
+    },
+    {
+      title: "Camera & Video Recording",
+      rows: [
+        { label: "Camera ISP", left: asText(leftDetail?.cameraIsp), right: asText(rightDetail?.cameraIsp) },
+        { label: "Camera Support Modes", left: formatCameraSupportModes(leftDetail), right: formatCameraSupportModes(rightDetail), leftNum: maxMpScore(formatCameraSupportModes(leftDetail)), rightNum: maxMpScore(formatCameraSupportModes(rightDetail)) },
+        { label: "Other Camera Features", left: leftDetail?.cameraFeatures?.length ? leftDetail.cameraFeatures.join(", ") : "-", right: rightDetail?.cameraFeatures?.length ? rightDetail.cameraFeatures.join(", ") : "-" },
+        {
+          label: "Video Recording Modes",
+          left: formatVideoRows(leftDetail?.videoRecordingModes?.length ? leftDetail.videoRecordingModes.join(", ") : asText(leftDetail?.maxVideoCapture || leftDetail?.videoCapture)),
+          right: formatVideoRows(rightDetail?.videoRecordingModes?.length ? rightDetail.videoRecordingModes.join(", ") : asText(rightDetail?.maxVideoCapture || rightDetail?.videoCapture)),
+          leftNum: mediaCapabilityScore(leftDetail?.videoRecordingModes?.length ? leftDetail.videoRecordingModes.join(", ") : asText(leftDetail?.maxVideoCapture || leftDetail?.videoCapture)),
+          rightNum: mediaCapabilityScore(rightDetail?.videoRecordingModes?.length ? rightDetail.videoRecordingModes.join(", ") : asText(rightDetail?.maxVideoCapture || rightDetail?.videoCapture)),
+        },
+        {
+          label: "Video Recording Codecs",
+          left: formatCodecList(leftDetail?.videoRecordingCodecs),
+          right: formatCodecList(rightDetail?.videoRecordingCodecs),
+        },
+        { label: "Other Video Features", left: leftDetail?.videoFeatures?.length ? leftDetail.videoFeatures.join(", ") : "-", right: rightDetail?.videoFeatures?.length ? rightDetail.videoFeatures.join(", ") : "-" },
+        {
+          label: "Video Playback",
+          left: formatVideoRows(asText(leftDetail?.videoPlayback)),
+          right: formatVideoRows(asText(rightDetail?.videoPlayback)),
+          leftNum: mediaCapabilityScore(asText(leftDetail?.videoPlayback)),
+          rightNum: mediaCapabilityScore(asText(rightDetail?.videoPlayback)),
+        },
+        {
+          label: "Video Playback Codecs",
+          left: formatCodecList(leftDetail?.videoPlaybackCodecs),
+          right: formatCodecList(rightDetail?.videoPlaybackCodecs),
+        },
       ],
     },
     {

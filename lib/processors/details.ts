@@ -37,10 +37,13 @@ export type ProcessorDetail = {
   memoryChannels?: string;
   storageType?: string;
   storageTypes?: string[];
+  storageChannels?: string;
   bandwidthGbps?: number;
   gpuName?: string;
   gpuArchitecture?: string;
   gpuFrequencyMhz?: number;
+  gpuApis?: string[];
+  gpuFlops?: string;
   pipelines?: number;
   shadingUnits?: number;
   vulkanVersion?: string;
@@ -68,10 +71,12 @@ export type ProcessorDetail = {
   cameraFeatures?: string[];
   maxVideoCapture?: string;
   videoRecordingModes?: string[];
+  videoRecordingCodecs?: string[];
   videoFeatures?: string[];
   cameraSupport?: string;
   videoCapture?: string;
   videoPlayback?: string;
+  videoPlaybackCodecs?: string[];
   maxDisplayResolution?: string;
   maxRefreshRateHz?: number;
   displayModes?: string[];
