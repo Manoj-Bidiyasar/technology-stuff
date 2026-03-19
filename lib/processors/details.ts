@@ -62,6 +62,7 @@ export type ProcessorDetail = {
   wifi?: string;
   bluetooth?: string;
   bluetoothFeatures?: string[];
+  gnssType?: string;
   quickCharging?: string;
   chargingSpeed?: string;
   navigation?: string[];

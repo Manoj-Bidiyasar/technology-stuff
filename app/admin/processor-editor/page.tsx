@@ -96,6 +96,7 @@ const NETWORK_SUPPORT_OPTIONS = ["5G", "4G", "3G", "2G"];
 const WIFI_OPTIONS = ["Wi-Fi 4", "Wi-Fi 5", "Wi-Fi 6", "Wi-Fi 6E", "Wi-Fi 7"];
 const BLUETOOTH_OPTIONS = ["4.2", "5.0", "5.1", "5.2", "5.3", "5.4", "6.0"];
 const NAVIGATION_OPTIONS = ["GPS", "A-GPS", "GLONASS", "Galileo", "BeiDou", "QZSS", "NavIC"];
+const GNSS_TYPE_OPTIONS = ["Single GNSS", "Dual GNSS (L1+L5)", "Triple GNSS (L1/L5/L2)"];
 const CAMERA_SETUP_OPTIONS = [
   { label: "Single", count: 1 },
   { label: "Dual", count: 2 },
@@ -281,6 +282,7 @@ const DETAIL_SECTIONS: DetailSection[] = [
       { key: "wifi", label: "Wi-Fi", type: "text" },
       { key: "bluetooth", label: "Bluetooth", type: "text" },
       { key: "bluetoothFeatures", label: "Bluetooth Features", type: "csv" },
+      { key: "gnssType", label: "GNSS Type", type: "text" },
       { key: "navigation", label: "Navigation", type: "csv" },
     ],
   },
@@ -383,6 +385,7 @@ const FIELD_HELP: Record<string, string> = {
   "Camera & Video.videoPlayback": "Video playback modes (what the chip can decode).",
   "Camera & Video.videoRecordingCodecs": "Comma separated recording codecs (H.264, H.265/HEVC, AV1).",
   "Camera & Video.videoPlaybackCodecs": "Comma separated playback codecs (H.264, H.265/HEVC, AV1).",
+  "Connectivity.gnssType": "GNSS type (single/dual/triple) and supported bands.",
 };
 
 const BULK_ALLOWED_FIELDS = new Set<string>([
@@ -457,6 +460,7 @@ const BULK_ALLOWED_FIELDS = new Set<string>([
   "wifi",
   "bluetooth",
   "bluetoothFeatures",
+  "gnssType",
   "navigation",
   "quickCharging",
   "chargingSpeed",
@@ -988,7 +992,6 @@ export default function ProcessorEditorPage() {
   const [networkSupportDraft, setNetworkSupportDraft] = useState<string[]>([]);
   const [selectedNetworkSupport, setSelectedNetworkSupport] = useState("");
   const [navigationDraft, setNavigationDraft] = useState<string[]>([]);
-  const [selectedNavigation, setSelectedNavigation] = useState("");
   const [topCollapsed, setTopCollapsed] = useState(false);
   const [statusCollapsed, setStatusCollapsed] = useState(false);
   const [qualityCollapsed, setQualityCollapsed] = useState(false);
@@ -1777,6 +1780,7 @@ export default function ProcessorEditorPage() {
           wifi: "Wi-Fi 7 /* Wi-Fi 6E | Wi-Fi 6 */",
           bluetooth: "5.4 /* 5.3 | 5.2 */",
           bluetoothFeatures: ["LE Audio /* aptX | LDAC */", "aptX", "LDAC"],
+          gnssType: "Dual GNSS (L1+L5)",
           navigation: ["GPS /* GLONASS | Galileo */", "GLONASS", "Galileo", "BeiDou"],
           quickCharging: "Quick Charge 5 /* USB PD 3.1 | SuperVOOC */",
           chargingSpeed: "120W",
@@ -1868,6 +1872,7 @@ export default function ProcessorEditorPage() {
           "wifi,Wi-Fi 7 /* Wi-Fi 6E | Wi-Fi 6 */,text",
           "bluetooth,5.4 /* 5.3 | 5.2 */,text",
           "bluetoothFeatures,LE Audio /* aptX | LDAC */|aptX|LDAC,csv",
+          "gnssType,Dual GNSS (L1+L5),text",
           "navigation,GPS /* GLONASS | Galileo */|GLONASS|Galileo|BeiDou,csv",
           "quickCharging,Quick Charge 5 /* USB PD 3.1 | SuperVOOC */,text",
           "chargingSpeed,120W,text",
@@ -4113,52 +4118,56 @@ export default function ProcessorEditorPage() {
                       <span className="inline-flex h-9 items-center justify-center rounded-lg border border-slate-200 bg-slate-50 px-2 text-xs font-semibold text-slate-600">Mbps</span>
                     </div>
                   </label>
+                  <label className="grid gap-1 lg:col-span-2">
+                    <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">GNSS Type</span>
+                    <div className="flex flex-wrap gap-2">
+                      {GNSS_TYPE_OPTIONS.map((option) => {
+                        const active = String(getDetailField("gnssType") || "") === option;
+                        return (
+                          <button
+                            key={option}
+                            type="button"
+                            onClick={() => setDetailField("gnssType", active ? "" : option)}
+                            className={`rounded-full border px-3 py-1 text-xs font-semibold transition ${
+                              active
+                                ? "border-blue-600 bg-blue-50 text-blue-700"
+                                : "border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:text-slate-800"
+                            }`}
+                          >
+                            {option}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </label>
                   <label className="grid gap-1 lg:col-span-3">
                     <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">Navigation</span>
-                    <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-2 sm:max-w-md">
-                      <select
-                        value={selectedNavigation}
-                        onChange={(e) => setSelectedNavigation(e.target.value)}
-                        className="h-9 w-full rounded-lg border border-slate-200 px-3 text-sm"
-                      >
-                        <option value="">Select Navigation System</option>
-                        {NAVIGATION_OPTIONS.map((item) => (
-                          <option key={item} value={item} disabled={navigationDraft.includes(item)}>{item}</option>
-                        ))}
-                      </select>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const value = selectedNavigation.trim();
-                          if (!value || navigationDraft.includes(value)) return;
-                          const next = [...navigationDraft, value];
-                          setNavigationDraft(next);
-                          setDetailField("navigation", next);
-                          setSelectedNavigation("");
-                        }}
-                        className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700"
-                      >
-                        Add
-                      </button>
-                    </div>
-                    <div className="mt-1 flex flex-wrap gap-1.5">
-                      {navigationDraft.map((item) => (
-                        <span key={item} className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[11px] text-slate-700">
-                          {item}
+                    <div className="flex flex-wrap gap-2">
+                      {NAVIGATION_OPTIONS.map((item) => {
+                        const active = navigationDraft.includes(item);
+                        return (
                           <button
+                            key={item}
                             type="button"
                             onClick={() => {
-                              const next = navigationDraft.filter((x) => x !== item);
+                              const next = active
+                                ? navigationDraft.filter((value) => value !== item)
+                                : [...navigationDraft, item];
                               setNavigationDraft(next);
                               setDetailField("navigation", next);
                             }}
-                            className="text-slate-500 hover:text-slate-700"
+                            className={`rounded-full border px-3 py-1 text-xs font-semibold transition ${
+                              active
+                                ? "border-blue-600 bg-blue-50 text-blue-700"
+                                : "border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:text-slate-800"
+                            }`}
                           >
-                            x
+                            {item}
                           </button>
-                        </span>
-                      ))}
+                        );
+                      })}
                     </div>
+                    <span className="text-[11px] text-slate-500">Click to toggle multiple navigation systems.</span>
                   </label>
                 </div>
               </div>
@@ -4225,7 +4234,7 @@ export default function ProcessorEditorPage() {
                 if (section.title === "Display & Multimedia" && (field.key === "displayModes" || field.key === "outputDisplay" || field.key === "maxDisplayResolution" || field.key === "maxRefreshRateHz" || field.key === "displayFeatures" || field.key === "audioCodecs" || field.key === "multimediaFeatures")) {
                   return null;
                 }
-                if (section.title === "Connectivity" && (field.key === "modem" || field.key === "networkSupport" || field.key === "downloadMbps" || field.key === "uploadMbps" || field.key === "wifi" || field.key === "bluetooth" || field.key === "bluetoothFeatures" || field.key === "navigation" || field.key === "dual5g")) {
+                if (section.title === "Connectivity" && (field.key === "modem" || field.key === "networkSupport" || field.key === "downloadMbps" || field.key === "uploadMbps" || field.key === "wifi" || field.key === "bluetooth" || field.key === "bluetoothFeatures" || field.key === "gnssType" || field.key === "navigation" || field.key === "dual5g")) {
                   return null;
                 }
                 if (section.title === "Charging & Source" && (field.key === "quickCharging" || field.key === "chargingSpeed" || field.key === "sourceUrl")) {

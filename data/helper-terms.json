@@ -1,6 +1,13 @@
 {
   "processor": [
     {
+      "section": "Graphics (GPU)",
+      "name": "DirectX",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-03-18T19:06:55.830Z"
+    },
+    {
       "section": "Camera",
       "name": "Qualcomm Spectra ISP (triple 12-bit)",
       "aliases": [],
