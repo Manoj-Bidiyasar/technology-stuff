@@ -916,6 +916,11 @@ function buildSections(
           left: formatCodecList(leftDetail?.videoRecordingCodecs),
           right: formatCodecList(rightDetail?.videoRecordingCodecs),
         },
+        {
+          label: "Video Recording HDR Formats",
+          left: formatCodecList(leftDetail?.videoRecordingHdrFormats),
+          right: formatCodecList(rightDetail?.videoRecordingHdrFormats),
+        },
         { label: "Other Video Features", left: leftDetail?.videoFeatures?.length ? leftDetail.videoFeatures.join(", ") : "-", right: rightDetail?.videoFeatures?.length ? rightDetail.videoFeatures.join(", ") : "-" },
         {
           label: "Video Playback",
@@ -928,6 +933,11 @@ function buildSections(
           label: "Video Playback Codecs",
           left: formatCodecList(leftDetail?.videoPlaybackCodecs),
           right: formatCodecList(rightDetail?.videoPlaybackCodecs),
+        },
+        {
+          label: "Video Playback HDR Formats",
+          left: formatCodecList(leftDetail?.videoPlaybackHdrFormats),
+          right: formatCodecList(rightDetail?.videoPlaybackHdrFormats),
         },
       ],
     },

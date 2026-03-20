@@ -1862,11 +1862,19 @@ export default async function ProcessorDetailPage({ params, searchParams }: Prop
                   label: "Video Recording Codecs",
                   value: formatCodecList(detail?.videoRecordingCodecs),
                 },
+                {
+                  label: "Video Recording HDR Formats",
+                  value: formatCodecList(detail?.videoRecordingHdrFormats),
+                },
                 { label: "Other Video Features", value: detail?.videoFeatures?.length ? detail.videoFeatures.join(", ") : "-" },
                 { label: "Video Playback", value: clusterRows(detail?.videoPlayback || "-"), labelAlign: "center" },
                 {
                   label: "Video Playback Codecs",
                   value: formatCodecList(detail?.videoPlaybackCodecs),
+                },
+                {
+                  label: "Video Playback HDR Formats",
+                  value: formatCodecList(detail?.videoPlaybackHdrFormats),
                 },
               ]}
             />

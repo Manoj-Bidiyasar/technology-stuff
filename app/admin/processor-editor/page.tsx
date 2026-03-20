@@ -46,6 +46,7 @@ const BRAND_TITLE_HINTS: Record<string, string[]> = {
 const INSTRUCTION_SET_OPTIONS = [
   "ARMv8-A",
   "ARMv8.2-A",
+  "ARMv8.6-A",
   "ARMv9-A",
   "ARMv9.2-A",
   "x86-64",
@@ -110,6 +111,7 @@ const DISPLAY_MODE_NAME_OPTIONS = [
   "HD+",
   "FHD",
   "FHD+",
+  "WFHD+",
   "QHD",
   "QHD+",
   "WQHD+",
@@ -124,11 +126,13 @@ const CSV_TEXT_FIELDS = [
   "aiFeatures",
   "cameraFeatures",
   "videoRecordingModes",
+  "videoRecordingHdrFormats",
   "videoFeatures",
   "displayFeatures",
   "audioCodecs",
   "multimediaFeatures",
   "bluetoothFeatures",
+  "videoPlaybackHdrFormats",
 ];
 const SEO_CSV_FIELDS = ["seo.tags"];
 const PRIVATE_SECTION_SUGGESTIONS = [
@@ -267,9 +271,11 @@ const DETAIL_SECTIONS: DetailSection[] = [
       { key: "videoCapture", label: "Video Capture", type: "text" },
       { key: "videoRecordingModes", label: "Video Recording Modes", type: "csv" },
       { key: "videoRecordingCodecs", label: "Video Recording Codecs", type: "csv" },
+      { key: "videoRecordingHdrFormats", label: "Video Recording HDR Formats", type: "csv" },
       { key: "videoFeatures", label: "Video Features", type: "csv" },
       { key: "videoPlayback", label: "Video Playback", type: "text" },
       { key: "videoPlaybackCodecs", label: "Video Playback Codecs", type: "csv" },
+      { key: "videoPlaybackHdrFormats", label: "Video Playback HDR Formats", type: "csv" },
     ],
   },
   {
@@ -385,6 +391,8 @@ const FIELD_HELP: Record<string, string> = {
   "Camera & Video.videoPlayback": "Video playback modes (what the chip can decode).",
   "Camera & Video.videoRecordingCodecs": "Comma separated recording codecs (H.264, H.265/HEVC, AV1).",
   "Camera & Video.videoPlaybackCodecs": "Comma separated playback codecs (H.264, H.265/HEVC, AV1).",
+  "Camera & Video.videoRecordingHdrFormats": "HDR formats the camera can record (HDR10, HDR10+, HLG, Dolby Vision).",
+  "Camera & Video.videoPlaybackHdrFormats": "HDR formats the chip can decode (HDR10, HDR10+, HLG, Dolby Vision).",
   "Connectivity.gnssType": "GNSS type (single/dual/triple) and supported bands.",
 };
 
@@ -443,9 +451,11 @@ const BULK_ALLOWED_FIELDS = new Set<string>([
   "videoCapture",
   "videoRecordingModes",
   "videoRecordingCodecs",
+  "videoRecordingHdrFormats",
   "videoFeatures",
   "videoPlayback",
   "videoPlaybackCodecs",
+  "videoPlaybackHdrFormats",
   "maxDisplayResolution",
   "maxRefreshRateHz",
   "displayModes",
@@ -1762,9 +1772,11 @@ export default function ProcessorEditorPage() {
           videoCapture: "4K@120fps",
           videoRecordingModes: ["8K@30fps", "4K@120fps", "4K@60fps", "FHD+@240fps", "FHD@120fps"],
           videoRecordingCodecs: ["H.264 /* H.265/HEVC | AV1 */", "H.265/HEVC", "AV1"],
+          videoRecordingHdrFormats: ["HDR10 /* HDR10+ | HLG | Dolby Vision */", "HDR10+", "HLG (Hybrid Log-Gamma)", "Dolby Vision"],
           videoFeatures: ["HDR10 /* EIS | 10-bit */", "EIS", "10-bit"],
           videoPlayback: "8K@60fps,4K@240fps,4K@120fps",
           videoPlaybackCodecs: ["H.264 /* H.265/HEVC | AV1 */", "H.265/HEVC", "AV1"],
+          videoPlaybackHdrFormats: ["HDR10 /* HDR10+ | HLG | Dolby Vision */", "HDR10+", "HLG (Hybrid Log-Gamma)", "Dolby Vision"],
           maxDisplayResolution: "3200x1440",
           maxRefreshRateHz: 144,
           displayModes: ["QHD+ (2960x3160):120Hz", "FHD+ (2160x1080):240Hz", "HD+ (1650x720):180Hz"],
@@ -1854,9 +1866,11 @@ export default function ProcessorEditorPage() {
           "videoCapture,4K@120fps,text",
           "videoRecordingModes,8K@30fps|4K@120fps|4K@60fps|FHD+@240fps|FHD@120fps,csv",
           "videoRecordingCodecs,H.264 /* H.265/HEVC | AV1 */|H.265/HEVC|AV1,csv",
+          "videoRecordingHdrFormats,HDR10 /* HDR10+ | HLG | Dolby Vision */|HDR10+|HLG (Hybrid Log-Gamma)|Dolby Vision,csv",
           "videoFeatures,HDR10 /* EIS | 10-bit */|EIS|10-bit,csv",
           "videoPlayback,8K@60fps|4K@240fps|4K@120fps,csv",
           "videoPlaybackCodecs,H.264 /* H.265/HEVC | AV1 */|H.265/HEVC|AV1,csv",
+          "videoPlaybackHdrFormats,HDR10 /* HDR10+ | HLG | Dolby Vision */|HDR10+|HLG (Hybrid Log-Gamma)|Dolby Vision,csv",
           "maxDisplayResolution,3200x1440,text",
           "maxRefreshRateHz,144,number",
           "displayModes,QHD+ (2960x3160):120Hz|FHD+ (2160x1080):240Hz|HD+ (1650x720):180Hz,csv",
@@ -3673,6 +3687,13 @@ export default function ProcessorEditorPage() {
                       ) : null}
                       {renderCsvInput("videoRecordingCodecs", "Comma separated (e.g. H.264, H.265/HEVC)")}
                     </label>
+                    <label className="grid gap-1">
+                      <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">Video Recording HDR Formats</span>
+                      {FIELD_HELP["Camera & Video.videoRecordingHdrFormats"] ? (
+                        <span className="text-[11px] leading-4 text-slate-500">{FIELD_HELP["Camera & Video.videoRecordingHdrFormats"]}</span>
+                      ) : null}
+                      {renderCsvInput("videoRecordingHdrFormats", "Comma separated (e.g. HDR10, HDR10+, HLG)")}
+                    </label>
                     <div className="grid gap-1">
                       <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">Video Playback</span>
                       {FIELD_HELP["Camera & Video.videoPlayback"] ? (
@@ -3751,6 +3772,13 @@ export default function ProcessorEditorPage() {
                         <span className="text-[11px] leading-4 text-slate-500">{FIELD_HELP["Camera & Video.videoPlaybackCodecs"]}</span>
                       ) : null}
                       {renderCsvInput("videoPlaybackCodecs", "Comma separated (e.g. H.264, H.265/HEVC)")}
+                    </label>
+                    <label className="grid gap-1">
+                      <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">Video Playback HDR Formats</span>
+                      {FIELD_HELP["Camera & Video.videoPlaybackHdrFormats"] ? (
+                        <span className="text-[11px] leading-4 text-slate-500">{FIELD_HELP["Camera & Video.videoPlaybackHdrFormats"]}</span>
+                      ) : null}
+                      {renderCsvInput("videoPlaybackHdrFormats", "Comma separated (e.g. HDR10, HDR10+, HLG)")}
                     </label>
                     <label className="grid gap-1">
                       <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">Other Video Features <span className="normal-case tracking-normal text-slate-500">(comma separated)</span></span>
@@ -4240,7 +4268,7 @@ export default function ProcessorEditorPage() {
                 if (section.title === "Charging & Source" && (field.key === "quickCharging" || field.key === "chargingSpeed" || field.key === "sourceUrl")) {
                   return null;
                 }
-                if (section.title === "Camera & Video" && (field.key === "cameraIsp" || field.key === "maxCameraSupport" || field.key === "cameraSupport" || field.key === "cameraSupportModes" || field.key === "cameraFeatures" || field.key === "maxVideoCapture" || field.key === "videoCapture" || field.key === "videoRecordingModes" || field.key === "videoRecordingCodecs" || field.key === "videoFeatures" || field.key === "videoPlayback" || field.key === "videoPlaybackCodecs")) {
+                if (section.title === "Camera & Video" && (field.key === "cameraIsp" || field.key === "maxCameraSupport" || field.key === "cameraSupport" || field.key === "cameraSupportModes" || field.key === "cameraFeatures" || field.key === "maxVideoCapture" || field.key === "videoCapture" || field.key === "videoRecordingModes" || field.key === "videoRecordingCodecs" || field.key === "videoRecordingHdrFormats" || field.key === "videoFeatures" || field.key === "videoPlayback" || field.key === "videoPlaybackCodecs" || field.key === "videoPlaybackHdrFormats")) {
                   return null;
                 }
                 const value = getDetailField(field.key);

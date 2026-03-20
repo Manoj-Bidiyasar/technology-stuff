@@ -73,11 +73,13 @@ export type ProcessorDetail = {
   maxVideoCapture?: string;
   videoRecordingModes?: string[];
   videoRecordingCodecs?: string[];
+  videoRecordingHdrFormats?: string[];
   videoFeatures?: string[];
   cameraSupport?: string;
   videoCapture?: string;
   videoPlayback?: string;
   videoPlaybackCodecs?: string[];
+  videoPlaybackHdrFormats?: string[];
   maxDisplayResolution?: string;
   maxRefreshRateHz?: number;
   displayModes?: string[];

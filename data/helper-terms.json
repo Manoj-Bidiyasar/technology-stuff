@@ -2,6 +2,13 @@
   "processor": [
     {
       "section": "Graphics (GPU)",
+      "name": "OpenGL® ES 3.2, OpenCL™ 2.0, Vulkan® 1.3",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-03-19T13:27:03.623Z"
+    },
+    {
+      "section": "Graphics (GPU)",
       "name": "DirectX",
       "aliases": [],
       "status": "approved",
@@ -20,6 +27,41 @@
       "aliases": [],
       "status": "approved",
       "createdAt": "2026-03-17T18:21:34.718Z"
+    },
+    {
+      "section": "Video",
+      "name": "HDR10",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-03-20T06:30:00.000Z"
+    },
+    {
+      "section": "Video",
+      "name": "HDR10+",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-03-20T06:30:00.000Z"
+    },
+    {
+      "section": "Video",
+      "name": "HLG (Hybrid Log-Gamma)",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-03-20T06:30:00.000Z"
+    },
+    {
+      "section": "Video",
+      "name": "Dolby Vision",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-03-20T06:30:00.000Z"
+    },
+    {
+      "section": "Video",
+      "name": "HDR Vivid",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-03-20T06:30:00.000Z"
     },
     {
       "section": "Camera",
