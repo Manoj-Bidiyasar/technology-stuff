@@ -1,4 +1,4 @@
-import { NextResponse, type NextRequest } from "next/server";
+﻿import { NextResponse, type NextRequest } from "next/server";
 import { promises as fs } from "fs";
 import path from "path";
 import { requireAdminCapability } from "@/lib/auth/adminApi";
@@ -8,6 +8,7 @@ const DATA_PATH = path.join(process.cwd(), "data", "helper-terms.json");
 type HelperScope = "processor" | "smartphone" | "tablet" | "blog";
 type HelperTerm = {
   section: string;
+  field?: string;
   name: string;
   aliases?: string[];
   status?: "pending" | "approved";
@@ -65,3 +66,4 @@ export async function POST(request: NextRequest) {
   await writeStore(store);
   return NextResponse.json({ ok: true });
 }
+

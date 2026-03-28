@@ -2,115 +2,259 @@
   "processor": [
     {
       "section": "Graphics (GPU)",
-      "name": "OpenGL® ES 3.2, OpenCL™ 2.0, Vulkan® 1.3",
+      "field": "gpuName",
+      "name": "Mali G1-Ultra",
       "aliases": [],
       "status": "approved",
-      "createdAt": "2026-03-19T13:27:03.623Z"
+      "createdAt": "2026-03-28T21:18:15.307Z"
     },
     {
       "section": "Graphics (GPU)",
-      "name": "DirectX",
+      "field": "gpuName",
+      "name": "Mali G1-Premium",
       "aliases": [],
       "status": "approved",
-      "createdAt": "2026-03-18T19:06:55.830Z"
+      "createdAt": "2026-03-28T21:18:01.084Z"
     },
     {
-      "section": "Camera",
-      "name": "Qualcomm Spectra ISP (triple 12-bit)",
+      "section": "Graphics (GPU)",
+      "field": "gpuName",
+      "name": "Mali G1-Pro",
       "aliases": [],
       "status": "approved",
-      "createdAt": "2026-03-17T19:32:34.547Z"
+      "createdAt": "2026-03-28T21:17:42.495Z"
     },
     {
-      "section": "Video",
-      "name": "H.264, H.265/HEVC, VP9",
+      "section": "Graphics (GPU)",
+      "field": "gpuName",
+      "name": "Immortalis-Gx",
       "aliases": [],
       "status": "approved",
-      "createdAt": "2026-03-17T18:21:34.718Z"
+      "createdAt": "2026-03-28T21:17:04.954Z"
     },
     {
-      "section": "Video",
-      "name": "HDR10",
+      "section": "Graphics (GPU)",
+      "field": "gpuName",
+      "name": "Mali-G",
       "aliases": [],
       "status": "approved",
-      "createdAt": "2026-03-20T06:30:00.000Z"
+      "createdAt": "2026-03-28T21:11:50.329Z"
     },
     {
-      "section": "Video",
-      "name": "HDR10+",
+      "section": "CPU",
+      "field": "cpuCoreName",
+      "name": "ARM Cortex -",
       "aliases": [],
       "status": "approved",
-      "createdAt": "2026-03-20T06:30:00.000Z"
+      "createdAt": "2026-03-28T21:07:27.441Z"
     },
     {
-      "section": "Video",
-      "name": "HLG (Hybrid Log-Gamma)",
+      "section": "CPU",
+      "field": "cpuCoreName",
+      "name": "Qualcomm Oryon Prime (2nd Gen)",
       "aliases": [],
       "status": "approved",
-      "createdAt": "2026-03-20T06:30:00.000Z"
-    },
-    {
-      "section": "Video",
-      "name": "Dolby Vision",
-      "aliases": [],
-      "status": "approved",
-      "createdAt": "2026-03-20T06:30:00.000Z"
-    },
-    {
-      "section": "Video",
-      "name": "HDR Vivid",
-      "aliases": [],
-      "status": "approved",
-      "createdAt": "2026-03-20T06:30:00.000Z"
-    },
-    {
-      "section": "Camera",
-      "name": "Qualcomm Spectra ISP (dual 12-bit)",
-      "aliases": [],
-      "status": "approved",
-      "createdAt": "2026-03-17T18:19:56.527Z"
+      "createdAt": "2026-03-28T21:07:10.569Z"
     },
     {
       "section": "Connectivity",
+      "field": "bluetoothFeatures",
+      "name": "LE Audio",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-03-28T19:38:24.648Z"
+    },
+    {
+      "section": "Connectivity",
+      "field": "navigation",
+      "name": "hhjg",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-03-28T19:21:18.035Z"
+    },
+    {
+      "section": "Video",
+      "field": "videoRecordingHdrFormats",
+      "name": "HDR10, HDR10+, HDR Vivid, HLG, Dolby Vision",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-03-28T04:18:39.770Z"
+    },
+    {
+      "section": "Video",
+      "field": "videoPlaybackHdrFormats",
+      "name": "HDR10, HDR10+, HDR Vivid, HLG, Dolby Vision",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-03-28T04:18:16.998Z"
+    },
+    {
+      "section": "Display",
+      "field": "displayFeatures",
+      "name": "HDR10",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-03-28T04:16:48.180Z"
+    },
+    {
+      "section": "Display",
+      "field": "displayFeatures",
+      "name": "HDR10, HDR10+",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-03-28T04:16:32.003Z"
+    },
+    {
+      "section": "Connectivity",
+      "field": "modem",
       "name": "Snapdragon® 5G Modem",
       "aliases": [],
       "status": "approved",
-      "createdAt": "2026-03-17T17:40:09.042Z"
+      "createdAt": "2026-03-28T04:15:15.022Z"
     },
     {
-      "section": "AI",
-      "name": "Qualcomm AI Engine",
+      "section": "Connectivity",
+      "field": "modem",
+      "name": "Qualcomm X80",
       "aliases": [],
       "status": "approved",
-      "createdAt": "2026-03-17T12:38:10.713Z"
-    },
-    {
-      "section": "Graphics (GPU)",
-      "name": "Vulkan® 1.1",
-      "aliases": [],
-      "status": "approved",
-      "createdAt": "2026-03-17T12:18:03.213Z"
-    },
-    {
-      "section": "Graphics (GPU)",
-      "name": "OpenCL™ 2.0",
-      "aliases": [],
-      "status": "approved",
-      "createdAt": "2026-03-17T12:17:41.080Z"
-    },
-    {
-      "section": "Graphics (GPU)",
-      "name": "OpenGL® ES 3.2",
-      "aliases": [],
-      "status": "approved",
-      "createdAt": "2026-03-17T12:17:30.344Z"
+      "createdAt": "2026-03-28T04:14:23.303Z"
     },
     {
       "section": "Charging",
-      "name": "Qualcomm® Quick Charge™ 5",
+      "field": "chargingSpeed",
+      "name": "50% in 30 min",
       "aliases": [],
       "status": "approved",
-      "createdAt": "2026-03-15T12:18:08.026Z"
+      "createdAt": "2026-03-28T04:13:34.723Z"
+    },
+    {
+      "section": "Charging",
+      "field": "quickCharging",
+      "name": "Qualcomm® Quick Charge™ 4+",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-03-28T04:13:05.966Z"
+    },
+    {
+      "section": "Basic",
+      "field": "manufacturer",
+      "name": "Samsung",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-03-28T04:12:36.189Z"
+    },
+    {
+      "section": "Basic",
+      "field": "manufacturer",
+      "name": "TSMC",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-03-28T04:12:23.211Z"
+    },
+    {
+      "section": "Video",
+      "field": "videoPlaybackCodecs",
+      "name": "H.264, H.265/HEVC, VP9",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-03-28T04:11:35.001Z"
+    },
+    {
+      "section": "Video",
+      "field": "videoRecordingCodecs",
+      "name": "H.264, H.265/HEVC, VP9",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-03-28T04:11:22.494Z"
+    },
+    {
+      "section": "Camera",
+      "field": "cameraIsp",
+      "name": "Qualcomm Spectra ISP (triple 12-bit)",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-03-28T04:09:54.725Z"
+    },
+    {
+      "section": "Camera",
+      "field": "cameraIsp",
+      "name": "Qualcomm Spectra ISP (dual 12-bit)",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-03-28T04:09:09.323Z"
+    },
+    {
+      "section": "AI",
+      "field": "aiPrecision",
+      "name": "INT",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-03-28T04:08:10.827Z"
+    },
+    {
+      "section": "AI",
+      "field": "aiEngine",
+      "name": "Qualcomm AI Engine",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-03-28T04:07:28.529Z"
+    },
+    {
+      "section": "AI",
+      "field": "aiEngine",
+      "name": "Hexagon NPU",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-03-28T04:07:04.851Z"
+    },
+    {
+      "section": "Graphics (GPU)",
+      "field": "gpuApis",
+      "name": "Vulkan® 1.1",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-03-28T04:05:55.244Z"
+    },
+    {
+      "section": "Graphics (GPU)",
+      "field": "gpuApis",
+      "name": "OpenCL™ 2.0",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-03-28T04:05:37.893Z"
+    },
+    {
+      "section": "Graphics (GPU)",
+      "field": "gpuApis",
+      "name": "OpenGL® ES 3.2",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-03-28T04:05:07.240Z"
+    },
+    {
+      "section": "Graphics (GPU)",
+      "field": "gpuApis",
+      "name": "DirectX 12",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-03-28T04:04:40.012Z"
+    },
+    {
+      "section": "Graphics (GPU)",
+      "field": "gpuApis",
+      "name": "OpenGL® ES 3.2, OpenCL™ 2.0, Vulkan® 1.3",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-03-28T04:04:23.685Z"
+    },
+    {
+      "section": "Graphics (GPU)",
+      "field": "gpuName",
+      "name": "Adreno",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-03-28T04:03:40.994Z"
     },
     {
       "section": "Storage",
@@ -146,13 +290,6 @@
       "aliases": [],
       "status": "approved",
       "createdAt": "2026-03-15T12:16:22.479Z"
-    },
-    {
-      "section": "CPU",
-      "name": "Arm Cortex A",
-      "aliases": [],
-      "status": "approved",
-      "createdAt": "2026-03-12T13:50:38.351Z"
     }
   ],
   "smartphone": [],

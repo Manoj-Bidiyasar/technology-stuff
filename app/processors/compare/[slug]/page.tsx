@@ -854,7 +854,7 @@ function buildSections(
           leftNum: Number(leftDetail?.gpuFrequencyMhz),
           rightNum: Number(rightDetail?.gpuFrequencyMhz),
         },
-        { label: "APIs", left: leftDetail?.gpuApis?.length ? leftDetail.gpuApis.join(", ") : "-", right: rightDetail?.gpuApis?.length ? rightDetail.gpuApis.join(", ") : "-" },
+        { label: "API Support", left: leftDetail?.gpuApis?.length ? leftDetail.gpuApis.join(", ") : "-", right: rightDetail?.gpuApis?.length ? rightDetail.gpuApis.join(", ") : "-" },
         { label: "FLOPS", left: formatFlops(leftDetail?.gpuFlops), right: formatFlops(rightDetail?.gpuFlops) },
         { label: "Other GPU Features", left: leftDetail?.gpuFeatures?.length ? leftDetail.gpuFeatures.join(", ") : "-", right: rightDetail?.gpuFeatures?.length ? rightDetail.gpuFeatures.join(", ") : "-" },
       ],
@@ -875,7 +875,7 @@ function buildSections(
         { label: "Memory Frequency", left: getMemoryFrequencyRows(leftDetail), right: getMemoryFrequencyRows(rightDetail), leftNum: memoryFreqScore(getMemoryFrequencyRows(leftDetail)), rightNum: memoryFreqScore(getMemoryFrequencyRows(rightDetail)) },
         { label: "Max Memory", left: leftDetail?.maxMemoryGb ? `${leftDetail.maxMemoryGb}GB` : "-", right: rightDetail?.maxMemoryGb ? `${rightDetail.maxMemoryGb}GB` : "-", leftNum: Number(leftDetail?.maxMemoryGb), rightNum: Number(rightDetail?.maxMemoryGb) },
         { label: "Storage Type", left: formatStorageTypes(leftDetail), right: formatStorageTypes(rightDetail), leftNum: storageTypeScore(formatStorageTypes(leftDetail)), rightNum: storageTypeScore(formatStorageTypes(rightDetail)) },
-        { label: "Storage Channels / Lanes", left: asText(leftDetail?.storageChannels), right: asText(rightDetail?.storageChannels) },
+        { label: "Storage Channels", left: asText(leftDetail?.storageChannels), right: asText(rightDetail?.storageChannels) },
       ],
     },
     {

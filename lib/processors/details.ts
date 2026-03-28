@@ -25,6 +25,7 @@ export type ProcessorDetail = {
   cpuFeatures?: string[];
   l2Cache?: string;
   l3Cache?: string;
+  slcCache?: string;
   process?: string;
   transistorCount?: string;
   tdpW?: number;
@@ -63,6 +64,7 @@ export type ProcessorDetail = {
   bluetooth?: string;
   bluetoothFeatures?: string[];
   gnssType?: string;
+  quickChargingSupport?: boolean;
   quickCharging?: string;
   chargingSpeed?: string;
   navigation?: string[];

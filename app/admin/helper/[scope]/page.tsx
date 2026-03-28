@@ -7,6 +7,7 @@ import { useParams } from "next/navigation";
 type HelperScope = "processor" | "smartphone" | "tablet" | "blog";
 type HelperTerm = {
   section: string;
+  field?: string;
   name: string;
   aliases?: string[];
   status?: "pending" | "approved";
@@ -39,6 +40,30 @@ const SECTION_SUGGESTIONS = [
   "Other",
 ];
 
+const PROCESSOR_FIELD_SUGGESTIONS: Record<string, string[]> = {
+  Basic: ["announced", "manufacturer", "className", "model"],
+  Benchmark: ["benchmarks.antutuVersion", "benchmarks.antutu", "benchmarks.geekbenchVersion", "benchmarks.geekbenchSingle", "benchmarks.geekbenchMulti", "benchmarks.threeDMarkName", "benchmarks.threeDMark"],
+  CPU: ["cpuCoreName", "coreCount", "coreConfiguration", "cores", "instructionSet", "architectureBits", "process", "transistorCount", "l2Cache", "l3Cache", "slcCache", "tdpW", "cpuFeatures"],
+  "Graphics (GPU)": ["gpuName", "gpuArchitecture", "pipelines", "shadingUnits", "gpuFrequencyMhz", "vulkanVersion", "openclVersion", "directxVersion", "gpuFeatures", "gpuApis", "gpuFlops"],
+  AI: ["aiEngine", "aiPerformanceTops", "aiPrecision", "aiFeatures"],
+  Memory: ["memoryType", "memoryTypes", "memoryFreqMhz", "memoryFreqByType", "memoryChannels", "memoryBusWidthBits", "maxMemoryGb", "bandwidthGbps"],
+  Storage: ["storageChannels", "storageType", "storageTypes"],
+  Camera: ["cameraIsp", "maxCameraSupport", "cameraSupportModes", "cameraFeatures"],
+  Video: ["maxVideoCapture", "videoCapture", "videoRecordingModes", "videoRecordingCodecs", "videoPlaybackCodecs", "videoRecordingHdrFormats", "videoPlaybackHdrFormats", "videoFeatures", "videoPlayback"],
+  Display: ["maxDisplayResolution", "maxRefreshRateHz", "displayModes", "outputDisplay", "displayFeatures"],
+  Multimedia: ["audioCodecs", "multimediaFeatures"],
+  Connectivity: ["modem", "networkSupport", "dual5g", "downloadMbps", "uploadMbps", "wifi", "bluetooth", "bluetoothFeatures", "navigation", "gnssType"],
+  Charging: ["quickCharging", "chargingSpeed"],
+  Source: ["sourceUrl"],
+  Other: ["seo.metaTitle", "seo.metaDescription", "seo.canonicalUrl", "seo.summary", "seo.focusKeyword", "seo.tags", "seo.ogImage", "seo.noIndex"],
+};
+
+function getFieldSuggestions(scope: HelperScope, section: string): string[] {
+  if (scope !== "processor") return [];
+  return PROCESSOR_FIELD_SUGGESTIONS[section] || [];
+}
+
+
 function resolveScopeFromSlug(slug: string | undefined): HelperScope {
   const value = String(slug || "").toLowerCase();
   if (value.includes("smartphone")) return "smartphone";
@@ -51,8 +76,9 @@ export default function AdminHelperPage() {
   const params = useParams();
   const scope = resolveScopeFromSlug(String(params?.scope || ""));
   const [items, setItems] = useState<HelperTerm[]>([]);
-  const [draft, setDraft] = useState<{ section: string; name: string }>({
+  const [draft, setDraft] = useState<{ section: string; field: string; name: string }>({
     section: "",
+    field: "",
     name: "",
   });
   const [showFile, setShowFile] = useState(false);
@@ -67,8 +93,12 @@ export default function AdminHelperPage() {
   const savedKeyMap = useMemo(() => {
     const map = new Map<string, string>();
     lastSavedItems.forEach((item) => {
-      const key = `${String(item.section || "").trim().toLowerCase()}::${String(item.name || "").trim().toLowerCase()}`;
-      if (key !== "::") map.set(key, String(item.name || ""));
+      const section = String(item.section || "").trim().toLowerCase();
+      const field = String(item.field || "").trim().toLowerCase();
+      const name = String(item.name || "").trim().toLowerCase();
+      if (!section || !name) return;
+      const key = `${section}::${field}::${name}`;
+      map.set(key, String(item.name || ""));
     });
     return map;
   }, [lastSavedItems]);
@@ -77,13 +107,14 @@ export default function AdminHelperPage() {
     const merged = new Set([...SECTION_SUGGESTIONS, ...fromItems]);
     return Array.from(merged);
   }, [items]);
+  const fieldOptions = useMemo(() => getFieldSuggestions(scope, draft.section.trim()), [scope, draft.section]);
   const groupedItems = useMemo(() => {
     const term = searchTerm.trim().toLowerCase();
     const rows = items
       .map((item, index) => ({ item, index }))
       .filter(({ item }) => {
         if (!term) return true;
-        return item.name.toLowerCase().includes(term) || item.section.toLowerCase().includes(term);
+        return item.name.toLowerCase().includes(term) || item.section.toLowerCase().includes(term) || String(item.field || "").toLowerCase().includes(term);
       });
     const map = new Map<string, Array<{ item: HelperTerm; index: number }>>();
     for (const row of rows) {
@@ -261,7 +292,7 @@ export default function AdminHelperPage() {
               </div>
 
               {showAddForm ? (
-                <div className="grid gap-2 lg:grid-cols-[1.1fr_1.8fr_auto]">
+                <div className="grid gap-2 lg:grid-cols-[1fr_1fr_1.6fr_auto]">
                   <label className="grid gap-1">
                     <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">Section</span>
                     <input
@@ -276,6 +307,24 @@ export default function AdminHelperPage() {
                     />
                     <datalist id="helper-section-options">
                       {sectionOptions.map((item) => (
+                        <option key={item} value={item} />
+                      ))}
+                    </datalist>
+                  </label>
+                  <label className="grid gap-1">
+                    <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">Field Name</span>
+                    <input
+                      list="helper-field-options"
+                      value={draft.field}
+                      onChange={(e) => {
+                        setDraft((prev) => ({ ...prev, field: e.target.value }));
+                        setError("");
+                      }}
+                      className="h-9 rounded-lg border border-slate-200 px-3 text-sm"
+                      placeholder="Optional field key"
+                    />
+                    <datalist id="helper-field-options">
+                      {fieldOptions.map((item) => (
                         <option key={item} value={item} />
                       ))}
                     </datalist>
@@ -305,13 +354,14 @@ export default function AdminHelperPage() {
                         }
                         const next: HelperTerm = {
                           section,
+                          field: draft.field.trim() || undefined,
                           name,
                           aliases: [],
                           status: "approved",
                           createdAt: new Date().toISOString(),
                         };
                         setItems((prev) => [next, ...prev]);
-                        setDraft({ section: "", name: "" });
+                        setDraft({ section: "", field: "", name: "" });
                         setSearchTerm("");
                         setMessage(`Added "${name}" to ${section}.`);
                         setError("");
@@ -331,19 +381,81 @@ export default function AdminHelperPage() {
                     <span className="text-xs font-semibold text-slate-500">{rows.length}</span>
                   </div>
                   <div className="mt-2 overflow-x-auto">
-                    <div className="grid min-w-[720px] grid-cols-6 gap-2">
+                    <div className="grid min-w-[920px] gap-2 lg:grid-cols-2">
                     {rows.map(({ item, index }) => {
-                      const isSaved = savedKeyMap.has(`${String(item.section || "").trim().toLowerCase()}::${String(item.name || "").trim().toLowerCase()}`);
+                      const isSaved = savedKeyMap.has(`${String(item.section || "").trim().toLowerCase()}::${String(item.field || "").trim().toLowerCase()}::${String(item.name || "").trim().toLowerCase()}`);
+                      const rowFieldOptions = getFieldSuggestions(scope, item.section || section);
                       return (
                       <div
-                        key={`term-${item.section}-${item.name}-${index}`}
-                        className={`relative rounded-md border ${isSaved ? "border-slate-200" : "border-rose-300"}`}
+                        key={`term-${item.section}-${item.field || "none"}-${item.name}-${index}`}
+                        className={`relative grid gap-2 rounded-md border p-2 ${isSaved ? "border-slate-200 bg-slate-50 grid-cols-[120px_minmax(0,1fr)_auto]" : "border-rose-300 lg:grid-cols-[1fr_1.1fr_1.6fr_auto] lg:col-span-2"}`}
                       >
                         {!isSaved ? (
-                          <span className="mb-1 inline-flex rounded-full bg-rose-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-rose-700">
+                          <span className="absolute -top-2 left-2 inline-flex rounded-full bg-rose-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-rose-700">
                             Not saved
                           </span>
                         ) : null}
+                        {!isSaved ? (
+                          <>
+                            <input
+                              value={item.section}
+                              list={`helper-section-options-${section}-${index}`}
+                              onChange={(e) => {
+                                const nextSection = e.target.value;
+                                setItems((prev) =>
+                                  prev.map((entry, idx) => (idx === index ? { ...entry, section: nextSection } : entry)),
+                                );
+                              }}
+                              className="h-8 w-full rounded-md border border-slate-200 bg-white px-2 text-xs font-semibold text-slate-900"
+                            />
+                            <datalist id={`helper-section-options-${section}-${index}`}>
+                              {sectionOptions.map((option) => (
+                                <option key={option} value={option} />
+                              ))}
+                            </datalist>
+                          </>
+                        ) : null}
+                        {isSaved ? (
+                          <div className="flex h-8 items-center rounded-md border border-slate-200 bg-white px-2 text-xs text-slate-700">
+                            {item.field || "-"}
+                          </div>
+                        ) : (
+                          <>
+                            <input
+                              value={item.field || ""}
+                              list={`helper-field-options-${section}-${index}`}
+                              onChange={(e) => {
+                                const nextField = e.target.value;
+                                setItems((prev) =>
+                                  prev.map((entry, idx) => (idx === index ? { ...entry, field: nextField || undefined } : entry)),
+                                );
+                              }}
+                              className="h-8 w-full rounded-md border border-slate-200 bg-white px-2 text-xs text-slate-900"
+                              placeholder="Optional field key"
+                            />
+                            <datalist id={`helper-field-options-${section}-${index}`}>
+                              {rowFieldOptions.map((option) => (
+                                <option key={option} value={option} />
+                              ))}
+                            </datalist>
+                          </>
+                        )}
+                        {isSaved ? (
+                          <div className="flex h-8 items-center rounded-md border border-slate-200 bg-white px-2 text-xs font-semibold text-slate-900">
+                            {item.name}
+                          </div>
+                        ) : (
+                          <input
+                            value={item.name}
+                            onChange={(e) => {
+                              const nextName = e.target.value;
+                              setItems((prev) =>
+                                prev.map((entry, idx) => (idx === index ? { ...entry, name: nextName } : entry)),
+                              );
+                            }}
+                            className="h-8 w-full rounded-md border border-slate-200 bg-white px-2 text-xs font-semibold text-slate-900"
+                          />
+                        )}
                         <button
                           type="button"
                           onClick={() => {
@@ -351,24 +463,12 @@ export default function AdminHelperPage() {
                             if (!ok) return;
                             setItems((prev) => prev.filter((_, idx) => idx !== index));
                           }}
-                          className="absolute right-1 top-1 rounded-md p-1 text-slate-400 hover:text-slate-700"
+                          className="h-8 rounded-md border border-slate-200 px-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
                           title="Delete"
                           aria-label={`Delete ${item.name}`}
                         >
-                          <svg viewBox="0 0 24 24" className="h-4 w-4" aria-hidden>
-                            <path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
-                          </svg>
+                          Delete
                         </button>
-                        <input
-                          value={item.name}
-                          onChange={(e) => {
-                            const nextName = e.target.value;
-                            setItems((prev) =>
-                              prev.map((entry, idx) => (idx === index ? { ...entry, name: nextName } : entry)),
-                            );
-                          }}
-                          className="h-8 w-full rounded-md border border-slate-200 bg-white px-2 text-xs font-semibold text-slate-900"
-                        />
                       </div>
                     );})}
                     {rows.length === 0 ? (

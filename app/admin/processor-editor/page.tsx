@@ -11,7 +11,7 @@ import { slugify } from "@/utils/slugify";
 type DetailFieldType = "text" | "number" | "csv" | "boolean" | "kv";
 type DetailField = { key: string; label: string; type: DetailFieldType; placeholder?: string };
 type DetailSection = { title: string; fields: DetailField[] };
-type CpuCluster = { id: string; count: number; core: string; ghz: number; isMax: boolean };
+type CpuCluster = { id: string; count: number; core: string; ghz: number | ""; isMax: boolean };
 type RamProfile = { id: string; type: string; freq: number | "" };
 type DisplayModeProfile = { id: string; mode: string; resolution: string; rr: number | "" };
 type CameraLensProfile = { id: string; value: string };
@@ -32,6 +32,7 @@ type BulkRow = { path: string; value: string; type?: string };
 
 const BRAND_OPTIONS = ["Samsung", "Qualcomm", "MediaTek", "Apple", "Google", "Unisoc", "Huawei", "Intel", "AMD"];
 const CLASS_OPTIONS = ["Ultra Flagship", "Flagship", "Upper Midrange", "Midrange", "Budget", "Entry"];
+const MANUFACTURER_OPTIONS = ["TSMC", "Samsung"];
 const BRAND_TITLE_HINTS: Record<string, string[]> = {
   Samsung: ["Exynos"],
   Qualcomm: ["Snapdragon"],
@@ -52,19 +53,6 @@ const INSTRUCTION_SET_OPTIONS = [
   "x86-64",
 ];
 const ARCHITECTURE_BITS_OPTIONS = ["64bit", "32bit"];
-const CPU_CORE_OPTIONS = [
-  "Arm Cortex-X5",
-  "Arm Cortex-X4",
-  "Arm Cortex-X3",
-  "Arm Cortex-A720",
-  "Arm Cortex-A715",
-  "Arm Cortex-A710",
-  "Arm Cortex-A78",
-  "Arm Cortex-A77",
-  "Arm Cortex-A55",
-  "Kryo",
-  "Oryon",
-];
 const RAM_TYPE_SUGGESTIONS = [
   "LPDDR2",
   "LPDDR3",
@@ -97,7 +85,8 @@ const NETWORK_SUPPORT_OPTIONS = ["5G", "4G", "3G", "2G"];
 const WIFI_OPTIONS = ["Wi-Fi 4", "Wi-Fi 5", "Wi-Fi 6", "Wi-Fi 6E", "Wi-Fi 7"];
 const BLUETOOTH_OPTIONS = ["4.2", "5.0", "5.1", "5.2", "5.3", "5.4", "6.0"];
 const NAVIGATION_OPTIONS = ["GPS", "A-GPS", "GLONASS", "Galileo", "BeiDou", "QZSS", "NavIC"];
-const GNSS_TYPE_OPTIONS = ["Single GNSS", "Dual GNSS (L1+L5)", "Triple GNSS (L1/L5/L2)"];
+const GNSS_TYPE_OPTIONS = ["Single GNSS", "Dual GNSS (L1/L5)", "Triple GNSS (L1/L5/L2)", "Quad GNSS (L1/L5/L2/L6)"];
+const MEMORY_BUS_WIDTH_OPTIONS = [8, 12, 16, 32, 64];
 const CAMERA_SETUP_OPTIONS = [
   { label: "Single", count: 1 },
   { label: "Dual", count: 2 },
@@ -152,16 +141,7 @@ const PRIVATE_SECTION_SUGGESTIONS = [
   "Source",
   "Other",
 ];
-const FIELD_SUGGESTIONS: Record<string, string[]> = {
-  cameraIsp: ["Imagiq 890", "Imagiq 1080", "Spectra ISP", "Hexagon ISP"],
-  gpuName: ["Adreno 830", "Adreno 750", "Mali-G720", "Immortalis-G720"],
-  gpuArchitecture: ["Adreno", "Valhall", "Immortalis", "RDNA"],
-  aiEngine: ["Hexagon NPU", "MediaTek APU", "Tensor TPU", "Neural Engine"],
-  modem: ["Snapdragon X75", "Snapdragon X70", "Exynos Modem 5300", "MediaTek M80"],
-  wifi: ["Wi-Fi 5", "Wi-Fi 6", "Wi-Fi 6E", "Wi-Fi 7"],
-  bluetooth: ["5.0", "5.1", "5.2", "5.3", "5.4"],
-  quickCharging: ["Quick Charge 5", "USB PD 3.1", "VOOC", "SuperVOOC"],
-};
+const FIELD_SUGGESTIONS: Record<string, string[]> = {};
 const NORMALIZE_ALIASES: Record<string, string> = {
   imagiq: "Imagiq",
   imagiq890: "Imagiq 890",
@@ -182,6 +162,7 @@ const NORMALIZE_ALIASES: Record<string, string> = {
 let HELPER_ALIAS_MAP: Record<string, string> = {};
 let HELPER_SUGGESTIONS: string[] = [];
 let HELPER_SUGGESTIONS_BY_SECTION: Record<string, string[]> = {};
+let HELPER_SUGGESTIONS_BY_FIELD: Record<string, string[]> = {};
 
 function setHelperAliasMap(next: Record<string, string>) {
   HELPER_ALIAS_MAP = next;
@@ -192,6 +173,9 @@ function setHelperSuggestions(next: string[]) {
 }
 function setHelperSectionSuggestions(next: Record<string, string[]>) {
   HELPER_SUGGESTIONS_BY_SECTION = next;
+}
+function setHelperFieldSuggestions(next: Record<string, string[]>) {
+  HELPER_SUGGESTIONS_BY_FIELD = next;
 }
 
 const DETAIL_SECTIONS: DetailSection[] = [
@@ -207,6 +191,7 @@ const DETAIL_SECTIONS: DetailSection[] = [
       { key: "transistorCount", label: "Transistor Count", type: "text" },
       { key: "l2Cache", label: "L2 Cache", type: "text" },
       { key: "l3Cache", label: "L3 Cache", type: "text" },
+      { key: "slcCache", label: "SLC Cache", type: "text" },
       { key: "cpuFeatures", label: "CPU Features", type: "csv" },
       { key: "tdpW", label: "TDP (W)", type: "number" },
     ],
@@ -218,7 +203,7 @@ const DETAIL_SECTIONS: DetailSection[] = [
       { key: "gpuArchitecture", label: "GPU Architecture", type: "text" },
       { key: "pipelines", label: "GPU Cores", type: "number" },
       { key: "gpuFrequencyMhz", label: "GPU Frequency (MHz)", type: "number" },
-      { key: "gpuApis", label: "APIs", type: "csv" },
+      { key: "gpuApis", label: "API Support", type: "csv" },
       { key: "gpuFlops", label: "FLOPS", type: "text" },
       { key: "gpuFeatures", label: "GPU Features", type: "csv" },
     ],
@@ -240,7 +225,7 @@ const DETAIL_SECTIONS: DetailSection[] = [
       { key: "memoryFreqMhz", label: "Memory Frequency (MHz)", type: "number" },
       { key: "memoryFreqByType", label: "Memory Freq by Type", type: "kv", placeholder: "LPDDR5X:8533" },
       { key: "memoryChannels", label: "Memory Channels", type: "text" },
-      { key: "storageChannels", label: "Storage Channels / Lanes", type: "text" },
+      { key: "storageChannels", label: "Storage Channels", type: "text" },
       { key: "memoryBusWidthBits", label: "Memory Bus Width (bits)", type: "number" },
       { key: "maxMemoryGb", label: "Max Memory (GB)", type: "number" },
       { key: "storageType", label: "Storage Type", type: "text" },
@@ -365,7 +350,7 @@ const DETAIL_FIELD_LABELS: Record<string, string> = Object.fromEntries(
 
 const FIELD_HELP: Record<string, string> = {
   "CPU / Core.coreCount": "Total cores (auto from cluster builder).",
-  "CPU / Core.coreConfiguration": "Format: 1x Arm Cortex-X4 @ 3.2GHz, 3x ...",
+  "CPU / Core.coreConfiguration": "Format: 1x ARM Cortex - X4 @ 3.2GHz, 3x ...",
   "CPU / Core.cores": "Optional raw note for custom layouts (example: 1+3+4).",
   "CPU / Core.instructionSet": "CPU ISA (for example: ARMv9.2-A).",
   "CPU / Core.architectureBits": "Bitness (32bit or 64bit).",
@@ -373,6 +358,7 @@ const FIELD_HELP: Record<string, string> = {
   "CPU / Core.transistorCount": "Chip transistor count (example: 17.5 billion).",
   "CPU / Core.l2Cache": "Per-cluster or total L2 cache value.",
   "CPU / Core.l3Cache": "Total shared L3 cache value.",
+  "CPU / Core.slcCache": "System level cache value.",
   "CPU / Core.cpuFeatures": "Comma separated features (example: SMT, AV1 decode).",
   "CPU / Core.tdpW": "Thermal design power in watts.",
   "Graphics (GPU).gpuName": "GPU marketing name (example: Adreno 750).",
@@ -393,7 +379,7 @@ const FIELD_HELP: Record<string, string> = {
   "Camera & Video.videoPlaybackCodecs": "Comma separated playback codecs (H.264, H.265/HEVC, AV1).",
   "Camera & Video.videoRecordingHdrFormats": "HDR formats the camera can record (HDR10, HDR10+, HLG, Dolby Vision).",
   "Camera & Video.videoPlaybackHdrFormats": "HDR formats the chip can decode (HDR10, HDR10+, HLG, Dolby Vision).",
-  "Connectivity.gnssType": "GNSS type (single/dual/triple) and supported bands.",
+  "Connectivity.gnssType": "GNSS type (single/dual/triple/quad) and supported bands.",
 };
 
 const BULK_ALLOWED_FIELDS = new Set<string>([
@@ -419,6 +405,7 @@ const BULK_ALLOWED_FIELDS = new Set<string>([
   "transistorCount",
   "l2Cache",
   "l3Cache",
+  "slcCache",
   "cpuFeatures",
   "tdpW",
   "gpuName",
@@ -491,6 +478,36 @@ const BULK_ALLOWED_FIELDS = new Set<string>([
 ]);
 
 const PUBLIC_SITE_URL = getPublicSiteUrl();
+const VIDEO_CODEC_OPTIONS = ["H.264", "H.265/HEVC", "APV", "AV1", "VP8", "VP9", "MPEG-4"] as const;
+const VIDEO_HDR_FORMAT_OPTIONS = ["HDR", "HDR10", "HDR10+", "Ultra HDR", "HDR Vivid", "HLG", "Dolby Vision"] as const;
+const STORAGE_CHANNEL_OPTIONS = ["X-Lane", "Single-channel", "Dual-channel", "Quad-channel", "Octa-channel"] as const;
+const VIDEO_CODEC_ALIAS_MAP: Record<string, string> = {
+  [normalizeLookupKey("H.264")]: "H.264",
+  [normalizeLookupKey("H264")]: "H.264",
+  [normalizeLookupKey("H.265/HEVC")]: "H.265/HEVC",
+  [normalizeLookupKey("H265")]: "H.265/HEVC",
+  [normalizeLookupKey("HEVC")]: "H.265/HEVC",
+  [normalizeLookupKey("APV")]: "APV",
+  [normalizeLookupKey("AV1")]: "AV1",
+  [normalizeLookupKey("VP8")]: "VP8",
+  [normalizeLookupKey("VP9")]: "VP9",
+  [normalizeLookupKey("MPEG-4")]: "MPEG-4",
+  [normalizeLookupKey("MPEG4")]: "MPEG-4",
+  [normalizeLookupKey("MPEG")]: "MPEG-4",
+};
+const VIDEO_HDR_ALIAS_MAP: Record<string, string> = {
+  [normalizeLookupKey("HDR")]: "HDR",
+  [normalizeLookupKey("HDR10")]: "HDR10",
+  [normalizeLookupKey("HDR10+")]: "HDR10+",
+  [normalizeLookupKey("HDR10 Plus")]: "HDR10+",
+  [normalizeLookupKey("Ultra HDR")]: "Ultra HDR",
+  [normalizeLookupKey("HDR Vivid")]: "HDR Vivid",
+  [normalizeLookupKey("Vivid")]: "HDR Vivid",
+  [normalizeLookupKey("HLG")]: "HLG",
+  [normalizeLookupKey("Hybrid Log-Gamma")]: "HLG",
+  [normalizeLookupKey("Dolby Vision")]: "Dolby Vision",
+};
+
 
 function parseCsv(value: string): string[] {
   return value.split(",").map((item) => item.trim()).filter(Boolean);
@@ -506,12 +523,210 @@ function csvInputValue(value: unknown): string {
   return String(value || "");
 }
 
-function normalizeLookupKey(value: string): string {
-  return String(value || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+function normalizeVideoCodecToken(value: string): string {
+  const compact = String(value || "").trim().replace(/\s+/g, " ");
+  if (!compact) return "";
+  return VIDEO_CODEC_ALIAS_MAP[normalizeLookupKey(compact)] || compact;
+}
+
+function normalizeOrderedVideoCodecs(value: unknown): string[] {
+  const raw = Array.isArray(value) ? value.map((item) => String(item)) : parseCsv(String(value || ""));
+  const known = new Set<string>();
+  const custom: string[] = [];
+  const seenCustom = new Set<string>();
+  raw.forEach((item) => {
+    const normalized = normalizeVideoCodecToken(item);
+    if (!normalized) return;
+    if ((VIDEO_CODEC_OPTIONS as readonly string[]).includes(normalized)) {
+      known.add(normalized);
+      return;
+    }
+    const customKey = normalizeLookupKey(normalized);
+    if (seenCustom.has(customKey)) return;
+    seenCustom.add(customKey);
+    custom.push(normalized);
+  });
+  const orderedKnown = VIDEO_CODEC_OPTIONS.filter((item) => known.has(item));
+  return [...orderedKnown, ...custom];
+}
+
+function formatOrderedVideoCodecs(value: unknown): string {
+  return normalizeOrderedVideoCodecs(value).join(", ");
+}
+
+function normalizeVideoHdrToken(value: string): string {
+  const compact = String(value || "").trim().replace(/\s+/g, " ");
+  if (!compact) return "";
+  return VIDEO_HDR_ALIAS_MAP[normalizeLookupKey(compact)] || compact;
+}
+
+function normalizeOrderedVideoHdrFormats(value: unknown): string[] {
+  const raw = Array.isArray(value) ? value.map((item) => String(item)) : parseCsv(String(value || ""));
+  const known = new Set<string>();
+  const custom: string[] = [];
+  const seenCustom = new Set<string>();
+  raw.forEach((item) => {
+    const normalized = normalizeVideoHdrToken(item);
+    if (!normalized) return;
+    if ((VIDEO_HDR_FORMAT_OPTIONS as readonly string[]).includes(normalized)) {
+      known.add(normalized);
+      return;
+    }
+    const customKey = normalizeLookupKey(normalized);
+    if (seenCustom.has(customKey)) return;
+    seenCustom.add(customKey);
+    custom.push(normalized);
+  });
+  const orderedKnown = VIDEO_HDR_FORMAT_OPTIONS.filter((item) => known.has(item));
+  return [...orderedKnown, ...custom];
+}
+
+function formatOrderedVideoHdrFormats(value: unknown): string {
+  return normalizeOrderedVideoHdrFormats(value).join(", ");
+}
+
+function normalizeStorageChannelsValue(value: string): string {
+  const compact = String(value || "").trim().replace(/\s+/g, " ");
+  if (!compact) return "";
+  const numericLane = compact.match(/^(\d+)\s*-?\s*lane$/i);
+  if (numericLane) return `${numericLane[1]}-Lane`;
+  const normalizedKey = normalizeLookupKey(compact);
+  const channelMap: Record<string, string> = {
+    [normalizeLookupKey("X-Lane")]: "X-Lane",
+    [normalizeLookupKey("Single-channel")]: "Single-channel",
+    [normalizeLookupKey("single channel")]: "Single-channel",
+    [normalizeLookupKey("Dual-channel")]: "Dual-channel",
+    [normalizeLookupKey("dual channel")]: "Dual-channel",
+    [normalizeLookupKey("Quad-channel")]: "Quad-channel",
+    [normalizeLookupKey("quad channel")]: "Quad-channel",
+    [normalizeLookupKey("Octa-channel")]: "Octa-channel",
+    [normalizeLookupKey("octa channel")]: "Octa-channel",
+    [normalizeLookupKey("8-channel")]: "Octa-channel",
+    [normalizeLookupKey("octa")]: "Octa-channel",
+  };
+  return channelMap[normalizedKey] || compact;
+}
+
+function normalizeNavigationToken(value: string): string {
+  const compact = String(value || "").trim().replace(/\s+/g, " ");
+  if (!compact) return "";
+  const map: Record<string, string> = {
+    [normalizeLookupKey("GPS")]: "GPS",
+    [normalizeLookupKey("A-GPS")]: "A-GPS",
+    [normalizeLookupKey("AGPS")]: "A-GPS",
+    [normalizeLookupKey("GLONASS")]: "GLONASS",
+    [normalizeLookupKey("Galileo")]: "Galileo",
+    [normalizeLookupKey("BeiDou")]: "BeiDou",
+    [normalizeLookupKey("Beidou")]: "BeiDou",
+    [normalizeLookupKey("QZSS")]: "QZSS",
+    [normalizeLookupKey("NavIC")]: "NavIC",
+    [normalizeLookupKey("NavIC/IRNSS")]: "NavIC",
+    [normalizeLookupKey("IRNSS")]: "NavIC",
+  };
+  return map[normalizeLookupKey(compact)] || compact;
+}
+
+function normalizeOrderedNavigationSystems(value: unknown): string[] {
+  const raw = Array.isArray(value) ? value.map((item) => String(item)) : parseCsv(String(value || ""));
+  const known = new Set<string>();
+  const custom: string[] = [];
+  const seenCustom = new Set<string>();
+  raw.forEach((item) => {
+    const normalized = normalizeNavigationToken(item);
+    if (!normalized) return;
+    if ((NAVIGATION_OPTIONS as readonly string[]).includes(normalized)) {
+      known.add(normalized);
+      return;
+    }
+    const customKey = normalizeLookupKey(normalized);
+    if (seenCustom.has(customKey)) return;
+    seenCustom.add(customKey);
+    custom.push(normalized);
+  });
+  const orderedKnown = NAVIGATION_OPTIONS.filter((item) => known.has(item));
+  return [...orderedKnown, ...custom];
+}
+
+function formatOrderedNavigationSystems(value: unknown): string {
+  return normalizeOrderedNavigationSystems(value).join(", ");
+}
+
+function normalizeLookupKey(value: string): string {  return String(value || "")
+    .toLowerCase()
+    .replace(/\+/g, "plus")
+    .replace(/[^a-z0-9]/g, "");
 }
 
 function normalizeSectionKey(value: string): string {
   return normalizeLookupKey(value || "");
+}
+
+function buildCsvSuggestionPool(items: string[]): string[] {
+  const out = new Set<string>();
+  items.forEach((item) => {
+    const trimmed = String(item || "").trim();
+    if (!trimmed) return;
+    const parts = parseCsv(trimmed);
+    out.add(trimmed);
+    if (parts.length <= 1) return;
+    parts.forEach((part) => {
+      if (part) out.add(part);
+    });
+  });
+  return Array.from(out);
+}
+
+function getFieldSectionKey(fieldKey: string): string {
+  const entry = DETAIL_SECTIONS.find((section) => section.fields.some((field) => field.key === fieldKey));
+  return entry ? normalizeSectionKey(entry.title) : "";
+}
+
+function getFieldSuggestionSectionKeys(fieldKey: string): string[] {
+  if (fieldKey.startsWith("camera")) return ["camera"];
+  if (fieldKey.startsWith("video")) return ["video"];
+  if (fieldKey.startsWith("display")) return ["display"];
+  if (fieldKey === "audioCodecs" || fieldKey === "multimediaFeatures") return ["multimedia"];
+  if (fieldKey.startsWith("bluetooth") || fieldKey === "wifi" || fieldKey === "navigation" || fieldKey === "networkSupport") return ["connectivity"];
+  if (fieldKey === "quickCharging" || fieldKey === "chargingSpeed") return ["charging"];
+  if (fieldKey.startsWith("storage") || fieldKey.startsWith("memory")) return ["storage", "memory"];
+  if (fieldKey.startsWith("gpu")) return [normalizeSectionKey("Graphics (GPU)")];
+  if (fieldKey.startsWith("ai")) return ["ai"];
+  const fallback = getFieldSectionKey(fieldKey);
+  return fallback ? [fallback] : [];
+}
+
+function inferAdrenoSeries(gpuName: string): string | undefined {
+  const match = String(gpuName || "").match(/adreno\s*(\d{3,4})/i);
+  if (!match) return undefined;
+  const code = Number(match[1]);
+  if (!Number.isFinite(code)) return undefined;
+  if (code >= 900) return "Adreno 900";
+  if (code >= 800) return "Adreno 800";
+  if (code >= 700) return "Adreno 700";
+  if (code >= 600) return "Adreno 600";
+  if (code >= 500) return "Adreno 500";
+  if (code >= 400) return "Adreno 400";
+  if (code >= 300) return "Adreno 300";
+  return undefined;
+}
+
+function normalizeBenchmarkLabel(value: unknown): string {
+  const compact = String(value || "").trim().replace(/\s+/g, " " );
+  if (!compact) return "";
+  const normalized = compact.toLowerCase().replace(/[^a-z0-9]/g, "");
+  if (normalized === "wildlife") return "Wild Life";
+  return compact;
+}
+
+function normalizeCpuCoreName(value: unknown): string {
+  const compact = String(value || "").trim().replace(/\s+/g, " ");
+  if (!compact) return "";
+  if (!/^arm\s+cortex/i.test(compact)) return compact;
+  const suffix = compact
+    .replace(/^arm\s+cortex\s*[- ]*\s*/i, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  return suffix ? `ARM Cortex - ${suffix}` : "ARM Cortex - ";
 }
 
 function getAliasCorrection(value: string): string | undefined {
@@ -567,11 +782,18 @@ function isEmptyValue(value: unknown): boolean {
   return false;
 }
 
+function getFieldSuggestionListId(key: string): string | undefined {
+  const normalizedKey = normalizeLookupKey(key);
+  const list = HELPER_SUGGESTIONS_BY_FIELD[normalizedKey];
+  return list && list.length ? `suggest-helper-field-${normalizedKey}` : undefined;
+}
+
 function getSuggestionListId(key: string): string | undefined {
-  if (FIELD_SUGGESTIONS[key]) {
-    return HELPER_SUGGESTIONS.length ? `suggest-${key}-merged` : `suggest-${key}`;
-  }
-  return HELPER_SUGGESTIONS.length ? "suggest-helper" : undefined;
+  if (!HELPER_SUGGESTIONS.length) return undefined;
+  if (key === "gpuName") return "suggest-gpu-name";
+  const fieldListId = getFieldSuggestionListId(key);
+  if (fieldListId) return fieldListId;
+  return undefined;
 }
 
 function getSectionSuggestionListId(section: string): string | undefined {
@@ -684,6 +906,16 @@ function parseCacheSize(value: unknown): { amount: string; unit: string } {
   };
 }
 
+function parseBitCount(value: unknown): number | undefined {
+  if (typeof value === "number") return Number.isFinite(value) ? value : undefined;
+  const raw = String(value || "").trim();
+  if (!raw) return undefined;
+  const match = raw.match(/(\d+)/);
+  if (!match?.[1]) return undefined;
+  const parsed = Number(match[1]);
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
+
 function parseResolutionPixels(value: string): number | null {
   const raw = String(value || "").trim();
   const m = raw.match(/(\d{3,5})\s*[xX]\s*(\d{3,5})/);
@@ -755,7 +987,8 @@ function parseBulkCsv(raw: string): BulkRow[] {
 function applyBulkRows(
   rows: BulkRow[],
   mode: "insert" | "apply",
-  current: Record<string, unknown>
+  current: Record<string, unknown>,
+  includeSeo: boolean
 ): { detail: Record<string, unknown>; warnings: string[] } {
   const warnings: string[] = [];
   let nextDetail = { ...current };
@@ -773,8 +1006,11 @@ function applyBulkRows(
     const path = String(row.path || "").trim();
     if (!path) return;
     const normalizedPath = path.startsWith("detail.") ? path.slice(7) : path;
-    const allowed = BULK_ALLOWED_FIELDS.has(normalizedPath) || normalizedPath.startsWith("benchmarks.");
-    if (!allowed) warnings.push(`Unknown field: ${normalizedPath}`);
+    const allowed = isBulkFieldAllowed(normalizedPath, includeSeo);
+    if (!allowed) {
+      warnings.push(`Unknown field: ${normalizedPath}`);
+      return;
+    }
 
     const currentValue = getByPath(nextDetail as Record<string, unknown>, normalizedPath);
     if (mode === "insert" && isFilled(currentValue)) return;
@@ -795,6 +1031,7 @@ function applyBulkRows(
     } else if (normalizedPath === "memoryTypes" || normalizedPath === "storageTypes" || normalizedPath.endsWith("Features") || normalizedPath.endsWith("Modes")) {
       value = parseCsv(rawValue);
     }
+    value = normalizeBulkValueForPath(normalizedPath, value);
     nextDetail = setByPath(nextDetail as Record<string, unknown>, normalizedPath, value);
   });
 
@@ -849,6 +1086,168 @@ function parseMaxCameraSupportNumber(value: unknown): number | undefined {
     ordered[key] = detail[key];
   });
   return ordered;
+}
+
+function getBulkDetailPayload(detail: Record<string, unknown>, includeSeo: boolean): Record<string, unknown> {
+  const ordered = orderDetailFields(detail);
+  if (includeSeo) return ordered;
+  const { seo: _seo, ...contentOnly } = ordered;
+  return contentOnly;
+}
+
+function withChoices(primary: string, options: readonly string[]): string {
+  const rest = options.filter((item) => item !== primary);
+  return rest.length ? `${primary} /* ${rest.join(" | ")} */` : primary;
+}
+
+function normalizeBulkValueForPath(path: string, value: unknown): unknown {
+  const raw = String(value ?? "").trim();
+  if (!raw) return value;
+  if (path === "l2Cache" || path === "l3Cache" || path === "slcCache") {
+    const parsed = parseCacheSize(raw);
+    if (!parsed.amount) return value;
+    const unit = parsed.unit || "MB";
+    return `${parsed.amount}${unit}`;
+  }
+  if (path === "transistorCount") {
+    const parsed = parseTransistorCount(raw);
+    if (!parsed.amount) return value;
+    const unit = parsed.unit || "billion";
+    return `${parsed.amount} ${unit}`;
+  }
+  return value;
+}
+
+function isBulkFieldAllowed(path: string, includeSeo: boolean): boolean {
+  if (path.startsWith("benchmarks.")) return true;
+  if (!includeSeo && path.startsWith("seo.")) return false;
+  return BULK_ALLOWED_FIELDS.has(path);
+}
+
+function detailToBulkCsv(detail: Record<string, unknown>): string {
+  const rows: string[] = ["path,value,type"];
+  const addRow = (path: string, value: unknown) => {
+    if (value === undefined || value === null) return;
+    if (typeof value === "object" && !Array.isArray(value)) {
+      Object.entries(value as Record<string, unknown>).forEach(([k, v]) => addRow(path ? `${path}.${k}` : k, v));
+      return;
+    }
+    if (Array.isArray(value)) {
+      rows.push(`${path},${value.map((v) => String(v)).join("|")},csv`);
+      return;
+    }
+    if (typeof value === "number") {
+      rows.push(`${path},${String(value)},number`);
+      return;
+    }
+    if (typeof value === "boolean") {
+      rows.push(`${path},${String(value)},boolean`);
+      return;
+    }
+    rows.push(`${path},${String(value)},text`);
+  };
+  Object.entries(detail).forEach(([key, value]) => addRow(key, value));
+  return rows.join("\n");
+}
+
+function getProcessorBulkTemplate(includeSeo: boolean): Record<string, unknown> {
+  const template: Record<string, unknown> = {
+    seo: {
+      metaTitle: "MediaTek Dimensity 9990 - Full Specs",
+      metaDescription: "MediaTek Dimensity 9990 specs, benchmarks, GPU, camera, and connectivity.",
+      canonicalUrl: "https://example.com/processors/mediatek-dimensity-9990",
+      summary: "Flagship 3nm chipset with next-gen GPU and AI.",
+      focusKeyword: "MediaTek Dimensity 9990",
+      tags: ["flagship", "mediatek", "3nm"],
+      ogImage: "https://example.com/og/mediatek-dimensity-9990.jpg",
+      noIndex: false,
+    },
+    announced: "2026-03-10",
+    manufacturer: "TSMC",
+    className: withChoices("Flagship", CLASS_OPTIONS),
+    model: "SM-1234",
+    coreCount: 8,
+    coreConfiguration: "1x ARM Cortex - X4 @ 3.2GHz, 3x ARM Cortex - A720 @ 2.8GHz, 4x ARM Cortex - A520 @ 2.0GHz",
+    cores: "1+3+4",
+    instructionSet: withChoices("ARMv9.2-A", INSTRUCTION_SET_OPTIONS),
+    architectureBits: withChoices("64bit", ARCHITECTURE_BITS_OPTIONS),
+    process: "3nm",
+    transistorCount: "17.5 billion /* billion | trillion */",
+    l2Cache: "2MB /* MB | KB */",
+    l3Cache: "6MB /* MB | KB */",
+    slcCache: "8MB /* MB | KB */",
+    cpuFeatures: ["AV1 decode /* SMT | HDR processing */", "SMT", "HDR processing", "AI acceleration"],
+    tdpW: 6,
+    gpuName: "Adreno 750",
+    gpuArchitecture: "Adreno",
+    pipelines: 6,
+    gpuFrequencyMhz: 900,
+    gpuApis: ["Vulkan /* OpenGL | DirectX | OpenCL */", "OpenGL", "DirectX", "OpenCL"],
+    gpuFlops: "5.6 TFLOPS",
+    gpuFeatures: ["Ray tracing /* Variable Rate Shading | HDR rendering */", "Variable Rate Shading", "HDR rendering"],
+    aiEngine: "Hexagon NPU",
+    aiPerformanceTops: 45,
+    aiPrecision: "INT8/FP16 /* INT4 | FP32 */",
+    aiFeatures: ["INT8 /* FP16 | INT4 */", "FP16", "INT4"],
+    memoryType: withChoices("LPDDR6", RAM_TYPE_SUGGESTIONS),
+    memoryTypes: [withChoices("LPDDR5X", RAM_TYPE_SUGGESTIONS), "LPDDR6", "LPDDR6X"],
+    memoryFreqMhz: 8533,
+    memoryFreqByType: { LPDDR5X: 8533, LPDDR6: 9999, LPDDR6X: 10667 },
+    memoryChannels: "Quad-channel /* Single-channel | Dual-channel */",
+    storageChannels: "X-Lane /* Single-channel | Dual-channel | Quad-channel | Octa-channel */",
+    memoryBusWidthBits: 64,
+    maxMemoryGb: 32,
+    storageType: withChoices("NVMe", STORAGE_TYPE_SUGGESTIONS),
+    storageTypes: [withChoices("UFS 4.0", STORAGE_TYPE_SUGGESTIONS), "UFS 4.1", "NVMe"],
+    bandwidthGbps: 58.3,
+    cameraIsp: "Imagiq 890",
+    maxCameraSupport: 240,
+    cameraSupportModes: ["240", "200 + 50", "64 + 32 + 12", "32 + 32 + 32 + 32"],
+    cameraFeatures: ["HDR /* AI | Night mode */", "AI", "Night mode", "Multi-frame"],
+    maxVideoCapture: "8K@30fps",
+    videoCapture: "4K@120fps",
+    videoRecordingModes: ["8K@30fps", "4K@120fps", "4K@60fps", "FHD+@240fps", "FHD@120fps"],
+    videoRecordingCodecs: [withChoices("H.264", VIDEO_CODEC_OPTIONS), ...VIDEO_CODEC_OPTIONS.filter((item) => item !== "H.264")],
+    videoRecordingHdrFormats: [withChoices("HDR", VIDEO_HDR_FORMAT_OPTIONS), ...VIDEO_HDR_FORMAT_OPTIONS.filter((item) => item !== "HDR")],
+    videoFeatures: ["HDR10 /* EIS | 10-bit */", "EIS", "10-bit"],
+    videoPlayback: "8K@60fps,4K@240fps,4K@120fps",
+    videoPlaybackCodecs: [withChoices("H.264", VIDEO_CODEC_OPTIONS), ...VIDEO_CODEC_OPTIONS.filter((item) => item !== "H.264")],
+    videoPlaybackHdrFormats: [withChoices("HDR", VIDEO_HDR_FORMAT_OPTIONS), ...VIDEO_HDR_FORMAT_OPTIONS.filter((item) => item !== "HDR")],
+    maxDisplayResolution: "3200x1440",
+    maxRefreshRateHz: 144,
+    displayModes: ["QHD+ (2960x3160):120Hz", "FHD+ (2160x1080):240Hz", "HD+ (1650x720):180Hz"],
+    outputDisplay: "4K (2400x2160):60Hz, FHD+ (2060x1080):120Hz, FHD (1920x1080):120Hz",
+    displayFeatures: ["HDR10+ /* HDR | HDR10 | Ultra HDR | HDR Vivid | HLG | Dolby Vision */", "Dolby Vision", "DC dimming"],
+    audioCodecs: ["HEVC /* AAC | FLAC */", "ALC", "AAC", "FLAC"],
+    multimediaFeatures: ["Dolby Vision /* Dolby Atmos */", "Dolby Atmos"],
+    modem: "Snapdragon X75",
+    networkSupport: [withChoices("5G", NETWORK_SUPPORT_OPTIONS), ...NETWORK_SUPPORT_OPTIONS.filter((item) => item !== "5G")],
+    dual5g: true,
+    downloadMbps: 10000,
+    uploadMbps: 3000,
+    wifi: withChoices("Wi-Fi 7", WIFI_OPTIONS),
+    bluetooth: withChoices("5.4", BLUETOOTH_OPTIONS),
+    bluetoothFeatures: ["LE Audio /* aptX | LDAC */", "aptX", "LDAC"],
+    gnssType: withChoices("Dual GNSS (L1/L5)", GNSS_TYPE_OPTIONS),
+    navigation: [withChoices("GPS", NAVIGATION_OPTIONS), ...NAVIGATION_OPTIONS.filter((item) => item !== "GPS")],
+    quickCharging: "Quick Charge 5 /* USB PD 3.1 | SuperVOOC */",
+    chargingSpeed: "120W",
+    sourceUrl: "https://example.com",
+    benchmarks: {
+      antutuVersion: "10",
+      antutu: 2200000,
+      antutuCpu: 520000,
+      antutuGpu: 780000,
+      antutuMemory: 420000,
+      antutuUx: 380000,
+      geekbenchVersion: "6",
+      geekbenchSingle: 2200,
+      geekbenchMulti: 7200,
+      threeDMarkName: "Wild Life Extreme",
+      threeDMark: 11800,
+    },
+  };
+  return getBulkDetailPayload(template, includeSeo);
 }
 
 function splitResolution(value: string): { width: string; height: string } {
@@ -993,14 +1392,14 @@ export default function ProcessorEditorPage() {
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
-  const [transistorUnitPref, setTransistorUnitPref] = useState("");
-  const [l2UnitPref, setL2UnitPref] = useState("");
-  const [l3UnitPref, setL3UnitPref] = useState("");
-  const [ramProfiles, setRamProfiles] = useState<RamProfile[]>([{ id: "r1", type: "LPDDR5X", freq: 8533 }]);
+  const [transistorUnitPref, setTransistorUnitPref] = useState("billion");
+  const [l2UnitPref, setL2UnitPref] = useState("MB");
+  const [l3UnitPref, setL3UnitPref] = useState("MB");
+  const [slcUnitPref, setSlcUnitPref] = useState("MB");
+  const [ramProfiles, setRamProfiles] = useState<RamProfile[]>([{ id: "r1", type: "", freq: "" }]);
   const [storageTypesDraft, setStorageTypesDraft] = useState<string[]>([]);
   const [selectedStorageType, setSelectedStorageType] = useState("");
   const [networkSupportDraft, setNetworkSupportDraft] = useState<string[]>([]);
-  const [selectedNetworkSupport, setSelectedNetworkSupport] = useState("");
   const [navigationDraft, setNavigationDraft] = useState<string[]>([]);
   const [topCollapsed, setTopCollapsed] = useState(false);
   const [statusCollapsed, setStatusCollapsed] = useState(false);
@@ -1018,6 +1417,11 @@ export default function ProcessorEditorPage() {
   const [csvSuggestKey, setCsvSuggestKey] = useState<string | null>(null);
   const [csvSuggestTerm, setCsvSuggestTerm] = useState("");
   const [csvSuggestOpen, setCsvSuggestOpen] = useState(false);
+  const [textSuggestKey, setTextSuggestKey] = useState<string | null>(null);
+  const [textSuggestTerm, setTextSuggestTerm] = useState("");
+  const [textSuggestOpen, setTextSuggestOpen] = useState(false);
+  const csvSuggestRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const textSuggestRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const [privateFields, setPrivateFields] = useState<PrivateFieldEntry[]>([]);
   const [privateFieldDraft, setPrivateFieldDraft] = useState<PrivateFieldDraft>({ section: "", label: "", subField: "", value: "", type: "string" });
   const [privateFieldGlobalDraft, setPrivateFieldGlobalDraft] = useState<PrivateFieldSimpleDraft>({ section: "", label: "", value: "" });
@@ -1031,7 +1435,7 @@ export default function ProcessorEditorPage() {
   const [bulkCsvInput, setBulkCsvInput] = useState("");
   const [bulkMessage, setBulkMessage] = useState("");
   const [bulkWarnings, setBulkWarnings] = useState<string[]>([]);
-  const [bulkMode, setBulkMode] = useState<"single" | "bulk">("single");
+  const [bulkMode, setBulkMode] = useState<"single" | "contentBulk" | "fullBulk">("single");
   const [helperAliasVersion, setHelperAliasVersion] = useState(0);
   const topReadOnly = Boolean(existingId);
   const lastAutoCanonical = useRef<string>("");
@@ -1041,6 +1445,7 @@ export default function ProcessorEditorPage() {
   const lastAutoSeoTags = useRef<string>("");
   const lastAutoSeoOgImage = useRef<string>("");
   const lastAutoSeoFocus = useRef<string>("");
+  const lastAutoGpuArchitecture = useRef<string>("");
 
   const suggestedSlug = useMemo(() => slugify(name || ""), [name]);
   const slug = useMemo(() => slugify(slugInput || suggestedSlug || name || ""), [name, slugInput, suggestedSlug]);
@@ -1109,6 +1514,8 @@ export default function ProcessorEditorPage() {
   const transistor = parseTransistorCount(transistorRaw);
   const l2Cache = parseCacheSize(getDetailField("l2Cache"));
   const l3Cache = parseCacheSize(getDetailField("l3Cache"));
+  const slcCache = parseCacheSize(getDetailField("slcCache"));
+  const memoryBusWidthValue = parseBitCount(getDetailField("memoryBusWidthBits"));
   const appliedRamSummary = (() => {
     const types = (getDetailField("memoryTypes") as string[] | undefined) || [];
     const freqMap = (getDetailField("memoryFreqByType") as Record<string, number | string> | undefined) || {};
@@ -1140,68 +1547,476 @@ export default function ProcessorEditorPage() {
     return modes.map((item) => String(item).trim()).filter(Boolean).join(", ");
   })();
   const appliedVideoPlaybackSummary = (() => String(getDetailField("videoPlayback") || "").trim())();
-  const csvSuggestionPool = useMemo(() => {
-    const out = new Set<string>();
-    HELPER_SUGGESTIONS.forEach((item) => {
-      const trimmed = String(item || "").trim();
-      if (!trimmed) return;
-      const parts = parseCsv(trimmed);
-      if (parts.length <= 1) {
-        out.add(trimmed);
-        return;
-      }
-      parts.forEach((part) => {
-        if (part) out.add(part);
-      });
-      out.add(trimmed);
-    });
-    return Array.from(out).sort((a, b) => a.localeCompare(b));
-  }, [helperAliasVersion]);
+  const antutuVersionValue = String(getDetailField("benchmarks.antutuVersion") || "").trim();
+  const geekbenchVersionValue = String(getDetailField("benchmarks.geekbenchVersion") || "").trim();
+  const threeDMarkNameValue = String(getDetailField("benchmarks.threeDMarkName") || "").trim();
+  const csvSuggestionPool = useMemo(() => buildCsvSuggestionPool(HELPER_SUGGESTIONS), [helperAliasVersion]);
   const helperSectionSuggestions = useMemo(() => {
     return HELPER_SUGGESTIONS_BY_SECTION;
   }, [helperAliasVersion]);
+  const helperFieldSuggestions = useMemo(() => {
+    return HELPER_SUGGESTIONS_BY_FIELD;
+  }, [helperAliasVersion]);
+  const gpuNameSuggestions = useMemo(() => {
+    const list = helperFieldSuggestions[normalizeLookupKey("gpuName")] || [];
+    return list.filter((item) => String(item || "").trim());
+  }, [helperFieldSuggestions]);
+  const csvSuggestionPoolByField = useMemo(() => {
+    const out: Record<string, string[]> = {};
+    Object.entries(helperFieldSuggestions).forEach(([key, list]) => {
+      out[key] = buildCsvSuggestionPool(list || []);
+    });
+    return out;
+  }, [helperFieldSuggestions]);
   const csvSuggestions = useMemo(() => {
+    if (!csvSuggestOpen || !csvSuggestKey) return [];
+    const scopedPool = csvSuggestionPoolByField[csvSuggestKey] || [];
+    if (!scopedPool.length) return [];
     const term = csvSuggestTerm.trim().toLowerCase();
-    if (!csvSuggestOpen || !term) return [];
-    return csvSuggestionPool.filter((item) => item.toLowerCase().startsWith(term)).slice(0, 8);
-  }, [csvSuggestTerm, csvSuggestOpen, csvSuggestionPool]);
+    if (!term) return scopedPool.slice(0, 8);
+    return scopedPool.filter((item) => item.toLowerCase().includes(term)).slice(0, 8);
+  }, [csvSuggestTerm, csvSuggestOpen, csvSuggestKey, csvSuggestionPoolByField]);
+  const textSuggestions = useMemo(() => {
+    if (!textSuggestOpen || !textSuggestKey) return [];
+    const scopedPool = helperFieldSuggestions[textSuggestKey] || [];
+    if (!scopedPool.length) return [];
+    const term = textSuggestTerm.trim().toLowerCase();
+    const filtered = term ? scopedPool.filter((item) => item.toLowerCase().includes(term)) : scopedPool;
+    return filtered.slice(0, 8);
+  }, [helperFieldSuggestions, textSuggestKey, textSuggestOpen, textSuggestTerm]);
+
+  useEffect(() => {
+    const handlePointerDown = (event: PointerEvent) => {
+      const target = event.target as Node | null;
+      if (csvSuggestOpen && csvSuggestKey) {
+        const wrapper = csvSuggestRefs.current[csvSuggestKey];
+        if (wrapper && target && !wrapper.contains(target)) {
+          setCsvSuggestOpen(false);
+        }
+      }
+      if (textSuggestOpen && textSuggestKey) {
+        const wrapper = textSuggestRefs.current[textSuggestKey];
+        if (wrapper && target && !wrapper.contains(target)) {
+          setTextSuggestOpen(false);
+        }
+      }
+    };
+    document.addEventListener("pointerdown", handlePointerDown);
+    return () => document.removeEventListener("pointerdown", handlePointerDown);
+  }, [csvSuggestKey, csvSuggestOpen, textSuggestKey, textSuggestOpen]);
 
   const renderCsvInput = (fieldKey: string, placeholder?: string) => {
     const currentValue = csvInputValue(getDetailField(fieldKey));
+    const normalizedKey = normalizeLookupKey(fieldKey);
     return (
-      <div className="relative">
+      <div
+        className="relative"
+        ref={(node) => {
+          csvSuggestRefs.current[normalizedKey] = node;
+        }}
+      >
         <input
           value={currentValue}
           onChange={(e) => {
             const next = e.target.value;
             setDetailField(fieldKey, next);
-            setCsvSuggestKey(fieldKey);
+            setCsvSuggestKey(normalizedKey);
             setCsvSuggestTerm(getLastCsvToken(next));
             setCsvSuggestOpen(true);
           }}
           onFocus={() => {
-            setCsvSuggestKey(fieldKey);
+            setCsvSuggestKey(normalizedKey);
             setCsvSuggestTerm(getLastCsvToken(currentValue));
             setCsvSuggestOpen(true);
           }}
-          onBlur={() => setTimeout(() => setCsvSuggestOpen(false), 120)}
+          onBlur={() => undefined}
           placeholder={placeholder}
           className="h-9 w-full rounded-lg border border-slate-200 px-3 text-sm"
         />
-        {csvSuggestOpen && csvSuggestKey === fieldKey && csvSuggestions.length > 0 ? (
-          <div className="absolute z-20 mt-1 max-h-48 w-full overflow-auto rounded-lg border border-slate-200 bg-white shadow-lg">
+        {csvSuggestOpen && csvSuggestKey === normalizedKey && csvSuggestions.length > 0 ? (
+          <div className="absolute z-20 mt-1 max-h-56 w-full overflow-auto rounded-xl border border-slate-200 bg-white shadow-lg">
             {csvSuggestions.map((item) => (
               <button
                 key={item}
                 type="button"
-                onMouseDown={(e) => e.preventDefault()}
+                onPointerDown={(e) => e.preventDefault()}
                 onClick={() => {
                   const next = replaceLastCsvToken(currentValue, item);
                   setDetailField(fieldKey, next);
                   setCsvSuggestTerm("");
                   setCsvSuggestOpen(false);
                 }}
-                className="flex w-full items-center justify-between gap-2 border-b border-slate-100 px-3 py-2 text-left text-sm font-medium text-slate-700 last:border-b-0 hover:bg-blue-50"
+                className="flex min-h-11 w-full items-center justify-between gap-2 border-b border-slate-100 px-3 py-2.5 text-left text-[15px] font-medium text-slate-700 last:border-b-0 hover:bg-blue-50 sm:min-h-0 sm:py-2 sm:text-sm"
+              >
+                {item}
+              </button>
+            ))}
+          </div>
+        ) : null}
+      </div>
+    );
+  };
+
+  const renderVideoCodecInput = (fieldKey: "videoRecordingCodecs" | "videoPlaybackCodecs", placeholder?: string) => {
+    const rawValue = csvInputValue(getDetailField(fieldKey));
+    const normalizedKey = normalizeLookupKey(fieldKey);
+    const normalizedTokens = normalizeOrderedVideoCodecs(rawValue);
+    const selected = new Set(normalizedTokens.filter((item) => (VIDEO_CODEC_OPTIONS as readonly string[]).includes(item)));
+    return (
+      <div className="grid gap-2">
+        <div className="grid grid-cols-4 gap-1 sm:flex sm:flex-wrap sm:gap-2">
+          {VIDEO_CODEC_OPTIONS.map((item) => {
+            const active = selected.has(item);
+            return (
+              <button
+                key={`${fieldKey}-${item}`}
+                type="button"
+                onClick={() => {
+                  const current = normalizeOrderedVideoCodecs(getDetailField(fieldKey));
+                  const nextKnown = new Set(current.filter((token) => (VIDEO_CODEC_OPTIONS as readonly string[]).includes(token)));
+                  const custom = current.filter((token) => !(VIDEO_CODEC_OPTIONS as readonly string[]).includes(token));
+                  if (nextKnown.has(item)) nextKnown.delete(item);
+                  else nextKnown.add(item);
+                  const ordered = VIDEO_CODEC_OPTIONS.filter((codec) => nextKnown.has(codec));
+                  const nextValue = [...ordered, ...custom].join(", ");
+                  setDetailField(fieldKey, nextValue);
+                  setCsvSuggestKey(normalizedKey);
+                  setCsvSuggestTerm(getLastCsvToken(nextValue));
+                }}
+                className={`w-full whitespace-nowrap rounded-full border px-1.5 py-1 text-[10px] font-semibold leading-tight transition sm:w-auto sm:px-3 sm:text-xs ${
+                  active
+                    ? "border-blue-700 bg-blue-700 text-white shadow-sm shadow-blue-200 ring-2 ring-blue-200"
+                    : "border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50 hover:text-slate-800"
+                }`}
+              >
+                {item}
+              </button>
+            );
+          })}
+        </div>
+        <div
+          className="relative"
+          ref={(node) => {
+            csvSuggestRefs.current[normalizedKey] = node;
+          }}
+        >
+          <input
+            value={rawValue}
+            onChange={(e) => {
+              const next = e.target.value;
+              setDetailField(fieldKey, next);
+              setCsvSuggestKey(normalizedKey);
+              setCsvSuggestTerm(getLastCsvToken(next));
+              setCsvSuggestOpen(true);
+            }}
+            onFocus={() => {
+              setCsvSuggestKey(normalizedKey);
+              setCsvSuggestTerm(getLastCsvToken(rawValue));
+              setCsvSuggestOpen(true);
+            }}
+            onBlur={(e) => {
+              const next = e.target.value;
+              setDetailField(fieldKey, formatOrderedVideoCodecs(next));
+            }}
+            placeholder={placeholder}
+            className="h-9 w-full rounded-lg border border-slate-200 px-3 text-sm"
+          />
+          {csvSuggestOpen && csvSuggestKey === normalizedKey && csvSuggestions.length > 0 ? (
+            <div className="absolute z-20 mt-1 max-h-56 w-full overflow-auto rounded-xl border border-slate-200 bg-white shadow-lg">
+              {csvSuggestions.map((item) => (
+                <button
+                  key={item}
+                  type="button"
+                  onPointerDown={(e) => e.preventDefault()}
+                  onClick={() => {
+                    const next = replaceLastCsvToken(rawValue, item);
+                    setDetailField(fieldKey, next);
+                    setCsvSuggestTerm("");
+                    setCsvSuggestOpen(false);
+                  }}
+                  className="flex min-h-11 w-full items-center justify-between gap-2 border-b border-slate-100 px-3 py-2.5 text-left text-[15px] font-medium text-slate-700 last:border-b-0 hover:bg-blue-50 sm:min-h-0 sm:py-2 sm:text-sm"
+                >
+                  {item}
+                </button>
+              ))}
+            </div>
+          ) : null}
+        </div>
+      </div>
+    );
+  };
+
+  const renderVideoHdrInput = (fieldKey: "videoRecordingHdrFormats" | "videoPlaybackHdrFormats", placeholder?: string) => {
+    const rawValue = csvInputValue(getDetailField(fieldKey));
+    const normalizedKey = normalizeLookupKey(fieldKey);
+    const normalizedTokens = normalizeOrderedVideoHdrFormats(rawValue);
+    const selected = new Set(normalizedTokens.filter((item) => (VIDEO_HDR_FORMAT_OPTIONS as readonly string[]).includes(item)));
+    return (
+      <div className="grid gap-2">
+        <div className="grid grid-cols-4 gap-1 sm:flex sm:flex-wrap sm:gap-2">
+          {VIDEO_HDR_FORMAT_OPTIONS.map((item) => {
+            const active = selected.has(item);
+            return (
+              <button
+                key={`${fieldKey}-${item}`}
+                type="button"
+                onClick={() => {
+                  const current = normalizeOrderedVideoHdrFormats(getDetailField(fieldKey));
+                  const nextKnown = new Set(current.filter((token) => (VIDEO_HDR_FORMAT_OPTIONS as readonly string[]).includes(token)));
+                  const custom = current.filter((token) => !(VIDEO_HDR_FORMAT_OPTIONS as readonly string[]).includes(token));
+                  if (nextKnown.has(item)) nextKnown.delete(item);
+                  else nextKnown.add(item);
+                  const ordered = VIDEO_HDR_FORMAT_OPTIONS.filter((format) => nextKnown.has(format));
+                  const nextValue = [...ordered, ...custom].join(", ");
+                  setDetailField(fieldKey, nextValue);
+                  setCsvSuggestKey(normalizedKey);
+                  setCsvSuggestTerm(getLastCsvToken(nextValue));
+                }}
+                className={`w-full rounded-full border px-1.5 py-1 text-[10px] font-semibold leading-tight transition sm:w-auto sm:px-3 sm:text-xs ${
+                  active
+                    ? "border-blue-700 bg-blue-700 text-white shadow-sm shadow-blue-200 ring-2 ring-blue-200"
+                    : "border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50 hover:text-slate-800"
+                }`}
+              >
+                {item}
+              </button>
+            );
+          })}
+        </div>
+        <div
+          className="relative"
+          ref={(node) => {
+            csvSuggestRefs.current[normalizedKey] = node;
+          }}
+        >
+          <input
+            value={rawValue}
+            onChange={(e) => {
+              const next = e.target.value;
+              setDetailField(fieldKey, next);
+              setCsvSuggestKey(normalizedKey);
+              setCsvSuggestTerm(getLastCsvToken(next));
+              setCsvSuggestOpen(true);
+            }}
+            onFocus={() => {
+              setCsvSuggestKey(normalizedKey);
+              setCsvSuggestTerm(getLastCsvToken(rawValue));
+              setCsvSuggestOpen(true);
+            }}
+            onBlur={(e) => {
+              const next = e.target.value;
+              setDetailField(fieldKey, formatOrderedVideoHdrFormats(next));
+            }}
+            placeholder={placeholder}
+            className="h-9 w-full rounded-lg border border-slate-200 px-3 text-sm"
+          />
+          {csvSuggestOpen && csvSuggestKey === normalizedKey && csvSuggestions.length > 0 ? (
+            <div className="absolute z-20 mt-1 max-h-56 w-full overflow-auto rounded-xl border border-slate-200 bg-white shadow-lg">
+              {csvSuggestions.map((item) => (
+                <button
+                  key={item}
+                  type="button"
+                  onPointerDown={(e) => e.preventDefault()}
+                  onClick={() => {
+                    const next = replaceLastCsvToken(rawValue, item);
+                    setDetailField(fieldKey, next);
+                    setCsvSuggestTerm("");
+                    setCsvSuggestOpen(false);
+                  }}
+                  className="flex min-h-11 w-full items-center justify-between gap-2 border-b border-slate-100 px-3 py-2.5 text-left text-[15px] font-medium text-slate-700 last:border-b-0 hover:bg-blue-50 sm:min-h-0 sm:py-2 sm:text-sm"
+                >
+                  {item}
+                </button>
+              ))}
+            </div>
+          ) : null}
+        </div>
+      </div>
+    );
+  };
+
+  const renderStorageChannelsInput = (placeholder?: string) => {
+    const fieldKey = "storageChannels";
+    const rawValue = String(getDetailField(fieldKey) || "");
+    const normalizedValue = normalizeStorageChannelsValue(rawValue);
+    return (
+      <div className="grid gap-2">
+        <div className="flex flex-wrap gap-2">
+          {STORAGE_CHANNEL_OPTIONS.map((item) => {
+            const active = normalizedValue === item;
+            return (
+              <button
+                key={`storage-channel-${item}`}
+                type="button"
+                onClick={() => setDetailField(fieldKey, active ? "" : item)}
+                className={`rounded-full border px-3 py-1 text-xs font-semibold transition ${
+                  active
+                    ? "border-blue-700 bg-blue-700 text-white shadow-sm shadow-blue-200 ring-2 ring-blue-200"
+                    : "border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50 hover:text-slate-800"
+                }`}
+              >
+                {item}
+              </button>
+            );
+          })}
+        </div>
+        {renderTextSuggestInput(fieldKey, rawValue, (next) => setDetailField(fieldKey, next), {
+          placeholder,
+          className: "h-9 w-full rounded-lg border border-slate-200 px-3 text-sm",
+          onBlurValue: (next) => setDetailField(fieldKey, normalizeStorageChannelsValue(next)),
+        })}
+      </div>
+    );
+  };
+
+  const renderNavigationInput = (placeholder?: string) => {
+    const fieldKey = "navigation";
+    const rawValue = csvInputValue(getDetailField(fieldKey));
+    const normalizedKey = normalizeLookupKey(fieldKey);
+    const selected = new Set(normalizeOrderedNavigationSystems(rawValue).filter((item) => (NAVIGATION_OPTIONS as readonly string[]).includes(item)));
+    return (
+      <div className="grid gap-2">
+        <div className="flex flex-wrap gap-2">
+          {NAVIGATION_OPTIONS.map((item) => {
+            const active = selected.has(item);
+            return (
+              <button
+                key={`nav-${item}`}
+                type="button"
+                onClick={() => {
+                  const current = normalizeOrderedNavigationSystems(getDetailField(fieldKey));
+                  const nextKnown = new Set(current.filter((token) => (NAVIGATION_OPTIONS as readonly string[]).includes(token)));
+                  const custom = current.filter((token) => !(NAVIGATION_OPTIONS as readonly string[]).includes(token));
+                  if (nextKnown.has(item)) nextKnown.delete(item);
+                  else nextKnown.add(item);
+                  const ordered = NAVIGATION_OPTIONS.filter((token) => nextKnown.has(token));
+                  const nextValue = [...ordered, ...custom].join(", ");
+                  setNavigationDraft([...ordered, ...custom]);
+                  setDetailField(fieldKey, nextValue);
+                  setCsvSuggestKey(normalizedKey);
+                  setCsvSuggestTerm(getLastCsvToken(nextValue));
+                }}
+                className={`rounded-full border px-3 py-1 text-xs font-semibold transition ${
+                  active
+                    ? "border-blue-700 bg-blue-700 text-white shadow-sm shadow-blue-200 ring-2 ring-blue-200"
+                    : "border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50 hover:text-slate-800"
+                }`}
+              >
+                {item}
+              </button>
+            );
+          })}
+        </div>
+        <div
+          className="relative"
+          ref={(node) => {
+            csvSuggestRefs.current[normalizedKey] = node;
+          }}
+        >
+          <input
+            value={rawValue}
+            onChange={(e) => {
+              const next = e.target.value;
+              setDetailField(fieldKey, next);
+              setNavigationDraft(normalizeOrderedNavigationSystems(next));
+              setCsvSuggestKey(normalizedKey);
+              setCsvSuggestTerm(getLastCsvToken(next));
+              setCsvSuggestOpen(true);
+            }}
+            onFocus={() => {
+              setCsvSuggestKey(normalizedKey);
+              setCsvSuggestTerm(getLastCsvToken(rawValue));
+              setCsvSuggestOpen(true);
+            }}
+            onBlur={(e) => {
+              const next = e.target.value;
+              const normalized = formatOrderedNavigationSystems(next);
+              setNavigationDraft(normalizeOrderedNavigationSystems(next));
+              setDetailField(fieldKey, normalized);
+            }}
+            placeholder={placeholder}
+            className="h-9 w-full rounded-lg border border-slate-200 px-3 text-sm"
+          />
+          {csvSuggestOpen && csvSuggestKey === normalizedKey && csvSuggestions.length > 0 ? (
+            <div className="absolute z-20 mt-1 max-h-56 w-full overflow-auto rounded-xl border border-slate-200 bg-white shadow-lg">
+              {csvSuggestions.map((item) => (
+                <button
+                  key={item}
+                  type="button"
+                  onPointerDown={(e) => e.preventDefault()}
+                  onClick={() => {
+                    const next = replaceLastCsvToken(rawValue, item);
+                    setDetailField(fieldKey, next);
+                    setNavigationDraft(normalizeOrderedNavigationSystems(next));
+                    setCsvSuggestTerm("");
+                    setCsvSuggestOpen(false);
+                  }}
+                  className="flex min-h-11 w-full items-center justify-between gap-2 border-b border-slate-100 px-3 py-2.5 text-left text-[15px] font-medium text-slate-700 last:border-b-0 hover:bg-blue-50 sm:min-h-0 sm:py-2 sm:text-sm"
+                >
+                  {item}
+                </button>
+              ))}
+            </div>
+          ) : null}
+        </div>
+      </div>
+    );
+  };
+
+  const renderTextSuggestInput = (
+    fieldKey: string,
+    value: string,
+    onChange: (next: string) => void,
+    options?: {
+      placeholder?: string;
+      className?: string;
+      wrapperClassName?: string;
+      onBlurValue?: (next: string) => void;
+    }
+  ) => {
+    const normalizedKey = normalizeLookupKey(fieldKey);
+    const scopedPool = helperFieldSuggestions[normalizedKey] || [];
+    return (
+      <div
+        className={options?.wrapperClassName || "relative"}
+        ref={(node) => {
+          textSuggestRefs.current[normalizedKey] = node;
+        }}
+      >
+        <input
+          value={value}
+          onChange={(e) => {
+            const next = e.target.value;
+            onChange(next);
+            setTextSuggestKey(normalizedKey);
+            setTextSuggestTerm(next);
+            setTextSuggestOpen(true);
+          }}
+          onFocus={() => {
+            setTextSuggestKey(normalizedKey);
+            setTextSuggestTerm(value);
+            setTextSuggestOpen(true);
+          }}
+          onBlur={(e) => {
+            options?.onBlurValue?.(e.target.value);
+          }}
+          placeholder={options?.placeholder}
+          autoComplete="off"
+          className={options?.className || "h-9 w-full rounded-lg border border-slate-200 px-3 text-sm"}
+        />
+        {textSuggestOpen && textSuggestKey === normalizedKey && textSuggestions.length > 0 ? (
+          <div className="absolute z-20 mt-1 max-h-56 w-full overflow-auto rounded-xl border border-slate-200 bg-white shadow-lg">
+            {textSuggestions.map((item) => (
+              <button
+                key={item}
+                type="button"
+                onPointerDown={(e) => e.preventDefault()}
+                onClick={() => {
+                  onChange(item);
+                  setTextSuggestTerm(item);
+                  setTextSuggestOpen(false);
+                }}
+                className="flex min-h-11 w-full items-center gap-2 border-b border-slate-100 px-3 py-2.5 text-left text-[15px] font-medium text-slate-700 last:border-b-0 hover:bg-blue-50 sm:min-h-0 sm:py-2 sm:text-sm"
               >
                 {item}
               </button>
@@ -1263,16 +2078,23 @@ export default function ProcessorEditorPage() {
       try {
         const response = await fetch("/api/admin/helper-terms?scope=processor", { cache: "no-store" });
         if (!response.ok) return;
-        const json = (await response.json()) as { items?: { name: string; aliases?: string[]; status?: string; section?: string }[] };
+        const json = (await response.json()) as { items?: { name: string; field?: string; aliases?: string[]; status?: string; section?: string }[] };
         if (!active) return;
         const map: Record<string, string> = {};
         const suggestions = new Set<string>();
         const sectionMap: Record<string, Set<string>> = {};
+        const fieldMap: Record<string, Set<string>> = {};
         (json.items || []).forEach((item) => {
           if (item.status && item.status !== "approved") return;
           const canonical = String(item.name || "").trim();
           if (!canonical) return;
           suggestions.add(canonical);
+          const fieldKey = normalizeLookupKey(String(item.field || "").trim());
+          if (fieldKey) {
+            const fieldBucket = fieldMap[fieldKey] || new Set<string>();
+            fieldBucket.add(canonical);
+            fieldMap[fieldKey] = fieldBucket;
+          }
           const sectionKey = normalizeSectionKey(item.section || "");
           if (sectionKey) {
             const bucket = sectionMap[sectionKey] || new Set<string>();
@@ -1290,15 +2112,29 @@ export default function ProcessorEditorPage() {
         const sectionSuggestions = Object.fromEntries(
           Object.entries(sectionMap).map(([key, set]) => [key, Array.from(set).sort((a, b) => a.localeCompare(b))])
         );
+        const fieldSuggestions = Object.fromEntries(
+          Object.entries(fieldMap).map(([key, set]) => [key, Array.from(set).sort((a, b) => a.localeCompare(b))])
+        );
         setHelperSectionSuggestions(sectionSuggestions);
+        setHelperFieldSuggestions(fieldSuggestions);
         setHelperAliasVersion((v) => v + 1);
       } catch {
         // ignore
       }
     }
-    loadHelperAliases().catch(() => undefined);
+    const refreshHelperAliases = () => {
+      loadHelperAliases().catch(() => undefined);
+    };
+    refreshHelperAliases();
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") refreshHelperAliases();
+    };
+    window.addEventListener("focus", refreshHelperAliases);
+    document.addEventListener("visibilitychange", handleVisibility);
     return () => {
       active = false;
+      window.removeEventListener("focus", refreshHelperAliases);
+      document.removeEventListener("visibilitychange", handleVisibility);
     };
   }, []);
 
@@ -1309,6 +2145,40 @@ export default function ProcessorEditorPage() {
       lastAutoCanonical.current = canonicalAutoValue;
     }
   }, [canonicalAutoValue, currentCanonical]);
+
+  useEffect(() => {
+    if (!antutuVersionValue) setDetailField("benchmarks.antutuVersion", "10");
+  }, [antutuVersionValue]);
+
+  useEffect(() => {
+    if (!geekbenchVersionValue) setDetailField("benchmarks.geekbenchVersion", "6");
+  }, [geekbenchVersionValue]);
+
+  useEffect(() => {
+    const normalized = normalizeBenchmarkLabel(threeDMarkNameValue);
+    if (!normalized) {
+      setDetailField("benchmarks.threeDMarkName", "Wild Life");
+      return;
+    }
+    if (normalized !== threeDMarkNameValue) {
+      setDetailField("benchmarks.threeDMarkName", normalized);
+    }
+  }, [threeDMarkNameValue]);
+
+  useEffect(() => {
+    const gpuName = String(getDetailField("gpuName") || "").trim();
+    const currentArchitecture = String(getDetailField("gpuArchitecture") || "").trim();
+    const inferred = inferAdrenoSeries(gpuName);
+    if (!inferred) return;
+    if (currentArchitecture === inferred) {
+      lastAutoGpuArchitecture.current = inferred;
+      return;
+    }
+    if (!currentArchitecture || currentArchitecture === lastAutoGpuArchitecture.current) {
+      setDetailField("gpuArchitecture", inferred);
+      lastAutoGpuArchitecture.current = inferred;
+    }
+  }, [form.detail]);
 
   useEffect(() => {
     if (autoTitle) {
@@ -1399,7 +2269,7 @@ export default function ProcessorEditorPage() {
   }, [missingFields]);
   const missingCount = missingFields.length;
   const [cpuClusters, setCpuClusters] = useState<CpuCluster[]>([
-    { id: "c1", count: 1, core: "Arm Cortex-X4", ghz: 3.2, isMax: true },
+    { id: "c1", count: 1, core: "ARM Cortex - ", ghz: "", isMax: true },
   ]);
 
   useEffect(() => {
@@ -1449,7 +2319,7 @@ export default function ProcessorEditorPage() {
         return {
           id: `p${idx + 1}`,
           count: Number(match[1]) || 1,
-          core: String(match[2] || "").trim(),
+          core: normalizeCpuCoreName(String(match[2] || "").trim()),
           ghz: Number(match[3]) || 1,
           isMax: idx === 0,
         } as CpuCluster;
@@ -1500,7 +2370,8 @@ export default function ProcessorEditorPage() {
   }, [form.detail]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    const values = (getDetailField("navigation") as string[] | undefined) || [];
+    const raw = getDetailField("navigation");
+    const values = Array.isArray(raw) ? raw.map((item) => String(item)) : normalizeOrderedNavigationSystems(raw);
     const currentSig = JSON.stringify(navigationDraft);
     const nextSig = JSON.stringify(values);
     if (currentSig !== nextSig) setNavigationDraft(values);
@@ -1575,9 +2446,9 @@ export default function ProcessorEditorPage() {
   }, [privateFields]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    if (bulkMode !== "bulk") return;
+    if (bulkMode !== "contentBulk" && bulkMode !== "fullBulk") return;
     const detail = form.detail || {};
-    const ordered = orderDetailFields(detail);
+    const ordered = getBulkDetailPayload(detail, bulkMode === "fullBulk");
     setBulkJsonInput(JSON.stringify(ordered, null, 2));
     const csvRows: string[] = ["path,value,type"];
     const addRow = (path: string, value: unknown) => {
@@ -1636,7 +2507,7 @@ export default function ProcessorEditorPage() {
         ...row,
         count: Math.max(1, Number(row.count) || 1),
         ghz: Math.max(0.1, Number(row.ghz) || 0.1),
-        core: row.core.trim(),
+        core: normalizeCpuCoreName(row.core),
       }))
       .filter((row) => row.core);
     if (cleaned.length === 0) return;
@@ -1712,197 +2583,16 @@ export default function ProcessorEditorPage() {
     setDetailField("outputDisplay", formatted.join(", "));
   }
 
-  function downloadTemplate(kind: "json" | "csv") {
-    const filename = kind === "json" ? "processor-detail-template.json" : "processor-detail-template.csv";
-    const content =
-      kind === "json"
-          ? JSON.stringify({
-            seo: {
-              metaTitle: "MediaTek Dimensity 9990 - Full Specs",
-              metaDescription: "MediaTek Dimensity 9990 specs, benchmarks, GPU, camera, and connectivity.",
-              canonicalUrl: "https://example.com/processors/mediatek-dimensity-9990",
-              summary: "Flagship 3nm chipset with next-gen GPU and AI.",
-              focusKeyword: "MediaTek Dimensity 9990",
-              tags: ["flagship", "mediatek", "3nm"],
-              ogImage: "https://example.com/og/mediatek-dimensity-9990.jpg",
-              noIndex: false,
-            },
-            announced: "2026-03-10",
-            manufacturer: "TSMC",
-            className: "Flagship",
-            model: "SM-1234",
-          coreCount: 8,
-          coreConfiguration: "1x Arm Cortex-X4 @ 3.2GHz, 3x Arm Cortex-A720 @ 2.8GHz, 4x Arm Cortex-A520 @ 2.0GHz",
-          cores: "1+3+4",
-          instructionSet: "ARMv9.2-A /* ARMv9-A | ARMv8.2-A */",
-          architectureBits: "64bit /* 32bit */",
-          process: "3nm",
-          transistorCount: "17.5 billion",
-          l2Cache: "2MB",
-          l3Cache: "6MB",
-          cpuFeatures: ["AV1 decode /* SMT | HDR processing */", "SMT", "HDR processing", "AI acceleration"],
-          tdpW: 6,
-          gpuName: "Adreno 750",
-          gpuArchitecture: "Adreno",
-          pipelines: 6,
-          gpuFrequencyMhz: 900,
-          gpuApis: ["Vulkan /* OpenGL | DirectX */", "OpenGL", "DirectX"],
-          gpuFlops: "5.6 TFLOPS",
-          gpuFeatures: ["Ray tracing /* Variable Rate Shading | HDR rendering */", "Variable Rate Shading", "HDR rendering"],
-          aiEngine: "Hexagon NPU",
-          aiPerformanceTops: 45,
-          aiPrecision: "INT8/FP16 /* INT4 | FP32 */",
-          aiFeatures: ["INT8 /* FP16 | INT4 */", "FP16", "INT4"],
-          memoryType: "LPDDR6 /* LPDDR5X | LPDDR6X */",
-          memoryTypes: ["LPDDR5X /* LPDDR6 | LPDDR6X */", "LPDDR6", "LPDDR6X"],
-          memoryFreqMhz: 8533,
-          memoryFreqByType: { LPDDR5X: 8533, LPDDR6: 9999, LPDDR6X: 10667 },
-          memoryChannels: "Quad-channel /* Single-channel | Dual-channel */",
-          storageChannels: "2-lane /* Dual channel | 4-lane | 4 channel */",
-          memoryBusWidthBits: 256,
-          maxMemoryGb: 32,
-          storageType: "NVMe /* UFS 4.0 | UFS 4.1 */",
-          storageTypes: ["UFS 4.0 /* UFS 4.1 | NVMe */", "UFS 4.1", "NVMe"],
-          bandwidthGbps: 58.3,
-          cameraIsp: "Imagiq 890",
-          maxCameraSupport: 240,
-          cameraSupportModes: ["240", "200 + 50", "64 + 32 + 12", "32 + 32 + 32 + 32"],
-          cameraFeatures: ["HDR /* AI | Night mode */", "AI", "Night mode", "Multi-frame"],
-          maxVideoCapture: "8K@30fps",
-          videoCapture: "4K@120fps",
-          videoRecordingModes: ["8K@30fps", "4K@120fps", "4K@60fps", "FHD+@240fps", "FHD@120fps"],
-          videoRecordingCodecs: ["H.264 /* H.265/HEVC | AV1 */", "H.265/HEVC", "AV1"],
-          videoRecordingHdrFormats: ["HDR10 /* HDR10+ | HLG | Dolby Vision */", "HDR10+", "HLG (Hybrid Log-Gamma)", "Dolby Vision"],
-          videoFeatures: ["HDR10 /* EIS | 10-bit */", "EIS", "10-bit"],
-          videoPlayback: "8K@60fps,4K@240fps,4K@120fps",
-          videoPlaybackCodecs: ["H.264 /* H.265/HEVC | AV1 */", "H.265/HEVC", "AV1"],
-          videoPlaybackHdrFormats: ["HDR10 /* HDR10+ | HLG | Dolby Vision */", "HDR10+", "HLG (Hybrid Log-Gamma)", "Dolby Vision"],
-          maxDisplayResolution: "3200x1440",
-          maxRefreshRateHz: 144,
-          displayModes: ["QHD+ (2960x3160):120Hz", "FHD+ (2160x1080):240Hz", "HD+ (1650x720):180Hz"],
-          outputDisplay: "4K (2400x2160):60Hz, FHD+ (2060x1080):120Hz, FHD (1920x1080):120Hz",
-          displayFeatures: ["HDR10+ /* Dolby Vision | DC dimming */", "Dolby Vision", "DC dimming"],
-          audioCodecs: ["HEVC /* AAC | FLAC */", "ALC", "AAC", "FLAC"],
-          multimediaFeatures: ["Dolby Vision /* Dolby Atmos */", "Dolby Atmos"],
-          modem: "Snapdragon X75",
-          networkSupport: ["5G /* 4G | 3G | 2G */", "4G", "3G", "2G"],
-          dual5g: true,
-          downloadMbps: 10000,
-          uploadMbps: 3000,
-          wifi: "Wi-Fi 7 /* Wi-Fi 6E | Wi-Fi 6 */",
-          bluetooth: "5.4 /* 5.3 | 5.2 */",
-          bluetoothFeatures: ["LE Audio /* aptX | LDAC */", "aptX", "LDAC"],
-          gnssType: "Dual GNSS (L1+L5)",
-          navigation: ["GPS /* GLONASS | Galileo */", "GLONASS", "Galileo", "BeiDou"],
-          quickCharging: "Quick Charge 5 /* USB PD 3.1 | SuperVOOC */",
-          chargingSpeed: "120W",
-          sourceUrl: "https://example.com",
-          benchmarks: {
-            antutuVersion: "v10",
-            antutu: 2200000,
-            antutuCpu: 520000,
-            antutuGpu: 780000,
-            antutuMemory: 420000,
-            antutuUx: 380000,
-            geekbenchVersion: "6",
-            geekbenchSingle: 2200,
-            geekbenchMulti: 7200,
-            threeDMarkName: "Wild Life Extreme",
-            threeDMark: 11800,
-          },
-        }, null, 2)
-          : [
-            "path,value,type",
-            "seo.metaTitle,MediaTek Dimensity 9990 - Full Specs,text",
-            "seo.metaDescription,MediaTek Dimensity 9990 specs, benchmarks, GPU, camera, and connectivity.,text",
-            "seo.canonicalUrl,https://example.com/processors/mediatek-dimensity-9990,text",
-            "seo.summary,Flagship 3nm chipset with next-gen GPU and AI.,text",
-            "seo.focusKeyword,MediaTek Dimensity 9990,text",
-            "seo.tags,flagship|mediatek|3nm,csv",
-            "seo.ogImage,https://example.com/og/mediatek-dimensity-9990.jpg,text",
-            "seo.noIndex,false,boolean",
-            "announced,2026-03-10,text",
-            "manufacturer,TSMC,text",
-            "className,Flagship,text",
-            "model,SM-1234,text",
-          "coreCount,8,number",
-          "coreConfiguration,1x Arm Cortex-X4 @ 3.2GHz|3x Arm Cortex-A720 @ 2.8GHz|4x Arm Cortex-A520 @ 2.0GHz,text",
-          "cores,1+3+4,text",
-          "instructionSet,ARMv9.2-A /* ARMv9-A | ARMv8.2-A */,text",
-          "architectureBits,64bit /* 32bit */,text",
-          "process,3nm,text",
-          "transistorCount,17.5 billion,text",
-          "l2Cache,2MB,text",
-          "l3Cache,6MB,text",
-          "cpuFeatures,AV1 decode /* SMT | HDR processing */|SMT|HDR processing|AI acceleration,csv",
-          "tdpW,6,number",
-          "gpuName,Adreno 750,text",
-          "gpuArchitecture,Adreno,text",
-          "pipelines,6,number",
-          "gpuFrequencyMhz,900,number",
-          "gpuApis,Vulkan /* OpenGL | DirectX */|OpenGL|DirectX,csv",
-          "gpuFlops,5.6 TFLOPS,text",
-          "gpuFeatures,Ray tracing /* Variable Rate Shading | HDR rendering */|Variable Rate Shading|HDR rendering,csv",
-          "aiEngine,Hexagon NPU,text",
-          "aiPerformanceTops,45,number",
-          "aiPrecision,INT8/FP16 /* INT4 | FP32 */,text",
-          "aiFeatures,INT8 /* FP16 | INT4 */|FP16|INT4,csv",
-          "memoryType,LPDDR6 /* LPDDR5X | LPDDR6X */,text",
-          "memoryTypes,LPDDR5X /* LPDDR6 | LPDDR6X */|LPDDR6|LPDDR6X,csv",
-          "memoryFreqMhz,8533,number",
-          "memoryFreqByType,LPDDR5X:8533|LPDDR6:9999|LPDDR6X:10667,kv",
-          "memoryChannels,Quad-channel /* Single-channel | Dual-channel */,text",
-          "storageChannels,2-lane /* Dual channel | 4-lane | 4 channel */,text",
-          "memoryBusWidthBits,256,number",
-          "maxMemoryGb,32,number",
-          "storageType,NVMe /* UFS 4.0 | UFS 4.1 */,text",
-          "storageTypes,UFS 4.0 /* UFS 4.1 | NVMe */|UFS 4.1|NVMe,csv",
-          "bandwidthGbps,58.3,number",
-          "cameraIsp,Imagiq 890,text",
-          "maxCameraSupport,240,number",
-          "cameraSupportModes,240|200 + 50|64 + 32 + 12|32 + 32 + 32 + 32,csv",
-          "cameraFeatures,HDR /* AI | Night mode */|AI|Night mode|Multi-frame,csv",
-          "maxVideoCapture,8K@30fps,text",
-          "videoCapture,4K@120fps,text",
-          "videoRecordingModes,8K@30fps|4K@120fps|4K@60fps|FHD+@240fps|FHD@120fps,csv",
-          "videoRecordingCodecs,H.264 /* H.265/HEVC | AV1 */|H.265/HEVC|AV1,csv",
-          "videoRecordingHdrFormats,HDR10 /* HDR10+ | HLG | Dolby Vision */|HDR10+|HLG (Hybrid Log-Gamma)|Dolby Vision,csv",
-          "videoFeatures,HDR10 /* EIS | 10-bit */|EIS|10-bit,csv",
-          "videoPlayback,8K@60fps|4K@240fps|4K@120fps,csv",
-          "videoPlaybackCodecs,H.264 /* H.265/HEVC | AV1 */|H.265/HEVC|AV1,csv",
-          "videoPlaybackHdrFormats,HDR10 /* HDR10+ | HLG | Dolby Vision */|HDR10+|HLG (Hybrid Log-Gamma)|Dolby Vision,csv",
-          "maxDisplayResolution,3200x1440,text",
-          "maxRefreshRateHz,144,number",
-          "displayModes,QHD+ (2960x3160):120Hz|FHD+ (2160x1080):240Hz|HD+ (1650x720):180Hz,csv",
-          "outputDisplay,4K (2400x2160):60Hz|FHD+ (2060x1080):120Hz|FHD (1920x1080):120Hz,csv",
-          "displayFeatures,HDR10+ /* Dolby Vision | DC dimming */|Dolby Vision|DC dimming,csv",
-          "audioCodecs,HEVC /* AAC | FLAC */|ALC|AAC|FLAC,csv",
-          "multimediaFeatures,Dolby Vision /* Dolby Atmos */|Dolby Atmos,csv",
-          "modem,Snapdragon X75,text",
-          "networkSupport,5G /* 4G | 3G | 2G */|4G|3G|2G,csv",
-          "dual5g,true,boolean",
-          "downloadMbps,10000,number",
-          "uploadMbps,3000,number",
-          "wifi,Wi-Fi 7 /* Wi-Fi 6E | Wi-Fi 6 */,text",
-          "bluetooth,5.4 /* 5.3 | 5.2 */,text",
-          "bluetoothFeatures,LE Audio /* aptX | LDAC */|aptX|LDAC,csv",
-          "gnssType,Dual GNSS (L1+L5),text",
-          "navigation,GPS /* GLONASS | Galileo */|GLONASS|Galileo|BeiDou,csv",
-          "quickCharging,Quick Charge 5 /* USB PD 3.1 | SuperVOOC */,text",
-          "chargingSpeed,120W,text",
-          "sourceUrl,https://example.com,text",
-          "benchmarks.antutuVersion,v10,text",
-          "benchmarks.antutu,2200000,number",
-          "benchmarks.antutuCpu,520000,number",
-          "benchmarks.antutuGpu,780000,number",
-          "benchmarks.antutuMemory,420000,number",
-          "benchmarks.antutuUx,380000,number",
-          "benchmarks.geekbenchVersion,6,text",
-          "benchmarks.geekbenchSingle,2200,number",
-          "benchmarks.geekbenchMulti,7200,number",
-          "benchmarks.threeDMarkName,Wild Life Extreme,text",
-          "benchmarks.threeDMark,11800,number",
-        ].join("\n");
+  function downloadTemplate(kind: "json" | "csv", includeSeo: boolean) {
+    const filename = kind === "json"
+      ? includeSeo
+        ? "processor-bulk-template.json"
+        : "processor-content-template.json"
+      : includeSeo
+        ? "processor-bulk-template.csv"
+        : "processor-content-template.csv";
+    const template = getProcessorBulkTemplate(includeSeo);
+    const content = kind === "json" ? JSON.stringify(template, null, 2) : detailToBulkCsv(template);
     const blob = new Blob([content], { type: "text/plain;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
@@ -1912,55 +2602,30 @@ export default function ProcessorEditorPage() {
     URL.revokeObjectURL(url);
   }
 
-  function exportCurrentDetails(kind: "json" | "csv") {
-    const detail = (form.detail || {}) as Record<string, unknown>;
-    const normalized = orderDetailFields(detail);
+  function exportCurrentDetails(kind: "json" | "csv", includeSeo: boolean) {
+    const detail = getBulkDetailPayload((form.detail || {}) as Record<string, unknown>, includeSeo);
     if (kind === "json") {
-      const content = JSON.stringify(normalized, null, 2);
+      const content = JSON.stringify(detail, null, 2);
       const blob = new Blob([content], { type: "application/json;charset=utf-8" });
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
-      link.download = "processor-detail-export.json";
+      link.download = includeSeo ? "processor-bulk-export.json" : "processor-content-export.json";
       link.click();
       URL.revokeObjectURL(url);
       return;
     }
 
-    const rows: string[] = ["path,value,type"];
-    const addRow = (path: string, value: unknown) => {
-      if (value === undefined || value === null) return;
-      if (typeof value === "object" && !Array.isArray(value)) {
-        Object.entries(value as Record<string, unknown>).forEach(([k, v]) => {
-          addRow(path ? `${path}.${k}` : k, v);
-        });
-        return;
-      }
-      if (Array.isArray(value)) {
-        rows.push(`${path},${value.map((v) => String(v)).join("|")},csv`);
-        return;
-      }
-      if (typeof value === "number") {
-        rows.push(`${path},${String(value)},number`);
-        return;
-      }
-      if (typeof value === "boolean") {
-        rows.push(`${path},${String(value)},boolean`);
-        return;
-      }
-      rows.push(`${path},${String(value)},text`);
-    };
-    Object.entries(normalized).forEach(([key, value]) => addRow(key, value));
-    const blob = new Blob([rows.join("\n")], { type: "text/plain;charset=utf-8" });
+    const blob = new Blob([detailToBulkCsv(detail)], { type: "text/plain;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = "processor-detail-export.csv";
+    link.download = includeSeo ? "processor-bulk-export.csv" : "processor-content-export.csv";
     link.click();
     URL.revokeObjectURL(url);
   }
 
-  function importDetailsFromFile(kind: "json" | "csv", file?: File | null) {
+  function importDetailsFromFile(kind: "json" | "csv", includeSeo: boolean, file?: File | null) {
     if (!file) return;
     const reader = new FileReader();
     reader.onload = () => {
@@ -1969,16 +2634,16 @@ export default function ProcessorEditorPage() {
       if (kind === "json") {
         try {
           setBulkJsonInput(text);
-          const rows = parseJsonToRows(text);
+          const rows = parseJsonToRows(text, includeSeo);
           if (!rows.length) {
             setBulkWarnings(["No rows found in JSON."]);
             setBulkMessage("Import failed.");
             return;
           }
-          const { detail: nextDetail, warnings } = applyBulkRows(rows, "apply", (form.detail || {}) as Record<string, unknown>);
+          const { detail: nextDetail, warnings } = applyBulkRows(rows, "apply", (form.detail || {}) as Record<string, unknown>, includeSeo);
           setBulkWarnings(warnings);
           setForm((prev) => ({ ...prev, detail: nextDetail as ProcessorDetail }));
-          setBulkMessage("Imported JSON and filled form fields.");
+          setBulkMessage(includeSeo ? "Imported bulk JSON and filled form fields." : "Imported content JSON and filled form fields.");
         } catch {
           setBulkWarnings(["Invalid JSON file."]);
           setBulkMessage("Import failed.");
@@ -1993,10 +2658,10 @@ export default function ProcessorEditorPage() {
           setBulkMessage("Import failed.");
           return;
         }
-        const { detail: nextDetail, warnings } = applyBulkRows(rows, "apply", (form.detail || {}) as Record<string, unknown>);
+        const { detail: nextDetail, warnings } = applyBulkRows(rows, "apply", (form.detail || {}) as Record<string, unknown>, includeSeo);
         setBulkWarnings(warnings);
         setForm((prev) => ({ ...prev, detail: nextDetail as ProcessorDetail }));
-        setBulkMessage("Imported CSV and filled form fields.");
+        setBulkMessage(includeSeo ? "Imported bulk CSV and filled form fields." : "Imported content CSV and filled form fields.");
       } catch {
         setBulkWarnings(["Invalid CSV file."]);
         setBulkMessage("Import failed.");
@@ -2005,13 +2670,13 @@ export default function ProcessorEditorPage() {
     reader.readAsText(file);
   }
 
-  function validateBulkRows(rows: BulkRow[]) {
+  function validateBulkRows(rows: BulkRow[], includeSeo: boolean) {
     const warnings: string[] = [];
     rows.forEach((row) => {
       const path = String(row.path || "").trim();
       if (!path) return;
       const normalizedPath = path.startsWith("detail.") ? path.slice(7) : path;
-      if (!BULK_ALLOWED_FIELDS.has(normalizedPath) && !normalizedPath.startsWith("benchmarks.")) {
+      if (!isBulkFieldAllowed(normalizedPath, includeSeo)) {
         warnings.push(`Unknown field: ${normalizedPath}`);
       }
     });
@@ -2019,13 +2684,14 @@ export default function ProcessorEditorPage() {
     setBulkMessage(warnings.length ? "Validation found unknown fields." : "Validation passed.");
   }
 
-  function parseJsonToRows(rawJson: string): BulkRow[] {
+  function parseJsonToRows(rawJson: string, includeSeo: boolean): BulkRow[] {
     const rows: BulkRow[] = [];
     const parsed = JSON.parse(rawJson);
     const detailPayload = parsed?.detail && typeof parsed.detail === "object" ? parsed.detail : parsed;
     if (detailPayload && typeof detailPayload === "object" && !Array.isArray(detailPayload)) {
       Object.entries(detailPayload as Record<string, unknown>).forEach(([key, value]) => {
-        if (key === "seo" && value && typeof value === "object" && !Array.isArray(value)) {
+        if (key === "seo") {
+          if (!includeSeo || !value || typeof value !== "object" || Array.isArray(value)) return;
           Object.entries(value as Record<string, unknown>).forEach(([k, v]) => {
             rows.push({
               path: `seo.${k}`,
@@ -2044,26 +2710,26 @@ export default function ProcessorEditorPage() {
         rows.push({
           path: key,
           value: Array.isArray(value) ? (value as unknown[]).join("|") : String(value ?? ""),
-          type: Array.isArray(value) ? "csv" : (typeof value === "number" ? "number" : ""),
+          type: Array.isArray(value) ? "csv" : (typeof value === "number" ? "number" : (typeof value === "boolean" ? "boolean" : "")),
         });
       });
     }
     return rows;
   }
 
-  function handleBulkValidate(kind: "json" | "csv") {
+  function handleBulkValidate(kind: "json" | "csv", includeSeo: boolean) {
     try {
       const rows =
         kind === "json"
-          ? parseJsonToRows(String(bulkJsonInput || "").trim())
+          ? parseJsonToRows(String(bulkJsonInput || "").trim(), includeSeo)
           : parseBulkCsv(String(bulkCsvInput || "").trim());
       if (!rows.length) {
         setBulkWarnings(["No rows to validate."]);
         setBulkMessage("Validation failed.");
         return;
       }
-      validateBulkRows(rows);
-      const { detail: nextDetail, warnings } = applyBulkRows(rows, "apply", (form.detail || {}) as Record<string, unknown>);
+      validateBulkRows(rows, includeSeo);
+      const { detail: nextDetail, warnings } = applyBulkRows(rows, "apply", (form.detail || {}) as Record<string, unknown>, includeSeo);
       setBulkWarnings(warnings);
       setForm((prev) => ({ ...prev, detail: nextDetail as ProcessorDetail }));
       setBulkMessage("Validated and filled form fields.");
@@ -2073,7 +2739,7 @@ export default function ProcessorEditorPage() {
     }
   }
 
-  function handleBulkApply(mode: "insert" | "apply") {
+  function handleBulkApply(mode: "insert" | "apply", includeSeo: boolean) {
     const rawJson = String(bulkJsonInput || "").trim();
     const rawCsv = String(bulkCsvInput || "").trim();
     let sourceRows: BulkRow[] = [];
@@ -2082,7 +2748,7 @@ export default function ProcessorEditorPage() {
     if (rawJson) {
       isJsonSource = true;
       try {
-        sourceRows = parseJsonToRows(rawJson);
+        sourceRows = parseJsonToRows(rawJson, includeSeo);
       } catch (err) {
         setBulkMessage(err instanceof Error ? err.message : "Invalid JSON.");
         return;
@@ -2101,30 +2767,24 @@ export default function ProcessorEditorPage() {
       return;
     }
 
-    const { detail: detailFromRows } = applyBulkRows(sourceRows, "apply", {});
+    const { detail: detailFromRows } = applyBulkRows(sourceRows, "apply", {}, includeSeo);
 
     if (isJsonSource) {
-      const csvRows: string[] = ["path,value,type"];
-      const addRow = (path: string, value: unknown) => {
-        if (value === undefined || value === null) return;
-        if (typeof value === "object" && !Array.isArray(value)) {
-          Object.entries(value as Record<string, unknown>).forEach(([k, v]) => addRow(path ? `${path}.${k}` : k, v));
-          return;
-        }
-        const type = Array.isArray(value) ? "csv" : typeof value === "number" ? "number" : typeof value === "boolean" ? "boolean" : "text";
-        const valStr = Array.isArray(value) ? value.join('|') : String(value);
-        csvRows.push(`${path},${valStr.includes(',') ? `"${valStr}"` : valStr},${type}`);
-      };
-      Object.entries(orderDetailFields(detailFromRows)).forEach(([key, value]) => addRow(key, value));
-      setBulkCsvInput(csvRows.join('\n'));
+      setBulkCsvInput(detailToBulkCsv(orderDetailFields(detailFromRows)));
     } else {
-      setBulkJsonInput(JSON.stringify(detailFromRows, null, 2));
+      setBulkJsonInput(JSON.stringify(orderDetailFields(detailFromRows), null, 2));
     }
 
-    const { detail: nextDetail, warnings } = applyBulkRows(sourceRows, mode, (form.detail || {}) as Record<string, unknown>);
+    const { detail: nextDetail, warnings } = applyBulkRows(sourceRows, mode, (form.detail || {}) as Record<string, unknown>, includeSeo);
     setBulkWarnings(warnings);
     setForm((prev) => ({ ...prev, detail: nextDetail as ProcessorDetail }));
-    setBulkMessage(mode === "insert" ? "Inserted rows into processor details." : "Applied rows to processor details.");
+    setBulkMessage(mode === "insert"
+      ? includeSeo
+        ? "Inserted rows into processor details and SEO."
+        : "Inserted rows into processor content details."
+      : includeSeo
+        ? "Applied rows to processor details and SEO."
+        : "Applied rows to processor content details.");
   }
 
   function applyCameraSetups(next: CameraSetupProfile[]) {
@@ -2204,6 +2864,14 @@ export default function ProcessorEditorPage() {
           detail.maxCameraSupport = maxCamera;
           CSV_TEXT_FIELDS.forEach((key) => {
             const raw = detail[key];
+            if (key === "videoRecordingCodecs" || key === "videoPlaybackCodecs") {
+              detail[key] = normalizeOrderedVideoCodecs(raw);
+              return;
+            }
+            if (key === "videoRecordingHdrFormats" || key === "videoPlaybackHdrFormats") {
+              detail[key] = normalizeOrderedVideoHdrFormats(raw);
+              return;
+            }
             if (typeof raw === "string") detail[key] = normalizeCsvArray(parseCsv(raw));
             if (Array.isArray(raw)) detail[key] = normalizeCsvArray(raw.map((item) => String(item)));
           });
@@ -2216,7 +2884,9 @@ export default function ProcessorEditorPage() {
             if (typeof raw === "string" && key !== "sourceUrl") detail[key] = normalizeTextToken(raw);
             if (Array.isArray(raw) && key !== "cameraSupportModes") {
               const items = raw.map((item) => String(item));
-              detail[key] = normalizeCsvArray(items);
+              if (key === "videoRecordingCodecs" || key === "videoPlaybackCodecs") detail[key] = normalizeOrderedVideoCodecs(items);
+              else if (key === "videoRecordingHdrFormats" || key === "videoPlaybackHdrFormats") detail[key] = normalizeOrderedVideoHdrFormats(items);
+              else detail[key] = normalizeCsvArray(items);
             }
           });
           const ins = String(detail.instructionSet || "").trim();
@@ -2264,8 +2934,8 @@ export default function ProcessorEditorPage() {
       ) : null}
 
       <form onSubmit={onSave} className="space-y-4">
-        <section className="grid gap-0 lg:grid-cols-[minmax(0,2fr)_minmax(0,0.6fr)] lg:items-start">
-          <div className="panel p-3.5 w-full max-w-4xl">
+        <section className="grid gap-0 lg:grid-cols-[minmax(0,2.45fr)_minmax(0,0.55fr)] lg:items-start">
+          <div className="panel p-3.5 w-full">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="flex items-center gap-2">
                 <button
@@ -2479,7 +3149,7 @@ export default function ProcessorEditorPage() {
             </div>
           </div>
         </section>
-        <section className="panel p-4 max-w-4xl" id="detail-seo">
+        <section className="panel p-4 w-full lg:w-[81.67%]" id="detail-seo">
           <div
             className="flex items-center justify-between gap-3"
             onDoubleClick={() => setSeoCollapsed((prev) => !prev)}
@@ -2550,7 +3220,7 @@ export default function ProcessorEditorPage() {
           {!processorDetailsCollapsed ? (
             <div className="mt-3 space-y-4">
               <div className="border-b border-slate-200 pb-2">
-                <div className="inline-flex items-center gap-2">
+                <div className="inline-flex flex-wrap items-center gap-2">
                   <button
                     type="button"
                     onClick={() => setBulkMode("single")}
@@ -2560,19 +3230,26 @@ export default function ProcessorEditorPage() {
                   </button>
                   <button
                     type="button"
-                    onClick={() => setBulkMode("bulk")}
-                    className={`rounded-t-lg px-4 py-2 text-xs font-semibold ${bulkMode === "bulk" ? "bg-blue-600 text-white shadow-sm" : "bg-slate-200 text-slate-700 hover:bg-slate-300"}`}
+                    onClick={() => setBulkMode("contentBulk")}
+                    className={`rounded-t-lg px-4 py-2 text-xs font-semibold ${bulkMode === "contentBulk" ? "bg-blue-600 text-white shadow-sm" : "bg-slate-200 text-slate-700 hover:bg-slate-300"}`}
                   >
-                    JSON / CSV
+                    Content JSON / CSV
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setBulkMode("fullBulk")}
+                    className={`rounded-t-lg px-4 py-2 text-xs font-semibold ${bulkMode === "fullBulk" ? "bg-blue-600 text-white shadow-sm" : "bg-slate-200 text-slate-700 hover:bg-slate-300"}`}
+                  >
+                    Bulk JSON / CSV
                   </button>
                 </div>
               </div>
-              {bulkMode === "bulk" ? (
+              {bulkMode !== "single" ? (
               <div className="rounded-lg border border-slate-200 bg-white p-4">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div>
-                    <h3 className="text-sm font-bold text-slate-900">Processor Details: Bulk Import</h3>
-                    <p className="text-xs text-slate-500">Paste JSON or CSV for processor detail fields. Use dotted paths like `benchmarks.antutu`.</p>
+                    <h3 className="text-sm font-bold text-slate-900">{bulkMode === "fullBulk" ? "Processor Details + SEO: Bulk Import" : "Processor Content: Bulk Import"}</h3>
+                    <p className="text-xs text-slate-500">{bulkMode === "fullBulk" ? "Paste JSON or CSV for processor content plus SEO fields. Use dotted paths like `benchmarks.antutu` and `seo.metaTitle`." : "Paste JSON or CSV for processor content fields only. SEO is excluded here and handled in Bulk JSON / CSV."}</p>
                   </div>
                 </div>
                 <div className="mt-3 grid gap-3 lg:grid-cols-2">
@@ -2580,10 +3257,10 @@ export default function ProcessorEditorPage() {
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">JSON Input</span>
                       <div className="flex flex-wrap gap-2">
-                        <button type="button" onClick={() => downloadTemplate("json")} className="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-700 hover:border-blue-300 hover:text-blue-700">
+                        <button type="button" onClick={() => downloadTemplate("json", bulkMode === "fullBulk")} className="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-700 hover:border-blue-300 hover:text-blue-700">
                           Download JSON
                         </button>
-                        <button type="button" onClick={() => exportCurrentDetails("json")} className="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-700 hover:border-blue-300 hover:text-blue-700">
+                        <button type="button" onClick={() => exportCurrentDetails("json", bulkMode === "fullBulk")} className="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-700 hover:border-blue-300 hover:text-blue-700">
                           Export JSON
                         </button>
                         <label className="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-700 cursor-pointer hover:border-blue-300 hover:text-blue-700">
@@ -2592,7 +3269,7 @@ export default function ProcessorEditorPage() {
                             type="file"
                             accept=".json,application/json"
                             className="hidden"
-                            onChange={(e) => importDetailsFromFile("json", e.target.files?.[0])}
+                            onChange={(e) => importDetailsFromFile("json", bulkMode === "fullBulk", e.target.files?.[0])}
                           />
                         </label>
                       </div>
@@ -2600,7 +3277,7 @@ export default function ProcessorEditorPage() {
                     <textarea
                       value={bulkJsonInput}
                       onChange={(e) => setBulkJsonInput(e.target.value)}
-                      placeholder='{"memoryTypes":["LPDDR5X"],"memoryFreqByType":{"LPDDR5X":8533},"benchmarks":{"antutu":2200000}}'
+                      placeholder={bulkMode === "fullBulk" ? '{"seo":{"metaTitle":"MediaTek Dimensity 9990 - Full Specs"},"memoryTypes":["LPDDR5X"],"benchmarks":{"antutu":2200000}}' : '{"memoryTypes":["LPDDR5X"],"memoryFreqByType":{"LPDDR5X":8533},"benchmarks":{"antutu":2200000}}'}
                       className="min-h-[140px] rounded-lg border border-slate-200 px-3 py-2 text-xs"
                     />
                   </label>
@@ -2608,10 +3285,10 @@ export default function ProcessorEditorPage() {
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">CSV Input</span>
                       <div className="flex flex-wrap gap-2">
-                        <button type="button" onClick={() => downloadTemplate("csv")} className="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-700 hover:border-blue-300 hover:text-blue-700">
+                        <button type="button" onClick={() => downloadTemplate("csv", bulkMode === "fullBulk")} className="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-700 hover:border-blue-300 hover:text-blue-700">
                           Download CSV
                         </button>
-                        <button type="button" onClick={() => exportCurrentDetails("csv")} className="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-700 hover:border-blue-300 hover:text-blue-700">
+                        <button type="button" onClick={() => exportCurrentDetails("csv", bulkMode === "fullBulk")} className="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-700 hover:border-blue-300 hover:text-blue-700">
                           Export CSV
                         </button>
                         <label className="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-700 cursor-pointer hover:border-blue-300 hover:text-blue-700">
@@ -2620,7 +3297,7 @@ export default function ProcessorEditorPage() {
                             type="file"
                             accept=".csv,text/csv"
                             className="hidden"
-                            onChange={(e) => importDetailsFromFile("csv", e.target.files?.[0])}
+                            onChange={(e) => importDetailsFromFile("csv", bulkMode === "fullBulk", e.target.files?.[0])}
                           />
                         </label>
                       </div>
@@ -2628,22 +3305,22 @@ export default function ProcessorEditorPage() {
                     <textarea
                       value={bulkCsvInput}
                       onChange={(e) => setBulkCsvInput(e.target.value)}
-                      placeholder="path,value,type&#10;memoryTypes,LPDDR5X|LPDDR6,csv&#10;memoryFreqByType,LPDDR5X:8533|LPDDR6:9999,kv&#10;benchmarks.antutu,2200000,number"
+                      placeholder={bulkMode === "fullBulk" ? "path,value,type&#10;seo.metaTitle,MediaTek Dimensity 9990 - Full Specs,text&#10;memoryTypes,LPDDR5X|LPDDR6,csv&#10;benchmarks.antutu,2200000,number" : "path,value,type&#10;memoryTypes,LPDDR5X|LPDDR6,csv&#10;memoryFreqByType,LPDDR5X:8533|LPDDR6:9999,kv&#10;benchmarks.antutu,2200000,number"}
                       className="min-h-[140px] rounded-lg border border-slate-200 px-3 py-2 text-xs"
                     />
                   </label>
                 </div>
                 <div className="mt-3 flex flex-wrap gap-2">
-                  <button type="button" onClick={() => handleBulkApply("insert")} className="rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white">
+                  <button type="button" onClick={() => handleBulkApply("insert", bulkMode === "fullBulk")} className="rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white">
                     Insert
                   </button>
-                  <button type="button" onClick={() => handleBulkApply("apply")} className="rounded-lg bg-blue-700 px-3 py-1.5 text-xs font-semibold text-white">
+                  <button type="button" onClick={() => handleBulkApply("apply", bulkMode === "fullBulk")} className="rounded-lg bg-blue-700 px-3 py-1.5 text-xs font-semibold text-white">
                     Apply
                   </button>
-                  <button type="button" onClick={() => handleBulkValidate("csv")} className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700">
+                  <button type="button" onClick={() => handleBulkValidate("csv", bulkMode === "fullBulk")} className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700">
                     Validate CSV
                   </button>
-                  <button type="button" onClick={() => handleBulkValidate("json")} className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700">
+                  <button type="button" onClick={() => handleBulkValidate("json", bulkMode === "fullBulk")} className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700">
                     Validate JSON
                   </button>
                 </div>
@@ -2698,11 +3375,27 @@ export default function ProcessorEditorPage() {
               </label>
               <label className="grid gap-1">
                 <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">Manufacturer</span>
-                <input
-                  value={String(getDetailField("manufacturer") || "")}
-                  onChange={(e) => setDetailField("manufacturer", e.target.value)}
-                  className="h-9 rounded-lg border border-slate-200 px-3 text-sm"
-                />
+                <div className="flex flex-wrap gap-2">
+                  {MANUFACTURER_OPTIONS.map((item) => {
+                    const selected = String(getDetailField("manufacturer") || "") === item;
+                    return (
+                      <button
+                        key={item}
+                        type="button"
+                        onClick={() => setDetailField("manufacturer", selected ? "" : item)}
+                        className={`rounded-full border px-3 py-1 text-xs font-semibold transition ${selected ? "border-blue-600 bg-blue-600 text-white shadow-sm" : "border-slate-200 bg-white text-slate-700 hover:border-blue-300 hover:text-blue-700"}`}
+                      >
+                        {item}
+                      </button>
+                    );
+                  })}
+                </div>
+                {renderTextSuggestInput(
+                  "manufacturer",
+                  String(getDetailField("manufacturer") || ""),
+                  (next) => setDetailField("manufacturer", next),
+                  { className: "h-9 rounded-lg border border-slate-200 px-3 text-sm", placeholder: "TSMC or Samsung" }
+                )}
               </label>
               <label className="grid gap-1">
                 <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">Model Number</span>
@@ -2721,7 +3414,7 @@ export default function ProcessorEditorPage() {
               <label className="grid gap-1">
                 <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">AnTuTu Version</span>
                 <input
-                  value={String(getDetailField("benchmarks.antutuVersion") || "")}
+                  value={antutuVersionValue || "10"}
                   onChange={(e) => setDetailField("benchmarks.antutuVersion", e.target.value)}
                   className="h-9 rounded-lg border border-slate-200 px-3 text-sm"
                 />
@@ -2785,13 +3478,13 @@ export default function ProcessorEditorPage() {
 
           <div className="panel p-4">
             <div className="grid gap-3">
-              <div className="rounded-lg border border-slate-200 p-3">
+              <div className="rounded-lg border border-slate-200 p-2.5 sm:p-3">
                 <h2 className="text-sm font-bold text-slate-900">Geekbench</h2>
                 <div className="mt-2 grid gap-3">
                   <label className="grid gap-1">
                     <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">Geekbench Version</span>
                     <input
-                      value={String(getDetailField("benchmarks.geekbenchVersion") || "")}
+                      value={geekbenchVersionValue || "6"}
                       onChange={(e) => setDetailField("benchmarks.geekbenchVersion", e.target.value)}
                       className="h-9 rounded-lg border border-slate-200 px-3 text-sm"
                     />
@@ -2818,14 +3511,15 @@ export default function ProcessorEditorPage() {
                   </label>
                 </div>
               </div>
-              <div className="rounded-lg border border-slate-200 p-3">
+              <div className="rounded-lg border border-slate-200 p-2.5 sm:p-3">
                 <h2 className="text-sm font-bold text-slate-900">3DMark</h2>
                 <div className="mt-2 grid gap-3">
                   <label className="grid gap-1">
                     <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">3DMark Test Name</span>
                     <input
-                      value={String(getDetailField("benchmarks.threeDMarkName") || "")}
+                      value={threeDMarkNameValue || "Wild Life"}
                       onChange={(e) => setDetailField("benchmarks.threeDMarkName", e.target.value)}
+                      onBlur={(e) => setDetailField("benchmarks.threeDMarkName", normalizeBenchmarkLabel(e.target.value) || "Wild Life")}
                       className="h-9 rounded-lg border border-slate-200 px-3 text-sm"
                     />
                   </label>
@@ -2848,10 +3542,10 @@ export default function ProcessorEditorPage() {
             const sectionOptions = getSectionOptions(section.title);
             const hasSectionToggle = sectionOptions.length > 1;
             return (
-            <Fragment key={section.title}>
             <section
+              key={section.title}
               id={`detail-${section.title.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`}
-              className="panel p-5"
+              className="panel p-3 sm:p-5"
             >
             <div className="flex flex-wrap items-center justify-between gap-2">
               <h2 className="text-base font-bold text-slate-900">{section.title}</h2>
@@ -2871,15 +3565,15 @@ export default function ProcessorEditorPage() {
               </button>
             </div>
             {section.title === "CPU / Core" ? (
-              <>
-              <div className="mt-3 grid gap-3 lg:grid-cols-3">
-                <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 lg:col-span-2">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-600">
-                    Core Cluster Builder <span className="normal-case font-medium text-slate-500">(Clock is entered in GHz. Example: 3.2 equals 3200 MHz.)</span>
-                  </p>
-                  <div className="mt-2 space-y-2">
-                    {cpuClusters.map((row) => (
-                        <div key={row.id} className="grid gap-2 sm:grid-cols-[80px_minmax(0,1fr)_110px_120px_auto]">
+              <div className="mt-3 space-y-3">
+                <div className="grid gap-3 lg:grid-cols-[minmax(0,1.8fr)_minmax(0,1.2fr)]">
+                  <div className="rounded-lg border border-slate-200 bg-slate-50 p-2.5 sm:p-3">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-600">
+                      Core Cluster Builder <span className="normal-case font-medium text-slate-500">(Clock is entered in GHz. Example: 3.2 equals 3200 MHz.)</span>
+                    </p>
+                    <div className="mt-2 space-y-2">
+                      {cpuClusters.map((row) => (
+                        <div key={row.id} className="grid gap-2 sm:grid-cols-[64px_minmax(0,3fr)_96px_48px_76px]">
                           <input
                             type="number"
                             min={1}
@@ -2888,20 +3582,24 @@ export default function ProcessorEditorPage() {
                             className="h-9 rounded-lg border border-slate-200 px-2 text-sm"
                             title="Core count"
                           />
-                            <input
-                              list="cpu-core-options"
-                              value={row.core}
-                              onChange={(e) => setCpuClusters((prev) => prev.map((item) => (item.id === row.id ? { ...item, core: e.target.value } : item)))}
-                              className="h-9 rounded-lg border border-slate-200 px-2 text-sm"
-                              placeholder="Arm Cortex-X4"
-                            />
+                          {renderTextSuggestInput(
+                            "cpuCoreName",
+                            row.core,
+                            (next) => setCpuClusters((prev) => prev.map((item) => (item.id === row.id ? { ...item, core: next } : item))),
+                            {
+                              placeholder: "ARM Cortex - ",
+                              className: "h-9 w-full rounded-lg border border-slate-200 px-2 text-sm",
+                              onBlurValue: (next) =>
+                                setCpuClusters((prev) => prev.map((item) => (item.id === row.id ? { ...item, core: normalizeCpuCoreName(next) } : item))),
+                            }
+                          )}
                           <div className="relative">
                             <input
                               type="number"
                               step="0.01"
                               min={0.1}
                               value={row.ghz}
-                              onChange={(e) => setCpuClusters((prev) => prev.map((item) => (item.id === row.id ? { ...item, ghz: Number(e.target.value || 0.1) } : item)))}
+                              onChange={(e) => setCpuClusters((prev) => prev.map((item) => (item.id === row.id ? { ...item, ghz: e.target.value === "" ? "" : Number(e.target.value) } : item)))}
                               className="h-9 w-full rounded-lg border border-slate-200 px-2 pr-12 text-sm"
                               title="Clock (GHz)"
                             />
@@ -2912,34 +3610,26 @@ export default function ProcessorEditorPage() {
                               type="radio"
                               name="max-clock-cluster"
                               checked={row.isMax}
-                            onChange={() => setCpuClusters((prev) => prev.map((item) => ({ ...item, isMax: item.id === row.id })))}
-                          />
-                          Max
-                        </label>
-                        <button
-                          type="button"
-                          onClick={() => setCpuClusters((prev) => (prev.length > 1 ? prev.filter((item) => item.id !== row.id) : prev))}
-                          className="h-9 rounded-lg border border-slate-200 px-3 text-xs font-semibold text-slate-700"
-                        >
-                          Remove
-                        </button>
-                      </div>
-                    ))}
-                    <datalist id="cpu-core-options">
-                      {CPU_CORE_OPTIONS.map((item) => (
-                        <option key={item} value={item} />
+                              onChange={() => setCpuClusters((prev) => prev.map((item) => ({ ...item, isMax: item.id === row.id })))}
+                            />
+                            Max
+                          </label>
+                          <button
+                            type="button"
+                            onClick={() => setCpuClusters((prev) => (prev.length > 1 ? prev.filter((item) => item.id !== row.id) : prev))}
+                            className="h-9 rounded-lg border border-slate-200 px-3 text-xs font-semibold text-slate-700"
+                          >
+                            Remove
+                          </button>
+                        </div>
                       ))}
-                      {HELPER_SUGGESTIONS.map((item) => (
-                        <option key={`helper-${item}`} value={item} />
-                      ))}
-                    </datalist>
                       <div className="flex flex-wrap gap-2">
                         <button
                           type="button"
                           onClick={() =>
                             setCpuClusters((prev) => [
                               ...prev,
-                              { id: `c${Date.now()}`, count: 1, core: "Arm Cortex-A720", ghz: 2.8, isMax: false },
+                              { id: `c${Date.now()}`, count: 1, core: "ARM Cortex - ", ghz: "", isMax: false },
                             ])
                           }
                           className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700"
@@ -2954,251 +3644,355 @@ export default function ProcessorEditorPage() {
                           Apply Cluster Config
                         </button>
                       </div>
-                    <div className="grid gap-3">
-                      <label className="grid gap-1">
-                        <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">Core Configuration</span>
-                        <input
-                          value={String(getDetailField("coreConfiguration") || "")}
-                          onChange={(e) => setDetailField("coreConfiguration", e.target.value)}
-                          list={getSuggestionListId("coreConfiguration")}
-                          className="h-9 w-full rounded-lg border border-slate-200 px-3 text-sm"
-                        />
-                      </label>
-                      <label className="grid gap-1">
-                        <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">Cores (Raw Data)</span>
-                        <input
-                          value={String(getDetailField("cores") || "")}
-                          onChange={(e) => setDetailField("cores", e.target.value)}
-                          list={getSuggestionListId("cores")}
-                          className="h-9 w-full rounded-lg border border-slate-200 px-3 text-sm"
-                        />
-                      </label>
+                      <div className="grid gap-3">
+                        <label className="grid gap-1">
+                          <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">Core Configuration</span>
+                          {renderTextSuggestInput(
+                            "coreConfiguration",
+                            String(getDetailField("coreConfiguration") || ""),
+                            (next) => setDetailField("coreConfiguration", next),
+                            { className: "h-9 w-full rounded-lg border border-slate-200 px-3 text-sm" }
+                          )}
+                        </label>
+                        <label className="grid gap-1">
+                          <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">Cores (Raw Data)</span>
+                          {renderTextSuggestInput(
+                            "cores",
+                            String(getDetailField("cores") || ""),
+                            (next) => setDetailField("cores", next),
+                            { className: "h-9 w-full rounded-lg border border-slate-200 px-3 text-sm" }
+                          )}
+                        </label>
+                      </div>
                     </div>
                   </div>
-                </div>
-                <div className="rounded-lg border border-slate-200 bg-white p-3">
-                  <div className="grid gap-3">
-                    <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
-                      <label className="grid gap-1">
-                        <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">Core Count</span>
-                        <input
-                          type="number"
-                          step="1"
-                          min="1"
-                          value={String(getDetailField("coreCount") ?? "")}
-                          onChange={(e) => setDetailField("coreCount", e.target.value === "" ? undefined : Number(e.target.value))}
-                          className="h-9 w-full rounded-lg border border-slate-200 px-3 text-sm"
-                        />
-                      </label>
-                      <label className="grid gap-1">
-                        <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">Fabrication Process</span>
-                        <div className="relative">
-                          <input
-                            type="number"
-                            step="0.1"
-                            min={1}
-                            value={processNm}
-                            onChange={(e) => setDetailField("process", e.target.value ? `${e.target.value}nm` : "")}
-                            className="h-9 w-full rounded-lg border border-slate-200 px-3 pr-12 text-sm"
-                          />
-                          <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-sm text-slate-500">nm</span>
-                        </div>
-                      </label>
-                    </div>
-                    <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
-                      <label className="grid gap-1">
-                        <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">Instruction Set</span>
-                        <select value={String(getDetailField("instructionSet") || "")} onChange={(e) => setDetailField("instructionSet", e.target.value)} className="h-9 w-full rounded-lg border border-slate-200 px-3 text-sm">
-                          <option value="">Select Instruction Set</option>
-                          {INSTRUCTION_SET_OPTIONS.map((item) => <option key={item} value={item}>{item}</option>)}
-                        </select>
-                      </label>
-                      <label className="grid gap-1">
-                        <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">Architecture</span>
-                        <select value={String(getDetailField("architectureBits") || "")} onChange={(e) => setDetailField("architectureBits", e.target.value)} className="h-9 w-full rounded-lg border border-slate-200 px-3 text-sm">
-                          <option value="">Select Bitness</option>
-                          {ARCHITECTURE_BITS_OPTIONS.map((item) => <option key={item} value={item}>{item}</option>)}
-                        </select>
-                      </label>
-                    </div>
-                    <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
-                      <label className="grid gap-1">
-                        <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">TDP</span>
-                        <div className="relative">
-                          <input
-                            type="number"
-                            step="any"
-                            min={0}
-                            value={tdpValue}
-                            onChange={(e) => setDetailField("tdpW", e.target.value === "" ? undefined : Number(e.target.value))}
-                            className="h-9 w-full rounded-lg border border-slate-200 px-3 pr-10 text-sm"
-                          />
-                          <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-sm text-slate-500">W</span>
-                        </div>
-                      </label>
-                      <label className="grid gap-1">
-                        <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">Transistor Count</span>
-                        <div className="grid grid-cols-[minmax(0,1.8fr)_86px] gap-2">
-                          <input
-                            type="number"
-                            step="any"
-                            min={0}
-                            value={transistor.amount}
-                            onChange={(e) => {
-                              const amount = e.target.value;
-                              if (!amount) {
-                                setDetailField("transistorCount", "");
-                                return;
-                              }
-                              const unit = transistor.unit || transistorUnitPref;
-                              setDetailField("transistorCount", unit ? `${amount} ${unit}` : amount);
-                            }}
-                            className="h-9 w-full rounded-lg border border-slate-200 px-3 text-sm"
-                          />
-                          <select
-                            value={transistor.unit || transistorUnitPref}
-                            onChange={(e) => {
-                              const unit = e.target.value;
-                              setTransistorUnitPref(unit);
-                              const amount = transistor.amount;
-                              if (!amount) return;
-                              setDetailField("transistorCount", unit ? `${amount} ${unit}` : amount);
-                            }}
-                            className="h-9 w-full rounded-lg border border-slate-200 px-2 text-sm"
-                          >
-                            <option value="">Unit</option>
-                            <option value="million">Million</option>
-                            <option value="billion">Billion</option>
-                            <option value="trillion">Trillion</option>
-                          </select>
-                        </div>
-                      </label>
-                    </div>
-                    <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
-                      <label className="grid gap-1">
-                        <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">L2 Cache</span>
-                        <div className="grid grid-cols-[minmax(0,1.8fr)_86px] gap-2">
-                          <input
-                            type="number"
-                            step="any"
-                            min={0}
-                            value={l2Cache.amount}
-                            onChange={(e) => {
-                              const amount = e.target.value;
-                              if (!amount) {
-                                setDetailField("l2Cache", "");
-                                return;
-                              }
-                              const unit = l2Cache.unit || l2UnitPref;
-                              setDetailField("l2Cache", unit ? `${amount} ${unit}` : amount);
-                            }}
-                            className="h-9 w-full rounded-lg border border-slate-200 px-3 text-sm"
-                          />
-                          <select
-                            value={l2Cache.unit || l2UnitPref}
-                            onChange={(e) => {
-                              const unit = e.target.value;
-                              setL2UnitPref(unit);
-                              const amount = l2Cache.amount;
-                              if (!amount) return;
-                              setDetailField("l2Cache", unit ? `${amount} ${unit}` : amount);
-                            }}
-                            className="h-9 w-full rounded-lg border border-slate-200 px-2 text-sm"
-                          >
-                            <option value="">Unit</option>
-                            <option value="KB">KB</option>
-                            <option value="MB">MB</option>
-                            <option value="GB">GB</option>
-                          </select>
-                        </div>
-                      </label>
-                      <label className="grid gap-1">
-                        <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">L3 Cache</span>
-                        <div className="grid grid-cols-[minmax(0,1.8fr)_86px] gap-2">
-                          <input
-                            type="number"
-                            step="any"
-                            min={0}
-                            value={l3Cache.amount}
-                            onChange={(e) => {
-                              const amount = e.target.value;
-                              if (!amount) {
-                                setDetailField("l3Cache", "");
-                                return;
-                              }
-                              const unit = l3Cache.unit || l3UnitPref;
-                              setDetailField("l3Cache", unit ? `${amount} ${unit}` : amount);
-                            }}
-                            className="h-9 w-full rounded-lg border border-slate-200 px-3 text-sm"
-                          />
-                          <select
-                            value={l3Cache.unit || l3UnitPref}
-                            onChange={(e) => {
-                              const unit = e.target.value;
-                              setL3UnitPref(unit);
-                              const amount = l3Cache.amount;
-                              if (!amount) return;
-                              setDetailField("l3Cache", unit ? `${amount} ${unit}` : amount);
-                            }}
-                            className="h-9 w-full rounded-lg border border-slate-200 px-2 text-sm"
-                          >
-                            <option value="">Unit</option>
-                            <option value="KB">KB</option>
-                            <option value="MB">MB</option>
-                            <option value="GB">GB</option>
-                          </select>
-                        </div>
-                      </label>
-                    </div>
-                    <div className="grid grid-cols-1 gap-3">
-                      <label className="grid gap-1">
-                        <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">Max CPU Clock Speed</span>
-                        <div className="relative">
+                  <div className="rounded-lg border border-slate-200 bg-white p-2.5 sm:p-3">
+                    <div className="grid gap-3">
+                      <div className="grid grid-cols-1 gap-3 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)]">
+                        <label className="grid gap-1">
+                          <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">Core Count</span>
                           <input
                             type="number"
                             step="1"
-                            min={0}
-                            value={form.maxCpuGhz ? Math.round(form.maxCpuGhz * 1000) : ""}
-                            onChange={(e) => setField("maxCpuGhz", e.target.value ? Number(e.target.value) / 1000 : undefined)}
-                            className="h-9 w-full rounded-lg border border-slate-200 px-3 pr-14 text-sm"
+                            min="1"
+                            value={String(getDetailField("coreCount") ?? "")}
+                            onChange={(e) => setDetailField("coreCount", e.target.value === "" ? undefined : Number(e.target.value))}
+                            className="h-9 w-full rounded-lg border border-slate-200 px-3 text-sm"
                           />
-                          <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-sm text-slate-500">MHz</span>
-                        </div>
-                      </label>
+                        </label>
+                        <label className="grid gap-1">
+                          <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">Transistor Count</span>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <input
+                              type="number"
+                              step="any"
+                              min={0}
+                              value={transistor.amount}
+                              onChange={(e) => {
+                                const amount = e.target.value;
+                                const numericAmount = Number(amount);
+                                if (!amount || !Number.isFinite(numericAmount) || numericAmount <= 0) {
+                                  setDetailField("transistorCount", "");
+                                  return;
+                                }
+                                const unit = transistor.unit || transistorUnitPref || "billion";
+                                setDetailField("transistorCount", `${amount} ${unit}`);
+                              }}
+                              className="h-9 w-28 rounded-lg border border-slate-200 px-3 text-sm"
+                            />
+                            <div className="flex flex-wrap gap-2">
+                              {["billion", "trillion"].map((unit) => {
+                                const active = (transistor.unit || transistorUnitPref || "billion") === unit;
+                                return (
+                                  <button
+                                    key={unit}
+                                    type="button"
+                                    onClick={() => {
+                                      setTransistorUnitPref(unit);
+                                      const amount = transistor.amount;
+                                      const numericAmount = Number(amount);
+                                      if (!amount || !Number.isFinite(numericAmount) || numericAmount <= 0) {
+                                        setDetailField("transistorCount", "");
+                                        return;
+                                      }
+                                      setDetailField("transistorCount", `${amount} ${unit}`);
+                                    }}
+                                    className={`rounded-full border px-3 py-1 text-xs font-semibold transition ${
+                                      active
+                                        ? "border-blue-700 bg-blue-700 text-white shadow-sm shadow-blue-200 ring-2 ring-blue-200"
+                                        : "border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50 hover:text-slate-800"
+                                    }`}
+                                  >
+                                    {unit[0].toUpperCase() + unit.slice(1)}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        </label>
+                      </div>
+                      <div className="grid grid-cols-1 gap-3 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)]">
+                        <label className="grid gap-1">
+                          <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">Instruction Set</span>
+                          <select value={String(getDetailField("instructionSet") || "")} onChange={(e) => setDetailField("instructionSet", e.target.value)} className="h-9 w-full rounded-lg border border-slate-200 px-3 text-sm">
+                            <option value="">Select Instruction Set</option>
+                            {INSTRUCTION_SET_OPTIONS.map((item) => <option key={item} value={item}>{item}</option>)}
+                          </select>
+                        </label>
+                        <label className="grid gap-1">
+                          <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">Architecture</span>
+                          <div className="flex flex-wrap gap-2">
+                            {ARCHITECTURE_BITS_OPTIONS.map((item) => {
+                              const active = String(getDetailField("architectureBits") || "") === item;
+                              return (
+                                <button
+                                  key={item}
+                                  type="button"
+                                  onClick={() => setDetailField("architectureBits", active ? "" : item)}
+                                  className={`rounded-full border px-3 py-1 text-xs font-semibold transition ${
+                                    active
+                                      ? "border-blue-700 bg-blue-700 text-white shadow-sm shadow-blue-200 ring-2 ring-blue-200"
+                                      : "border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50 hover:text-slate-800"
+                                  }`}
+                                >
+                                  {item}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </label>
+                      </div>
+                      <div className="grid grid-cols-1 gap-3 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)]">
+                        <label className="grid gap-1">
+                          <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">Fabrication Process</span>
+                          <div className="relative">
+                            <input
+                              type="number"
+                              step="0.1"
+                              min={1}
+                              value={processNm}
+                              onChange={(e) => setDetailField("process", e.target.value ? `${e.target.value}nm` : "")}
+                              className="h-9 w-full rounded-lg border border-slate-200 px-3 pr-12 text-sm"
+                            />
+                            <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-sm text-slate-500">nm</span>
+                          </div>
+                        </label>
+                        <label className="grid gap-1">
+                          <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">L2 Cache</span>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <input
+                              type="number"
+                              step="any"
+                              min={0}
+                              value={l2Cache.amount}
+                              onChange={(e) => {
+                                const amount = e.target.value;
+                                const numericAmount = Number(amount);
+                                if (!amount || !Number.isFinite(numericAmount) || numericAmount <= 0) {
+                                  setDetailField("l2Cache", "");
+                                  return;
+                                }
+                                const unit = l2Cache.unit || l2UnitPref || "MB";
+                                setDetailField("l2Cache", `${amount}${unit}`);
+                              }}
+                              className="h-9 w-28 rounded-lg border border-slate-200 px-3 text-sm"
+                            />
+                            <div className="flex flex-wrap gap-2">
+                              {["KB", "MB"].map((unit) => {
+                                const active = (l2Cache.unit || l2UnitPref || "MB") === unit;
+                                return (
+                                  <button
+                                    key={unit}
+                                    type="button"
+                                    onClick={() => {
+                                      setL2UnitPref(unit);
+                                      const amount = l2Cache.amount;
+                                      const numericAmount = Number(amount);
+                                      if (!amount || !Number.isFinite(numericAmount) || numericAmount <= 0) {
+                                        setDetailField("l2Cache", "");
+                                        return;
+                                      }
+                                      setDetailField("l2Cache", `${amount}${unit}`);
+                                    }}
+                                    className={`rounded-full border px-3 py-1 text-xs font-semibold transition ${
+                                      active
+                                        ? "border-blue-700 bg-blue-700 text-white shadow-sm shadow-blue-200 ring-2 ring-blue-200"
+                                        : "border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50 hover:text-slate-800"
+                                    }`}
+                                  >
+                                    {unit}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        </label>
+                      </div>
+                      <div className="grid grid-cols-1 gap-3 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)]">
+                        <label className="grid gap-1">
+                          <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">TDP</span>
+                          <div className="relative">
+                            <input
+                              type="number"
+                              step="any"
+                              min={0}
+                              value={tdpValue}
+                              onChange={(e) => setDetailField("tdpW", e.target.value === "" ? undefined : Number(e.target.value))}
+                              className="h-9 w-full rounded-lg border border-slate-200 px-3 pr-10 text-sm"
+                            />
+                            <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-sm text-slate-500">W</span>
+                          </div>
+                        </label>
+                        <label className="grid gap-1">
+                          <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">L3 Cache</span>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <input
+                              type="number"
+                              step="any"
+                              min={0}
+                              value={l3Cache.amount}
+                              onChange={(e) => {
+                                const amount = e.target.value;
+                                const numericAmount = Number(amount);
+                                if (!amount || !Number.isFinite(numericAmount) || numericAmount <= 0) {
+                                  setDetailField("l3Cache", "");
+                                  return;
+                                }
+                                const unit = l3Cache.unit || l3UnitPref || "MB";
+                                setDetailField("l3Cache", `${amount}${unit}`);
+                              }}
+                              className="h-9 w-28 rounded-lg border border-slate-200 px-3 text-sm"
+                            />
+                            <div className="flex flex-wrap gap-2">
+                              {["KB", "MB"].map((unit) => {
+                                const active = (l3Cache.unit || l3UnitPref || "MB") === unit;
+                                return (
+                                  <button
+                                    key={unit}
+                                    type="button"
+                                    onClick={() => {
+                                      setL3UnitPref(unit);
+                                      const amount = l3Cache.amount;
+                                      const numericAmount = Number(amount);
+                                      if (!amount || !Number.isFinite(numericAmount) || numericAmount <= 0) {
+                                        setDetailField("l3Cache", "");
+                                        return;
+                                      }
+                                      setDetailField("l3Cache", `${amount}${unit}`);
+                                    }}
+                                    className={`rounded-full border px-3 py-1 text-xs font-semibold transition ${
+                                      active
+                                        ? "border-blue-700 bg-blue-700 text-white shadow-sm shadow-blue-200 ring-2 ring-blue-200"
+                                        : "border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50 hover:text-slate-800"
+                                    }`}
+                                  >
+                                    {unit}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        </label>
+                      </div>
+                      <div className="grid grid-cols-1 gap-3 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)]">
+                        <label className="grid gap-1">
+                          <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">Max CPU Clock Speed</span>
+                          <div className="relative">
+                            <input
+                              type="number"
+                              step="1"
+                              min={0}
+                              value={form.maxCpuGhz ? Math.round(form.maxCpuGhz * 1000) : ""}
+                              onChange={(e) => setField("maxCpuGhz", e.target.value ? Number(e.target.value) / 1000 : undefined)}
+                              className="h-9 w-full rounded-lg border border-slate-200 px-3 pr-14 text-sm"
+                            />
+                            <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-sm text-slate-500">MHz</span>
+                          </div>
+                        </label>
+                        <label className="grid gap-1">
+                          <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">SLC Cache</span>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <input
+                              type="number"
+                              step="any"
+                              min={0}
+                              value={slcCache.amount}
+                              onChange={(e) => {
+                                const amount = e.target.value;
+                                const numericAmount = Number(amount);
+                                if (!amount || !Number.isFinite(numericAmount) || numericAmount <= 0) {
+                                  setDetailField("slcCache", "");
+                                  return;
+                                }
+                                const unit = slcCache.unit || slcUnitPref || "MB";
+                                setDetailField("slcCache", `${amount}${unit}`);
+                              }}
+                              className="h-9 w-28 rounded-lg border border-slate-200 px-3 text-sm"
+                            />
+                            <div className="flex flex-wrap gap-2">
+                              {["KB", "MB"].map((unit) => {
+                                const active = (slcCache.unit || slcUnitPref || "MB") === unit;
+                                return (
+                                  <button
+                                    key={unit}
+                                    type="button"
+                                    onClick={() => {
+                                      setSlcUnitPref(unit);
+                                      const amount = slcCache.amount;
+                                      const numericAmount = Number(amount);
+                                      if (!amount || !Number.isFinite(numericAmount) || numericAmount <= 0) {
+                                        setDetailField("slcCache", "");
+                                        return;
+                                      }
+                                      setDetailField("slcCache", `${amount}${unit}`);
+                                    }}
+                                    className={`rounded-full border px-3 py-1 text-xs font-semibold transition ${
+                                      active
+                                        ? "border-blue-700 bg-blue-700 text-white shadow-sm shadow-blue-200 ring-2 ring-blue-200"
+                                        : "border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50 hover:text-slate-800"
+                                    }`}
+                                  >
+                                    {unit}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        </label>
+                      </div>
                     </div>
                   </div>
                 </div>
+                <div className="w-full rounded-lg border border-slate-200 bg-white p-2.5 sm:p-3">
+                  <label className="grid gap-1">
+                    <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">
+                      CPU Features <span className="normal-case font-medium text-slate-500">(comma separated)</span>
+                    </span>
+                    {renderCsvInput("cpuFeatures", "Comma separated (e.g. SMT, AV1 decode)")}
+                  </label>
+                </div>
               </div>
-              <div className="mt-3">
-                <label className="grid gap-1">
-                  <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">
-                    CPU Features <span className="normal-case font-medium text-slate-500">(comma separated)</span>
-                  </span>
-                  {renderCsvInput("cpuFeatures", "Comma separated (e.g. SMT, AV1 decode)")}
-                </label>
-              </div>
-              </>
             ) : null}
             {section.title === "Graphics (GPU)" ? (
               <div className="mt-3 space-y-3">
                 <div className="grid gap-3 lg:grid-cols-[2fr_1fr_1fr_1fr]">
                   <label className="grid gap-1">
                     <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">GPU Name</span>
-                    <input
-                      value={String(getDetailField("gpuName") || "")}
-                      onChange={(e) => setDetailField("gpuName", e.target.value)}
-                      list={getSuggestionListId("gpuName")}
-                      className="h-9 w-full rounded-lg border border-slate-200 px-3 text-sm"
-                    />
+                    {renderTextSuggestInput(
+                      "gpuName",
+                      String(getDetailField("gpuName") || ""),
+                      (next) => setDetailField("gpuName", next),
+                      { className: "h-9 w-full rounded-lg border border-slate-200 px-3 text-sm" }
+                    )}
                   </label>
                   <label className="grid gap-1">
                     <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">Architecture</span>
-                    <input
-                      value={String(getDetailField("gpuArchitecture") || "")}
-                      onChange={(e) => setDetailField("gpuArchitecture", e.target.value)}
-                      list={getSuggestionListId("gpuArchitecture")}
-                      className="h-9 w-full rounded-lg border border-slate-200 px-3 text-sm"
-                    />
+                    {renderTextSuggestInput(
+                      "gpuArchitecture",
+                      String(getDetailField("gpuArchitecture") || ""),
+                      (next) => setDetailField("gpuArchitecture", next),
+                      { className: "h-9 w-full rounded-lg border border-slate-200 px-3 text-sm" }
+                    )}
                   </label>
                   <label className="grid gap-1">
                     <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">GPU Cores</span>
@@ -3226,13 +4020,9 @@ export default function ProcessorEditorPage() {
                     </div>
                   </label>
                 </div>
-                <div className="grid gap-3 lg:grid-cols-[2fr_1fr_1fr]">
+                <div className="grid gap-3 lg:grid-cols-[minmax(0,3fr)_minmax(0,1fr)]">
                   <label className="grid gap-1">
-                    <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">Other GPU Feature</span>
-                    {renderCsvInput("gpuFeatures", "Comma separated")}
-                  </label>
-                  <label className="grid gap-1">
-                    <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">APIs</span>
+                    <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">API Support</span>
                     {renderCsvInput("gpuApis", "Comma separated")}
                   </label>
                   <label className="grid gap-1">
@@ -3248,6 +4038,10 @@ export default function ProcessorEditorPage() {
                     </div>
                   </label>
                 </div>
+                <label className="grid gap-1">
+                  <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">Other GPU Feature</span>
+                  {renderCsvInput("gpuFeatures", "Comma separated")}
+                </label>
               </div>
             ) : null}
             {section.title === "AI" ? (
@@ -3262,6 +4056,14 @@ export default function ProcessorEditorPage() {
                       renderCsvInput(field.key, "Comma separated")
                     ) : (
                       <div className="relative">
+                        {field.type === "text"
+                          ? renderTextSuggestInput(
+                              field.key,
+                              String(getDetailField(field.key) ?? ""),
+                              (next) => setDetailField(field.key, next),
+                              { className: `h-9 w-full rounded-lg border border-slate-200 px-3 text-sm ${field.key === "aiPerformanceTops" ? "pr-14" : ""}` }
+                            )
+                          : (
                         <input
                           type={field.type === "number" ? "number" : "text"}
                           value={String(getDetailField(field.key) ?? "")}
@@ -3271,9 +4073,8 @@ export default function ProcessorEditorPage() {
                               field.type === "number" ? (e.target.value === "" ? undefined : Number(e.target.value)) : e.target.value
                             )
                           }
-                          list={field.type === "text" ? getSuggestionListId(field.key) : undefined}
                           className={`h-9 w-full rounded-lg border border-slate-200 px-3 text-sm ${field.key === "aiPerformanceTops" ? "pr-14" : ""}`}
-                        />
+                        />)}
                         {field.key === "aiPerformanceTops" ? (
                           <span className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3 text-sm text-slate-500">TOPS</span>
                         ) : null}
@@ -3285,12 +4086,12 @@ export default function ProcessorEditorPage() {
             ) : null}
             {section.title === "Memory / Storage" ? (
               <div className="mt-3 space-y-3">
-                <div className="grid gap-3 lg:grid-cols-3">
-                  <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                <div className="grid gap-3 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,1.35fr)]">
+                  <div className="rounded-lg border border-slate-200 bg-slate-50 p-2.5 sm:p-3">
                     <p className="text-xs font-semibold uppercase tracking-wide text-slate-600">RAM Type & Frequency</p>
                     <div className="mt-2 space-y-2">
                       {ramProfiles.map((row) => (
-                        <div key={row.id} className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_120px_auto]">
+                        <div key={row.id} className="grid gap-2 sm:grid-cols-[180px_120px_110px_auto]">
                           <select
                             value={row.type}
                             onChange={(e) => setRamProfiles((prev) => prev.map((item) => (item.id === row.id ? { ...item, type: e.target.value } : item)))}
@@ -3312,6 +4113,17 @@ export default function ProcessorEditorPage() {
                               className="h-9 w-full rounded-lg border border-slate-200 px-3 pr-10 text-sm"
                             />
                             <span className="pointer-events-none absolute inset-y-0 right-2 flex items-center text-xs text-slate-500">MHz</span>
+                          </div>
+                          <div className="relative">
+                            <input
+                              type="number"
+                              step="any"
+                              min={0}
+                              value={String(getDetailField("bandwidthGbps") ?? "")}
+                              onChange={(e) => setDetailField("bandwidthGbps", e.target.value === "" ? undefined : Number(e.target.value))}
+                              className="h-9 w-full rounded-lg border border-slate-200 px-3 pr-12 text-sm"
+                            />
+                            <span className="pointer-events-none absolute inset-y-0 right-2 flex items-center text-xs text-slate-500">GB/s</span>
                           </div>
                           <button
                             type="button"
@@ -3343,30 +4155,19 @@ export default function ProcessorEditorPage() {
                       ) : null}
                     </div>
                   </div>
-                  <div className="rounded-lg border border-slate-200 bg-white p-3">
+                  <div className="rounded-lg border border-slate-200 bg-white p-2.5 sm:p-3">
                     <p className="text-xs font-semibold uppercase tracking-wide text-slate-600">RAM Specs</p>
-                    <div className="mt-2 grid gap-3 sm:grid-cols-2">
+                    <div className="mt-2 grid gap-3 sm:grid-cols-3">
                       <label className="grid gap-1">
                         <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">Max RAM Frequency</span>
                         <div className="relative">
-                          <input
-                            type="number"
-                            step="1"
-                            min={0}
-                            value={String(getDetailField("memoryFreqMhz") ?? "")}
-                            onChange={(e) => setDetailField("memoryFreqMhz", e.target.value === "" ? undefined : Number(e.target.value))}
-                            className="h-9 w-full rounded-lg border border-slate-200 px-3 pr-10 text-sm"
-                          />
+                          <input type="number" step="1" min={0} value={String(getDetailField("memoryFreqMhz") ?? "")} onChange={(e) => setDetailField("memoryFreqMhz", e.target.value === "" ? undefined : Number(e.target.value))} className="h-9 w-full rounded-lg border border-slate-200 px-3 pr-10 text-sm" />
                           <span className="pointer-events-none absolute inset-y-0 right-2 flex items-center text-xs text-slate-500">MHz</span>
                         </div>
                       </label>
                       <label className="grid gap-1">
                         <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">RAM Channel</span>
-                        <select
-                          value={String(getDetailField("memoryChannels") || "")}
-                          onChange={(e) => setDetailField("memoryChannels", e.target.value)}
-                          className="h-9 w-full rounded-lg border border-slate-200 px-3 text-sm"
-                        >
+                        <select value={String(getDetailField("memoryChannels") || "")} onChange={(e) => setDetailField("memoryChannels", e.target.value)} className="h-9 w-full rounded-lg border border-slate-200 px-3 text-sm">
                           <option value="">Select Channel</option>
                           <option value="Single-channel">Single-channel</option>
                           <option value="Dual-channel">Dual-channel</option>
@@ -3378,113 +4179,93 @@ export default function ProcessorEditorPage() {
                       <label className="grid gap-1">
                         <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">Max RAM</span>
                         <div className="relative">
-                          <input
-                            type="number"
-                            step="1"
-                            min={0}
-                            value={String(getDetailField("maxMemoryGb") ?? "")}
-                            onChange={(e) => setDetailField("maxMemoryGb", e.target.value === "" ? undefined : Number(e.target.value))}
-                            className="h-9 w-full rounded-lg border border-slate-200 px-3 pr-10 text-sm"
-                          />
+                          <input type="number" step="1" min={0} value={String(getDetailField("maxMemoryGb") ?? "")} onChange={(e) => setDetailField("maxMemoryGb", e.target.value === "" ? undefined : Number(e.target.value))} className="h-9 w-full rounded-lg border border-slate-200 px-3 pr-10 text-sm" />
                           <span className="pointer-events-none absolute inset-y-0 right-2 flex items-center text-xs text-slate-500">GB</span>
                         </div>
                       </label>
                       <label className="grid gap-1">
-                        <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">Max Memory/RAM Bus Width</span>
-                        <div className="grid grid-cols-[minmax(0,1fr)_64px] gap-2">
-                          <input
-                            type="number"
-                            step="1"
-                            min={0}
-                            value={String(getDetailField("memoryBusWidthBits") ?? "")}
-                            onChange={(e) => setDetailField("memoryBusWidthBits", e.target.value === "" ? undefined : Number(e.target.value))}
-                            className="h-9 w-full rounded-lg border border-slate-200 px-3 text-sm"
-                          />
-                          <span className="inline-flex h-9 items-center justify-center rounded-lg border border-slate-200 bg-slate-50 px-2 text-xs font-semibold text-slate-600">bit</span>
+                        <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">Bus Width</span>
+                        <div className="flex flex-wrap gap-2">
+                          {Array.from(new Set([...(memoryBusWidthValue && !MEMORY_BUS_WIDTH_OPTIONS.includes(memoryBusWidthValue) ? [memoryBusWidthValue] : []), ...MEMORY_BUS_WIDTH_OPTIONS])).map((item) => {
+                            const active = memoryBusWidthValue === item;
+                            return (
+                              <button
+                                key={item}
+                                type="button"
+                                onClick={() => setDetailField("memoryBusWidthBits", active ? undefined : item)}
+                                className={`rounded-full border px-3 py-1 text-xs font-semibold transition ${
+                                  active
+                                    ? "border-blue-700 bg-blue-700 text-white shadow-sm shadow-blue-200 ring-2 ring-blue-200"
+                                    : "border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50 hover:text-slate-800"
+                                }`}
+                              >
+                                {item}bit
+                              </button>
+                            );
+                          })}
                         </div>
                       </label>
-                      <label className="grid gap-1">
+                      <label className="grid gap-1 sm:col-span-2">
                         <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">Maximum Bandwidth</span>
                         <div className="grid grid-cols-[minmax(0,1fr)_72px] gap-2">
-                          <input
-                            type="number"
-                            step="any"
-                            min={0}
-                            value={String(getDetailField("bandwidthGbps") ?? "")}
-                            onChange={(e) => setDetailField("bandwidthGbps", e.target.value === "" ? undefined : Number(e.target.value))}
-                            className="h-9 w-full rounded-lg border border-slate-200 px-3 text-sm"
-                          />
+                          <input type="number" step="any" min={0} value={String(getDetailField("bandwidthGbps") ?? "")} onChange={(e) => setDetailField("bandwidthGbps", e.target.value === "" ? undefined : Number(e.target.value))} className="h-9 w-full rounded-lg border border-slate-200 px-3 text-sm" />
                           <span className="inline-flex h-9 items-center justify-center rounded-lg border border-slate-200 bg-slate-50 px-2 text-xs font-semibold text-slate-600">GB/s</span>
                         </div>
                       </label>
                     </div>
                   </div>
-                  <div className="rounded-lg border border-slate-200 bg-white p-3">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-600">Storage</p>
-                    <div className="mt-2 grid gap-3">
-                      <label className="grid gap-1">
-                        <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">Storage Channels / Lanes</span>
-                        <input
-                          value={String(getDetailField("storageChannels") || "")}
-                          onChange={(e) => setDetailField("storageChannels", e.target.value)}
-                          list={getSectionSuggestionListId("storage")}
-                          placeholder="e.g. 2 lane, Dual channel"
-                          className="h-9 w-full rounded-lg border border-slate-200 px-3 text-sm"
-                        />
-                      </label>
-                      <div className="grid gap-1">
-                        <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">Storage Type</span>
-                        <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-2">
-                          <select
-                            value={selectedStorageType}
-                            onChange={(e) => setSelectedStorageType(e.target.value)}
-                            className="h-9 w-full rounded-lg border border-slate-200 px-3 text-sm"
-                          >
-                            <option value="">Select Storage Type</option>
-                            {STORAGE_TYPE_SUGGESTIONS.map((item) => (
-                              <option key={item} value={item} disabled={storageTypesDraft.includes(item)}>
-                                {item}
-                              </option>
-                            ))}
-                            {selectedStorageType && !STORAGE_TYPE_SUGGESTIONS.includes(selectedStorageType) ? (
-                              <option value={selectedStorageType}>{selectedStorageType}</option>
-                            ) : null}
-                          </select>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              const value = selectedStorageType.trim();
-                              if (!value || storageTypesDraft.includes(value)) return;
-                              const next = [...storageTypesDraft, value];
-                              setStorageTypesDraft(next);
-                              setDetailField("storageTypes", next);
-                              setDetailField("storageType", next[0] || "");
-                              setSelectedStorageType("");
-                            }}
-                            className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700"
-                          >
-                            Add
-                          </button>
-                        </div>
-                        <div className="mt-1 flex flex-wrap gap-1.5">
-                          {storageTypesDraft.map((item) => (
-                            <span key={item} className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[11px] text-slate-700">
-                              {item}
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  const next = storageTypesDraft.filter((x) => x !== item);
-                                  setStorageTypesDraft(next);
-                                  setDetailField("storageTypes", next);
-                                  setDetailField("storageType", next[0] || "");
-                                }}
-                                className="text-slate-500 hover:text-slate-700"
-                              >
-                                x
-                              </button>
-                            </span>
+                </div>
+                <div className="rounded-lg border border-slate-200 bg-white p-2.5 sm:p-3">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-600">Storage</p>
+                  <div className="mt-2 grid gap-3 sm:grid-cols-[minmax(0,1.5fr)_minmax(0,0.75fr)]">
+                    <label className="grid gap-1">
+                      <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">Storage Channels</span>
+                      {renderStorageChannelsInput("e.g. 4-Lane or Dual-channel")}
+                    </label>
+                    <div className="grid gap-1">
+                      <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">Storage Type</span>
+                      <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-2">
+                        <select value={selectedStorageType} onChange={(e) => setSelectedStorageType(e.target.value)} className="h-9 w-full rounded-lg border border-slate-200 px-3 text-sm">
+                          <option value="">Select Storage Type</option>
+                          {STORAGE_TYPE_SUGGESTIONS.map((item) => (
+                            <option key={item} value={item} disabled={storageTypesDraft.includes(item)}>{item}</option>
                           ))}
-                        </div>
+                          {selectedStorageType && !STORAGE_TYPE_SUGGESTIONS.includes(selectedStorageType) ? <option value={selectedStorageType}>{selectedStorageType}</option> : null}
+                        </select>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const value = selectedStorageType.trim();
+                            if (!value || storageTypesDraft.includes(value)) return;
+                            const next = [...storageTypesDraft, value];
+                            setStorageTypesDraft(next);
+                            setDetailField("storageTypes", next);
+                            setDetailField("storageType", next[0] || "");
+                            setSelectedStorageType("");
+                          }}
+                          className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700"
+                        >
+                          Add
+                        </button>
+                      </div>
+                      <div className="mt-1 flex flex-wrap gap-1.5">
+                        {storageTypesDraft.map((item) => (
+                          <span key={item} className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[11px] text-slate-700">
+                            {item}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const next = storageTypesDraft.filter((x) => x !== item);
+                                setStorageTypesDraft(next);
+                                setDetailField("storageTypes", next);
+                                setDetailField("storageType", next[0] || "");
+                              }}
+                              className="text-slate-500 hover:text-slate-700"
+                            >
+                              x
+                            </button>
+                          </span>
+                        ))}
                       </div>
                     </div>
                   </div>
@@ -3492,20 +4273,39 @@ export default function ProcessorEditorPage() {
               </div>
             ) : null}
             {section.title === "Camera & Video" ? (
-              <div className="mt-3 rounded-lg border border-slate-200 bg-white p-3">
-                <div className="grid gap-3 lg:grid-cols-[3fr_2fr]">
-                  <div className="space-y-3 rounded-lg border border-slate-200 bg-slate-50 p-3">
+              <div className="mt-3 rounded-lg border border-slate-200 bg-white p-2.5 sm:p-3">
+                <div className="grid gap-3">
+                  <div className="space-y-3 rounded-lg border border-slate-200 bg-slate-50 p-2.5 sm:p-3">
                     <p className="text-xs font-semibold uppercase tracking-wide text-slate-600">Camera</p>
-                    <label className="grid gap-1">
-                      <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">Camera ISP</span>
-                    <input
-                      value={String(getDetailField("cameraIsp") || "")}
-                      onChange={(e) => setDetailField("cameraIsp", e.target.value)}
-                      list={getSuggestionListId("cameraIsp")}
-                      placeholder="Qualcomm Spectra ISP (dual 12-bit)"
-                      className="h-9 w-full rounded-lg border border-slate-200 px-3 text-sm"
-                    />
-                  </label>
+                    <div className="grid gap-3 md:grid-cols-[minmax(0,1.4fr)_160px]">
+                      <label className="grid gap-1">
+                        <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">Camera ISP</span>
+                        {renderTextSuggestInput(
+                          "cameraIsp",
+                          String(getDetailField("cameraIsp") || ""),
+                          (next) => setDetailField("cameraIsp", next),
+                          {
+                            placeholder: "Qualcomm Spectra ISP (dual 12-bit)",
+                            className: "h-9 w-full rounded-lg border border-slate-200 px-3 text-sm",
+                          }
+                        )}
+                      </label>
+                      <label className="grid gap-1">
+                        <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">Max Camera Support</span>
+                        <div className="relative">
+                          <input
+                            type="number"
+                            min={0}
+                            step="0.1"
+                            value={String(parseMaxCameraSupportNumber(getDetailField("maxCameraSupport")) ?? "")}
+                            onChange={(e) => setDetailField("maxCameraSupport", e.target.value === "" ? undefined : Number(e.target.value))}
+                            placeholder="320"
+                            className="h-9 w-full rounded-lg border border-slate-200 px-3 pr-10 text-sm"
+                          />
+                          <span className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3 text-sm text-slate-500">MP</span>
+                        </div>
+                      </label>
+                    </div>
                     <div className="grid gap-2">
                       <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">Camera Setup</span>
                       <div className="space-y-2">
@@ -3584,21 +4384,7 @@ export default function ProcessorEditorPage() {
                       {appliedCameraSetupSummary ? (
                         <p className="text-xs font-medium text-slate-600">{appliedCameraSetupSummary}</p>
                       ) : null}
-                      <label className="grid gap-1">
-                        <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">Max Camera Support</span>
-                        <div className="relative">
-                          <input
-                            type="number"
-                            min={0}
-                            step="0.1"
-                            value={String(parseMaxCameraSupportNumber(getDetailField("maxCameraSupport")) ?? "")}
-                            onChange={(e) => setDetailField("maxCameraSupport", e.target.value === "" ? undefined : Number(e.target.value))}
-                            placeholder="320"
-                            className="h-9 w-full rounded-lg border border-slate-200 px-3 pr-10 text-sm"
-                          />
-                          <span className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3 text-sm text-slate-500">MP</span>
-                        </div>
-                      </label>
+
                     </div>
                     <label className="grid gap-1">
                       <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">Other Camera Features <span className="normal-case tracking-normal text-slate-500">(comma separated)</span></span>
@@ -3606,184 +4392,192 @@ export default function ProcessorEditorPage() {
                     </label>
                   </div>
 
-                  <div className="space-y-3 rounded-lg border border-slate-200 bg-white p-3">
+                  <div className="space-y-3 rounded-lg border border-slate-200 bg-white p-2.5 sm:p-3">
                     <p className="text-xs font-semibold uppercase tracking-wide text-slate-600">Video</p>
-                    <div className="grid gap-1">
-                      <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">Video Recording Modes</span>
-                      {FIELD_HELP["Camera & Video.videoRecordingModes"] ? (
-                        <span className="text-[11px] leading-4 text-slate-500">{FIELD_HELP["Camera & Video.videoRecordingModes"]}</span>
-                      ) : null}
-                      <div className="space-y-2">
-                        {videoRecordingDraft.map((row) => (
-                          <div key={row.id} className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_120px_auto]">
-                            <select
-                              value={row.mode}
-                              onChange={(e) => {
-                                const mode = e.target.value;
-                                const next = videoRecordingDraft.map((item) => (item.id === row.id ? { ...item, mode } : item));
-                                setVideoRecordingDraft(next);
-                              }}
-                              className="h-9 rounded-lg border border-slate-200 px-3 text-sm"
-                            >
-                              <option value="">Select Mode</option>
-                              {VIDEO_RECORDING_MODE_OPTIONS.map((item) => (
-                                <option key={item} value={item}>{item}</option>
-                              ))}
-                              {row.mode && !VIDEO_RECORDING_MODE_OPTIONS.includes(row.mode) ? <option value={row.mode}>{row.mode}</option> : null}
-                            </select>
-                            <div className="relative">
-                              <input
-                                type="number"
-                                step="1"
-                                min={1}
-                                value={row.fps}
-                                onChange={(e) => {
-                                  const fps: number | "" = e.target.value === "" ? "" : Number(e.target.value);
-                                  const next = videoRecordingDraft.map((item) => (item.id === row.id ? { ...item, fps } : item));
-                                  setVideoRecordingDraft(next);
-                                }}
-                                className="h-9 w-full rounded-lg border border-slate-200 px-3 pr-12 text-sm"
-                                placeholder="FPS"
-                              />
-                              <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-xs text-slate-500">fps</span>
+                    <div className="grid gap-3 lg:grid-cols-2">
+                      <div className="space-y-3 rounded-lg border border-slate-200 bg-slate-50 p-2.5 sm:p-3">
+                        <p className="text-xs font-semibold uppercase tracking-wide text-slate-600">Recording</p>
+                        <div className="grid gap-1">
+                          <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">Video Recording Modes</span>
+                          {FIELD_HELP["Camera & Video.videoRecordingModes"] ? (
+                            <span className="text-[11px] leading-4 text-slate-500">{FIELD_HELP["Camera & Video.videoRecordingModes"]}</span>
+                          ) : null}
+                          <div className="space-y-2">
+                            {videoRecordingDraft.map((row) => (
+                              <div key={row.id} className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_120px_auto]">
+                                <select
+                                  value={row.mode}
+                                  onChange={(e) => {
+                                    const mode = e.target.value;
+                                    const next = videoRecordingDraft.map((item) => (item.id === row.id ? { ...item, mode } : item));
+                                    setVideoRecordingDraft(next);
+                                  }}
+                                  className="h-9 rounded-lg border border-slate-200 px-3 text-sm"
+                                >
+                                  <option value="">Select Mode</option>
+                                  {VIDEO_RECORDING_MODE_OPTIONS.map((item) => (
+                                    <option key={item} value={item}>{item}</option>
+                                  ))}
+                                  {row.mode && !VIDEO_RECORDING_MODE_OPTIONS.includes(row.mode) ? <option value={row.mode}>{row.mode}</option> : null}
+                                </select>
+                                <div className="relative">
+                                  <input
+                                    type="number"
+                                    step="1"
+                                    min={1}
+                                    value={row.fps}
+                                    onChange={(e) => {
+                                      const fps: number | "" = e.target.value === "" ? "" : Number(e.target.value);
+                                      const next = videoRecordingDraft.map((item) => (item.id === row.id ? { ...item, fps } : item));
+                                      setVideoRecordingDraft(next);
+                                    }}
+                                    className="h-9 w-full rounded-lg border border-slate-200 px-3 pr-12 text-sm"
+                                    placeholder="FPS"
+                                  />
+                                  <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-xs text-slate-500">fps</span>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const next = videoRecordingDraft.length > 1 ? videoRecordingDraft.filter((item) => item.id !== row.id) : videoRecordingDraft;
+                                    setVideoRecordingDraft(next);
+                                  }}
+                                  className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700"
+                                >
+                                  Remove
+                                </button>
+                              </div>
+                            ))}
+                            <div className="flex flex-wrap gap-2">
+                              <button
+                                type="button"
+                                onClick={() => setVideoRecordingDraft((prev) => [...prev, { id: `vr${Date.now()}`, mode: "", fps: "" }])}
+                                className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700"
+                              >
+                                Add Video Mode
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => applyVideoRecording(videoRecordingDraft)}
+                                className="rounded-lg bg-blue-700 px-3 py-1.5 text-xs font-semibold text-white"
+                              >
+                                Apply Video Modes
+                              </button>
                             </div>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                const next = videoRecordingDraft.length > 1 ? videoRecordingDraft.filter((item) => item.id !== row.id) : videoRecordingDraft;
-                                setVideoRecordingDraft(next);
-                              }}
-                              className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700"
-                            >
-                              Remove
-                            </button>
+                            {appliedVideoRecordingSummary ? (
+                              <p className="text-xs font-medium text-slate-600">{appliedVideoRecordingSummary}</p>
+                            ) : null}
                           </div>
-                        ))}
-                        <div className="flex flex-wrap gap-2">
-                          <button
-                            type="button"
-                            onClick={() => setVideoRecordingDraft((prev) => [...prev, { id: `vr${Date.now()}`, mode: "", fps: "" }])}
-                            className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700"
-                          >
-                            Add Video Mode
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => applyVideoRecording(videoRecordingDraft)}
-                            className="rounded-lg bg-blue-700 px-3 py-1.5 text-xs font-semibold text-white"
-                          >
-                            Apply Video Modes
-                          </button>
                         </div>
-                        {appliedVideoRecordingSummary ? (
-                          <p className="text-xs font-medium text-slate-600">{appliedVideoRecordingSummary}</p>
-                        ) : null}
+                        <label className="grid gap-1">
+                          <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">Video Recording Codecs</span>
+                          {FIELD_HELP["Camera & Video.videoRecordingCodecs"] ? (
+                            <span className="text-[11px] leading-4 text-slate-500">{FIELD_HELP["Camera & Video.videoRecordingCodecs"]}</span>
+                          ) : null}
+                          {renderVideoCodecInput("videoRecordingCodecs", "Comma separated (e.g. H.264, H.265/HEVC, APV)")}
+                        </label>
+                        <label className="grid gap-1">
+                          <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">Video Recording HDR Formats</span>
+                          {FIELD_HELP["Camera & Video.videoRecordingHdrFormats"] ? (
+                            <span className="text-[11px] leading-4 text-slate-500">{FIELD_HELP["Camera & Video.videoRecordingHdrFormats"]}</span>
+                          ) : null}
+                          {renderVideoHdrInput("videoRecordingHdrFormats", "Comma separated (e.g. HDR, HDR10, HDR10+, Ultra HDR)")}
+                        </label>
+                        <label className="grid gap-1">
+                          <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">Other Video Features <span className="normal-case tracking-normal text-slate-500">(comma separated)</span></span>
+                          {renderCsvInput("videoFeatures")}
+                        </label>
+                      </div>
+                      <div className="space-y-3 rounded-lg border border-slate-200 bg-white p-2.5 sm:p-3">
+                        <p className="text-xs font-semibold uppercase tracking-wide text-slate-600">Playback</p>
+                        <div className="grid gap-1">
+                          <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">Video Playback</span>
+                          {FIELD_HELP["Camera & Video.videoPlayback"] ? (
+                            <span className="text-[11px] leading-4 text-slate-500">{FIELD_HELP["Camera & Video.videoPlayback"]}</span>
+                          ) : null}
+                          <div className="space-y-2">
+                            {videoPlaybackDraft.map((row) => (
+                              <div key={row.id} className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_120px_auto]">
+                                <select
+                                  value={row.mode}
+                                  onChange={(e) => {
+                                    const mode = e.target.value;
+                                    const next = videoPlaybackDraft.map((item) => (item.id === row.id ? { ...item, mode } : item));
+                                    setVideoPlaybackDraft(next);
+                                  }}
+                                  className="h-9 rounded-lg border border-slate-200 px-3 text-sm"
+                                >
+                                  <option value="">Select Mode</option>
+                                  {VIDEO_RECORDING_MODE_OPTIONS.map((item) => (
+                                    <option key={item} value={item}>{item}</option>
+                                  ))}
+                                  {row.mode && !VIDEO_RECORDING_MODE_OPTIONS.includes(row.mode) ? <option value={row.mode}>{row.mode}</option> : null}
+                                </select>
+                                <div className="relative">
+                                  <input
+                                    type="number"
+                                    step="1"
+                                    min={1}
+                                    value={row.fps}
+                                    onChange={(e) => {
+                                      const fps: number | "" = e.target.value === "" ? "" : Number(e.target.value);
+                                      const next = videoPlaybackDraft.map((item) => (item.id === row.id ? { ...item, fps } : item));
+                                      setVideoPlaybackDraft(next);
+                                    }}
+                                    className="h-9 w-full rounded-lg border border-slate-200 px-3 pr-12 text-sm"
+                                    placeholder="FPS"
+                                  />
+                                  <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-xs text-slate-500">fps</span>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const next = videoPlaybackDraft.length > 1 ? videoPlaybackDraft.filter((item) => item.id !== row.id) : videoPlaybackDraft;
+                                    setVideoPlaybackDraft(next);
+                                  }}
+                                  className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700"
+                                >
+                                  Remove
+                                </button>
+                              </div>
+                            ))}
+                            <div className="flex flex-wrap gap-2">
+                              <button
+                                type="button"
+                                onClick={() => setVideoPlaybackDraft((prev) => [...prev, { id: `vp${Date.now()}`, mode: "", fps: "" }])}
+                                className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700"
+                              >
+                                Add Playback Mode
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => applyVideoPlayback(videoPlaybackDraft)}
+                                className="rounded-lg bg-blue-700 px-3 py-1.5 text-xs font-semibold text-white"
+                              >
+                                Apply Playback Modes
+                              </button>
+                            </div>
+                            {appliedVideoPlaybackSummary ? (
+                              <p className="text-xs font-medium text-slate-600">{appliedVideoPlaybackSummary}</p>
+                            ) : null}
+                          </div>
+                        </div>
+                        <label className="grid gap-1">
+                          <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">Video Playback Codecs</span>
+                          {FIELD_HELP["Camera & Video.videoPlaybackCodecs"] ? (
+                            <span className="text-[11px] leading-4 text-slate-500">{FIELD_HELP["Camera & Video.videoPlaybackCodecs"]}</span>
+                          ) : null}
+                          {renderVideoCodecInput("videoPlaybackCodecs", "Comma separated (e.g. H.264, H.265/HEVC, APV)")}
+                        </label>
+                        <label className="grid gap-1">
+                          <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">Video Playback HDR Formats</span>
+                          {FIELD_HELP["Camera & Video.videoPlaybackHdrFormats"] ? (
+                            <span className="text-[11px] leading-4 text-slate-500">{FIELD_HELP["Camera & Video.videoPlaybackHdrFormats"]}</span>
+                          ) : null}
+                          {renderVideoHdrInput("videoPlaybackHdrFormats", "Comma separated (e.g. HDR, HDR10, HDR10+, Ultra HDR)")}
+                        </label>
                       </div>
                     </div>
-                    <label className="grid gap-1">
-                      <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">Video Recording Codecs</span>
-                      {FIELD_HELP["Camera & Video.videoRecordingCodecs"] ? (
-                        <span className="text-[11px] leading-4 text-slate-500">{FIELD_HELP["Camera & Video.videoRecordingCodecs"]}</span>
-                      ) : null}
-                      {renderCsvInput("videoRecordingCodecs", "Comma separated (e.g. H.264, H.265/HEVC)")}
-                    </label>
-                    <label className="grid gap-1">
-                      <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">Video Recording HDR Formats</span>
-                      {FIELD_HELP["Camera & Video.videoRecordingHdrFormats"] ? (
-                        <span className="text-[11px] leading-4 text-slate-500">{FIELD_HELP["Camera & Video.videoRecordingHdrFormats"]}</span>
-                      ) : null}
-                      {renderCsvInput("videoRecordingHdrFormats", "Comma separated (e.g. HDR10, HDR10+, HLG)")}
-                    </label>
-                    <div className="grid gap-1">
-                      <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">Video Playback</span>
-                      {FIELD_HELP["Camera & Video.videoPlayback"] ? (
-                        <span className="text-[11px] leading-4 text-slate-500">{FIELD_HELP["Camera & Video.videoPlayback"]}</span>
-                      ) : null}
-                      <div className="space-y-2">
-                        {videoPlaybackDraft.map((row) => (
-                          <div key={row.id} className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_120px_auto]">
-                            <select
-                              value={row.mode}
-                              onChange={(e) => {
-                                const mode = e.target.value;
-                                const next = videoPlaybackDraft.map((item) => (item.id === row.id ? { ...item, mode } : item));
-                                setVideoPlaybackDraft(next);
-                              }}
-                              className="h-9 rounded-lg border border-slate-200 px-3 text-sm"
-                            >
-                              <option value="">Select Mode</option>
-                              {VIDEO_RECORDING_MODE_OPTIONS.map((item) => (
-                                <option key={item} value={item}>{item}</option>
-                              ))}
-                              {row.mode && !VIDEO_RECORDING_MODE_OPTIONS.includes(row.mode) ? <option value={row.mode}>{row.mode}</option> : null}
-                            </select>
-                            <div className="relative">
-                              <input
-                                type="number"
-                                step="1"
-                                min={1}
-                                value={row.fps}
-                                onChange={(e) => {
-                                  const fps: number | "" = e.target.value === "" ? "" : Number(e.target.value);
-                                  const next = videoPlaybackDraft.map((item) => (item.id === row.id ? { ...item, fps } : item));
-                                  setVideoPlaybackDraft(next);
-                                }}
-                                className="h-9 w-full rounded-lg border border-slate-200 px-3 pr-12 text-sm"
-                                placeholder="FPS"
-                              />
-                              <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-xs text-slate-500">fps</span>
-                            </div>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                const next = videoPlaybackDraft.length > 1 ? videoPlaybackDraft.filter((item) => item.id !== row.id) : videoPlaybackDraft;
-                                setVideoPlaybackDraft(next);
-                              }}
-                              className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700"
-                            >
-                              Remove
-                            </button>
-                          </div>
-                        ))}
-                        <div className="flex flex-wrap gap-2">
-                          <button
-                            type="button"
-                            onClick={() => setVideoPlaybackDraft((prev) => [...prev, { id: `vp${Date.now()}`, mode: "", fps: "" }])}
-                            className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700"
-                          >
-                            Add Playback Mode
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => applyVideoPlayback(videoPlaybackDraft)}
-                            className="rounded-lg bg-blue-700 px-3 py-1.5 text-xs font-semibold text-white"
-                          >
-                            Apply Playback Modes
-                          </button>
-                        </div>
-                        {appliedVideoPlaybackSummary ? (
-                          <p className="text-xs font-medium text-slate-600">{appliedVideoPlaybackSummary}</p>
-                        ) : null}
-                      </div>
-                    </div>
-                    <label className="grid gap-1">
-                      <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">Video Playback Codecs</span>
-                      {FIELD_HELP["Camera & Video.videoPlaybackCodecs"] ? (
-                        <span className="text-[11px] leading-4 text-slate-500">{FIELD_HELP["Camera & Video.videoPlaybackCodecs"]}</span>
-                      ) : null}
-                      {renderCsvInput("videoPlaybackCodecs", "Comma separated (e.g. H.264, H.265/HEVC)")}
-                    </label>
-                    <label className="grid gap-1">
-                      <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">Video Playback HDR Formats</span>
-                      {FIELD_HELP["Camera & Video.videoPlaybackHdrFormats"] ? (
-                        <span className="text-[11px] leading-4 text-slate-500">{FIELD_HELP["Camera & Video.videoPlaybackHdrFormats"]}</span>
-                      ) : null}
-                      {renderCsvInput("videoPlaybackHdrFormats", "Comma separated (e.g. HDR10, HDR10+, HLG)")}
-                    </label>
-                    <label className="grid gap-1">
-                      <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">Other Video Features <span className="normal-case tracking-normal text-slate-500">(comma separated)</span></span>
-                      {renderCsvInput("videoFeatures")}
-                    </label>
                   </div>
                 </div>
               </div>
@@ -3792,7 +4586,7 @@ export default function ProcessorEditorPage() {
               <div className="mt-3 space-y-3">
                 <div className="grid gap-3 lg:grid-cols-[3fr_2fr]">
                   <div className="space-y-3">
-                    <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                    <div className="rounded-lg border border-slate-200 bg-slate-50 p-2.5 sm:p-3">
                       <p className="text-xs font-semibold uppercase tracking-wide text-slate-600">Display Modes (Mode, Resolution, RR)</p>
                       <div className="mt-2 space-y-2">
                         {displayModesDraft.map((row) => (
@@ -3890,7 +4684,7 @@ export default function ProcessorEditorPage() {
                       </div>
                     </div>
 
-                    <div className="rounded-lg border border-slate-200 bg-white p-3">
+                    <div className="rounded-lg border border-slate-200 bg-white p-2.5 sm:p-3">
                       <p className="text-xs font-semibold uppercase tracking-wide text-slate-600">Output Display (Mode, Resolution, RR)</p>
                       <div className="mt-2 space-y-2">
                         {outputDisplaysDraft.map((row) => (
@@ -3976,7 +4770,7 @@ export default function ProcessorEditorPage() {
                     </div>
                   </div>
 
-                  <div className="rounded-lg border border-slate-200 bg-white p-3">
+                  <div className="rounded-lg border border-slate-200 bg-white p-2.5 sm:p-3">
                     <div className="grid gap-3">
                       <div className="grid gap-1">
                         <div className="flex flex-wrap items-center justify-between gap-2">
@@ -4030,209 +4824,193 @@ export default function ProcessorEditorPage() {
               </div>
             ) : null}
             {section.title === "Connectivity" ? (
-              <div className="mt-3 rounded-lg border border-slate-200 bg-white p-3">
-                <div className="grid gap-3 lg:grid-cols-[1.25fr_1.15fr_0.9fr_0.9fr_0.9fr]">
-                  <label className="grid gap-1">
-                    <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">Modem Name</span>
-                    <input
-                      value={String(getDetailField("modem") || "")}
-                      onChange={(e) => setDetailField("modem", e.target.value)}
-                      list={getSuggestionListId("modem")}
-                      className="h-9 w-full rounded-lg border border-slate-200 px-3 text-sm"
-                    />
-                  </label>
-                  <label className="grid gap-1">
-                    <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">Network Support</span>
-                    <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-2">
-                      <select
-                        value={selectedNetworkSupport}
-                        onChange={(e) => setSelectedNetworkSupport(e.target.value)}
-                        className="h-9 w-full rounded-lg border border-slate-200 px-3 text-sm"
-                      >
-                        <option value="">Select Network</option>
-                        {NETWORK_SUPPORT_OPTIONS.map((item) => (
-                          <option key={item} value={item} disabled={networkSupportDraft.includes(item)}>{item}</option>
-                        ))}
-                      </select>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const value = selectedNetworkSupport.trim();
-                          if (!value || networkSupportDraft.includes(value)) return;
-                          const next = [...networkSupportDraft, value];
-                          setNetworkSupportDraft(next);
-                          setDetailField("networkSupport", next);
-                          setSelectedNetworkSupport("");
-                        }}
-                        className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700"
-                      >
-                        Add
-                      </button>
+              <div className="mt-3 grid gap-3 lg:grid-cols-[1.4fr_1fr]">
+                <div className="rounded-lg border border-slate-200 bg-white p-2.5 sm:p-3">
+                  <div className="grid gap-3 lg:grid-cols-2">
+                    <label className="grid gap-1">
+                      <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">Modem Name</span>
+                      {renderTextSuggestInput(
+                        "modem",
+                        String(getDetailField("modem") || ""),
+                        (next) => setDetailField("modem", next),
+                        { className: "h-9 w-full rounded-lg border border-slate-200 px-3 text-sm" }
+                      )}
+                    </label>
+                    <label className="grid gap-1">
+                      <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">Network Support</span>
+                      <div className="flex flex-wrap gap-2">
+                        {NETWORK_SUPPORT_OPTIONS.map((item) => {
+                          const active = networkSupportDraft.includes(item);
+                          return (
+                            <button
+                              key={item}
+                              type="button"
+                              onClick={() => {
+                                const next = active
+                                  ? networkSupportDraft.filter((x) => x !== item)
+                                  : [...networkSupportDraft, item];
+                                setNetworkSupportDraft(next);
+                                setDetailField("networkSupport", next);
+                              }}
+                              className={`rounded-full border px-3 py-1 text-xs font-semibold transition ${
+                                active
+                                  ? "border-blue-700 bg-blue-700 text-white shadow-sm shadow-blue-200 ring-2 ring-blue-200"
+                                  : "border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50 hover:text-slate-800"
+                              }`}
+                            >
+                              {item}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </label>
+                    <label className="grid gap-1">
+                      <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">Download Speed</span>
+                      <div className="grid grid-cols-[minmax(0,1fr)_72px] gap-2">
+                        <input type="number" step="any" min={0} value={String(getDetailField("downloadMbps") ?? "")} onChange={(e) => setDetailField("downloadMbps", e.target.value === "" ? undefined : Number(e.target.value))} className="h-9 w-full rounded-lg border border-slate-200 px-3 text-sm" />
+                        <span className="inline-flex h-9 items-center justify-center rounded-lg border border-slate-200 bg-slate-50 px-2 text-xs font-semibold text-slate-600">Mbps</span>
+                      </div>
+                    </label>
+                    <label className="grid gap-1">
+                      <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">Upload Speed</span>
+                      <div className="grid grid-cols-[minmax(0,1fr)_72px] gap-2">
+                        <input type="number" step="any" min={0} value={String(getDetailField("uploadMbps") ?? "")} onChange={(e) => setDetailField("uploadMbps", e.target.value === "" ? undefined : Number(e.target.value))} className="h-9 w-full rounded-lg border border-slate-200 px-3 text-sm" />
+                        <span className="inline-flex h-9 items-center justify-center rounded-lg border border-slate-200 bg-slate-50 px-2 text-xs font-semibold text-slate-600">Mbps</span>
+                      </div>
+                    </label>
+                    <label className="grid gap-1 lg:col-span-2">
+                      <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">Wi-Fi</span>
+                      <div className="flex flex-wrap gap-2">
+                        {WIFI_OPTIONS.map((item) => {
+                          const active = String(getDetailField("wifi") || "") === item;
+                          return (
+                            <button
+                              key={item}
+                              type="button"
+                              onClick={() => setDetailField("wifi", active ? "" : item)}
+                              className={`rounded-full border px-3 py-1 text-xs font-semibold transition ${
+                                active
+                                  ? "border-blue-700 bg-blue-700 text-white shadow-sm shadow-blue-200 ring-2 ring-blue-200"
+                                  : "border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50 hover:text-slate-800"
+                              }`}
+                            >
+                              {item}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </label>
+                    <label className="grid gap-1">
+                      <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">Bluetooth</span>
+                      <div className="flex flex-wrap gap-2">
+                        {BLUETOOTH_OPTIONS.map((item) => {
+                          const active = String(getDetailField("bluetooth") || "") === item;
+                          return (
+                            <button
+                              key={item}
+                              type="button"
+                              onClick={() => setDetailField("bluetooth", active ? "" : item)}
+                              className={`rounded-full border px-3 py-1 text-xs font-semibold transition ${
+                                active
+                                  ? "border-blue-700 bg-blue-700 text-white shadow-sm shadow-blue-200 ring-2 ring-blue-200"
+                                  : "border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50 hover:text-slate-800"
+                              }`}
+                            >
+                              {item}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </label>
+                    <label className="grid gap-1">
+                      <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">Bluetooth Features</span>
+                      {renderCsvInput("bluetoothFeatures", "Comma separated (e.g. LE Audio, aptX)")}
+                    </label>
+                  </div>
+                </div>
+                <div className="rounded-lg border border-slate-200 bg-white p-2.5 sm:p-3">
+                  <div className="grid gap-3">
+                    <div className="grid gap-1">
+                      <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">GNSS Type</span>
+                      <div className="grid grid-cols-2 gap-1.5 sm:flex sm:flex-wrap">
+                        {GNSS_TYPE_OPTIONS.map((option) => {
+                          const active = String(getDetailField("gnssType") || "") === option;
+                          return (
+                            <button
+                              key={option}
+                              type="button"
+                              onClick={() => setDetailField("gnssType", active ? "" : option)}
+                              className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold transition ${
+                                active
+                                  ? "border-blue-700 bg-blue-700 text-white shadow-sm shadow-blue-200 ring-2 ring-blue-200"
+                                  : "border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50 hover:text-slate-800"
+                              }`}
+                            >
+                              {option}
+                            </button>
+                          );
+                        })}
+                      </div>
                     </div>
-                    <div className="mt-1 flex flex-wrap gap-1.5">
-                      {networkSupportDraft.map((item) => (
-                        <span key={item} className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[11px] text-slate-700">
-                          {item}
-                          <button
-                            type="button"
-                            onClick={() => {
-                              const next = networkSupportDraft.filter((x) => x !== item);
-                              setNetworkSupportDraft(next);
-                              setDetailField("networkSupport", next);
-                            }}
-                            className="text-slate-500 hover:text-slate-700"
-                          >
-                            x
-                          </button>
-                        </span>
-                      ))}
+                    <div className="grid gap-1">
+                      <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">Navigation</span>
+                      {renderNavigationInput("Comma separated (e.g. GPS, GLONASS, Galileo)")}
                     </div>
-                  </label>
-                  <label className="grid gap-1">
-                    <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">Wi-Fi</span>
-                    <select
-                      value={String(getDetailField("wifi") || "")}
-                      onChange={(e) => setDetailField("wifi", e.target.value)}
-                      className="h-9 w-full rounded-lg border border-slate-200 px-3 text-sm"
-                    >
-                      <option value="">Select Wi-Fi</option>
-                      {WIFI_OPTIONS.map((item) => (
-                        <option key={item} value={item}>{item}</option>
-                      ))}
-                    </select>
-                  </label>
-                  <label className="grid gap-1">
-                    <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">Bluetooth</span>
-                    <select
-                      value={String(getDetailField("bluetooth") || "")}
-                      onChange={(e) => setDetailField("bluetooth", e.target.value)}
-                      className="h-9 w-full rounded-lg border border-slate-200 px-3 text-sm"
-                    >
-                      <option value="">Select Bluetooth</option>
-                      {BLUETOOTH_OPTIONS.map((item) => (
-                        <option key={item} value={item}>{item}</option>
-                      ))}
-                    </select>
-                  </label>
-                  <label className="grid gap-1">
-                    <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">Bluetooth Features</span>
-                    {renderCsvInput("bluetoothFeatures", "Comma separated (e.g. LE Audio, aptX)")}
-                  </label>
-                  <label className="grid gap-1">
-                    <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">Download Speed</span>
-                    <div className="grid grid-cols-[minmax(0,1fr)_72px] gap-2">
-                      <input
-                        type="number"
-                        step="any"
-                        min={0}
-                        value={String(getDetailField("downloadMbps") ?? "")}
-                        onChange={(e) => setDetailField("downloadMbps", e.target.value === "" ? undefined : Number(e.target.value))}
-                        className="h-9 w-full rounded-lg border border-slate-200 px-3 text-sm"
-                      />
-                      <span className="inline-flex h-9 items-center justify-center rounded-lg border border-slate-200 bg-slate-50 px-2 text-xs font-semibold text-slate-600">Mbps</span>
-                    </div>
-                  </label>
-                  <label className="grid gap-1">
-                    <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">Upload Speed</span>
-                    <div className="grid grid-cols-[minmax(0,1fr)_72px] gap-2">
-                      <input
-                        type="number"
-                        step="any"
-                        min={0}
-                        value={String(getDetailField("uploadMbps") ?? "")}
-                        onChange={(e) => setDetailField("uploadMbps", e.target.value === "" ? undefined : Number(e.target.value))}
-                        className="h-9 w-full rounded-lg border border-slate-200 px-3 text-sm"
-                      />
-                      <span className="inline-flex h-9 items-center justify-center rounded-lg border border-slate-200 bg-slate-50 px-2 text-xs font-semibold text-slate-600">Mbps</span>
-                    </div>
-                  </label>
-                  <label className="grid gap-1 lg:col-span-2">
-                    <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">GNSS Type</span>
-                    <div className="flex flex-wrap gap-2">
-                      {GNSS_TYPE_OPTIONS.map((option) => {
-                        const active = String(getDetailField("gnssType") || "") === option;
-                        return (
-                          <button
-                            key={option}
-                            type="button"
-                            onClick={() => setDetailField("gnssType", active ? "" : option)}
-                            className={`rounded-full border px-3 py-1 text-xs font-semibold transition ${
-                              active
-                                ? "border-blue-600 bg-blue-50 text-blue-700"
-                                : "border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:text-slate-800"
-                            }`}
-                          >
-                            {option}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </label>
-                  <label className="grid gap-1 lg:col-span-3">
-                    <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">Navigation</span>
-                    <div className="flex flex-wrap gap-2">
-                      {NAVIGATION_OPTIONS.map((item) => {
-                        const active = navigationDraft.includes(item);
-                        return (
-                          <button
-                            key={item}
-                            type="button"
-                            onClick={() => {
-                              const next = active
-                                ? navigationDraft.filter((value) => value !== item)
-                                : [...navigationDraft, item];
-                              setNavigationDraft(next);
-                              setDetailField("navigation", next);
-                            }}
-                            className={`rounded-full border px-3 py-1 text-xs font-semibold transition ${
-                              active
-                                ? "border-blue-600 bg-blue-50 text-blue-700"
-                                : "border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:text-slate-800"
-                            }`}
-                          >
-                            {item}
-                          </button>
-                        );
-                      })}
-                    </div>
-                    <span className="text-[11px] text-slate-500">Click to toggle multiple navigation systems.</span>
-                  </label>
+                  </div>
                 </div>
               </div>
             ) : null}
             {section.title === "Charging & Source" ? (
-              <div className="mt-3 rounded-lg border border-slate-200 bg-white p-3">
+              <div className="mt-3 rounded-lg border border-slate-200 bg-white p-2.5 sm:p-3">
                 <div className="grid gap-3 lg:grid-cols-4">
                   <label className="grid gap-1">
                     <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">Fast Charging Support</span>
-                    <select
-                      value={String(getDetailField("quickChargingSupport") || "")}
-                      onChange={(e) => setDetailField("quickChargingSupport", e.target.value)}
-                      className="h-9 w-full rounded-lg border border-slate-200 px-3 text-sm"
-                    >
-                      <option value="">Not Available</option>
-                      <option value="true">True</option>
-                      <option value="false">False</option>
-                    </select>
+                    <div className="flex flex-wrap gap-2">
+                      {[
+                        { label: "Yes", value: true },
+                        { label: "No", value: false },
+                      ].map((option) => {
+                        const active = getDetailField("quickChargingSupport") === option.value;
+                        return (
+                          <button
+                            key={option.label}
+                            type="button"
+                            onClick={() => setDetailField("quickChargingSupport", active ? undefined : option.value)}
+                            className={`rounded-full border px-3 py-1 text-xs font-semibold transition ${
+                              active
+                                ? "border-blue-700 bg-blue-700 text-white shadow-sm shadow-blue-200 ring-2 ring-blue-200"
+                                : "border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50 hover:text-slate-800"
+                            }`}
+                          >
+                            {option.label}
+                          </button>
+                        );
+                      })}
+                    </div>
                   </label>
                   <label className="grid gap-1">
                     <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">Fast Charging Value</span>
-                    <input
-                      value={String(getDetailField("quickCharging") || "")}
-                      onChange={(e) => setDetailField("quickCharging", e.target.value)}
-                      list={getSuggestionListId("quickCharging")}
-                      className="h-9 w-full rounded-lg border border-slate-200 px-3 text-sm"
-                      placeholder="e.g. Qualcomm Quick Charge 5.0, USB PD 3.1"
-                    />
+                    {renderTextSuggestInput(
+                      "quickCharging",
+                      String(getDetailField("quickCharging") || ""),
+                      (next) => setDetailField("quickCharging", next),
+                      {
+                        className: "h-9 w-full rounded-lg border border-slate-200 px-3 text-sm",
+                        placeholder: "e.g. Qualcomm Quick Charge 5.0, USB PD 3.1",
+                      }
+                    )}
                   </label>
                   <label className="grid gap-1">
                     <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">Charging Speed</span>
-                    <input
-                      value={String(getDetailField("chargingSpeed") || "")}
-                      onChange={(e) => setDetailField("chargingSpeed", e.target.value)}
-                      className="h-9 w-full rounded-lg border border-slate-200 px-3 text-sm"
-                      placeholder="e.g. 65W, 50% in 30 min"
-                    />
+                    {renderTextSuggestInput(
+                      "chargingSpeed",
+                      String(getDetailField("chargingSpeed") || ""),
+                      (next) => setDetailField("chargingSpeed", next),
+                      {
+                        className: "h-9 w-full rounded-lg border border-slate-200 px-3 text-sm",
+                        placeholder: "e.g. 65W, 50% in 30 min",
+                      }
+                    )}
                   </label>
                   <label className="grid gap-1 lg:col-span-3">
                     <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">Source URL</span>
@@ -4250,7 +5028,7 @@ export default function ProcessorEditorPage() {
                 if (section.title === "AI") {
                   return null;
                 }
-                if (section.title === "CPU / Core" && (field.key === "coreCount" || field.key === "instructionSet" || field.key === "architectureBits" || field.key === "process" || field.key === "tdpW" || field.key === "transistorCount" || field.key === "coreConfiguration" || field.key === "cores" || field.key === "l2Cache" || field.key === "l3Cache" || field.key === "cpuFeatures")) {
+                if (section.title === "CPU / Core" && (field.key === "coreCount" || field.key === "instructionSet" || field.key === "architectureBits" || field.key === "process" || field.key === "tdpW" || field.key === "transistorCount" || field.key === "coreConfiguration" || field.key === "cores" || field.key === "l2Cache" || field.key === "l3Cache" || field.key === "slcCache" || field.key === "cpuFeatures")) {
                   return null;
                 }
                 if (section.title === "Graphics (GPU)" && (field.key === "gpuName" || field.key === "gpuArchitecture" || field.key === "pipelines" || field.key === "gpuFrequencyMhz" || field.key === "gpuFeatures" || field.key === "gpuApis" || field.key === "gpuFlops")) {
@@ -4321,7 +5099,11 @@ export default function ProcessorEditorPage() {
                         <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-sm text-slate-500">nm</span>
                       </div>
                     ) : null}
-                    {field.type === "text" && field.key !== "instructionSet" && field.key !== "architectureBits" && field.key !== "process" ? <input value={value ? String(value) : ""} onChange={(e) => setDetailField(field.key, e.target.value)} list={getSuggestionListId(field.key)} className="rounded-lg border border-slate-200 px-3 py-2" /> : null}
+                    {field.type === "text" && field.key !== "instructionSet" && field.key !== "architectureBits" && field.key !== "process"
+                      ? renderTextSuggestInput(field.key, value ? String(value) : "", (next) => setDetailField(field.key, next), {
+                          className: "rounded-lg border border-slate-200 px-3 py-2",
+                        })
+                      : null}
                     {field.type === "number" ? <input type="number" step="any" value={value === undefined ? "" : String(value)} onChange={(e) => setDetailField(field.key, e.target.value === "" ? undefined : Number(e.target.value))} className="rounded-lg border border-slate-200 px-3 py-2" /> : null}
                     {field.type === "csv" ? renderCsvInput(field.key, "Comma separated (e.g. HDR, Ray tracing)") : null}
                     {field.type === "kv" ? <input value={formatKvNumber(value)} onChange={(e) => setDetailField(field.key, parseKvNumber(e.target.value))} className="rounded-lg border border-slate-200 px-3 py-2" /> : null}
@@ -4458,7 +5240,6 @@ export default function ProcessorEditorPage() {
               ) : null}
             </div>
           ) : null}
-          </section>
           {privateFields.some((row) => row.sourceSection === section.title) ? (
             <div className="mt-3 overflow-hidden rounded-lg border border-slate-200 bg-white divide-y divide-slate-200">
               {privateFields
@@ -4524,11 +5305,11 @@ export default function ProcessorEditorPage() {
                 })}
             </div>
           ) : null}
-          </Fragment>
+          </section>
         );
         })}
 
-        <section className="panel p-5">
+        <section className="panel p-3 sm:p-5">
           <h2 className="text-base font-bold text-slate-900">Private Admin Fields</h2>
           <p className="mt-1 text-xs text-slate-500">Saved in Firebase for internal use only. Not shown on public page.</p>
           {privateFields.length ? (
@@ -4674,28 +5455,22 @@ export default function ProcessorEditorPage() {
             </div>
           ) : null}
         </section>
-        {Object.entries(FIELD_SUGGESTIONS).map(([key, values]) => {
-          const merged = HELPER_SUGGESTIONS.length
-            ? Array.from(new Set([...values, ...HELPER_SUGGESTIONS]))
-            : values;
-          const id = HELPER_SUGGESTIONS.length ? `suggest-${key}-merged` : `suggest-${key}`;
-          return (
-            <datalist key={id} id={id}>
-              {merged.map((item) => (
-                <option key={item} value={item} />
-              ))}
-            </datalist>
-          );
-        })}
-        {HELPER_SUGGESTIONS.length ? (
-          <datalist id="suggest-helper">
-            {HELPER_SUGGESTIONS.map((item) => (
+        {gpuNameSuggestions.length ? (
+          <datalist id="suggest-gpu-name">
+            {gpuNameSuggestions.map((item) => (
               <option key={item} value={item} />
             ))}
           </datalist>
         ) : null}
         {Object.entries(helperSectionSuggestions).map(([key, values]) => (
           <datalist key={key} id={`suggest-helper-section-${key}`}>
+            {values.map((item) => (
+              <option key={item} value={item} />
+            ))}
+          </datalist>
+        ))}
+        {Object.entries(helperFieldSuggestions).map(([key, values]) => (
+          <datalist key={key} id={`suggest-helper-field-${key}`}>
             {values.map((item) => (
               <option key={item} value={item} />
             ))}

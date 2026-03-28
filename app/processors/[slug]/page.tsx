@@ -1749,7 +1749,7 @@ export default async function ProcessorDetailPage({ params, searchParams }: Prop
                 { label: "Architecture (GPU)", value: detail?.gpuArchitecture || "-" },
                 { label: "GPU Cores", value: gpuCores },
                 { label: "GPU Frequency", value: detail?.gpuFrequencyMhz ? `${detail.gpuFrequencyMhz} MHz` : "-" },
-                { label: "APIs", value: detail?.gpuApis?.length ? detail.gpuApis.join(", ") : "-" },
+                { label: "API Support", value: detail?.gpuApis?.length ? detail.gpuApis.join(", ") : "-" },
                 { label: "FLOPS", value: formatFlops(detail?.gpuFlops) },
                 { label: "Other GPU Features", value: detail?.gpuFeatures?.length ? detail.gpuFeatures.join(", ") : "-" },
               ]}
@@ -1790,7 +1790,7 @@ export default async function ProcessorDetailPage({ params, searchParams }: Prop
                 },
                 { label: "Max Memory", value: detail?.maxMemoryGb ? `${detail.maxMemoryGb}GB` : "-" },
                 { label: "Storage Type", value: mobileClusterRows(formatStorageTypes(detail || {})) },
-                { label: "Storage Channels / Lanes", value: detail?.storageChannels || "-" },
+                { label: "Storage Channels", value: detail?.storageChannels || "-" },
               ]}
             />
           </article>
