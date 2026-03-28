@@ -7,6 +7,7 @@ import { slugify } from "@/utils/slugify";
 
 type StatusFilter = "all" | "draft" | "review" | "published" | "scheduled" | "recently_deleted";
 const BRAND_OPTIONS = ["Samsung", "Qualcomm", "MediaTek", "Apple", "Google", "Unisoc", "Huawei", "Intel", "AMD"];
+const CLASS_FILTER_ORDER = ["Ultra Flagship", "Flagship", "Upper Midrange", "Midrange", "Budget", "Entry"] as const;
 const BRAND_TITLE_HINTS: Record<string, string[]> = {
   Samsung: ["Exynos"],
   Qualcomm: ["Snapdragon"],
@@ -23,8 +24,8 @@ export default function AdminProcessorsPage() {
   const [rows, setRows] = useState<ProcessorAdmin[]>([]);
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
-  const [vendorFilter, setVendorFilter] = useState("all");
-  const [classFilter, setClassFilter] = useState("all");
+  const [vendorFilter, setVendorFilter] = useState<string[]>([]);
+  const [classFilter, setClassFilter] = useState<string[]>([]);
   const [createTitle, setCreateTitle] = useState("");
   const [createBrand, setCreateBrand] = useState("");
   const [createSlugInput, setCreateSlugInput] = useState("");
@@ -65,10 +66,12 @@ export default function AdminProcessorsPage() {
   const filteredRows = useMemo(() => {
     const q = query.trim().toLowerCase();
     return rows.filter((row) => {
-      if (statusFilter !== "all" && (row.status || "published") !== statusFilter) return false;
-      if (vendorFilter !== "all" && String(row.vendor || "").toLowerCase() !== vendorFilter.toLowerCase()) return false;
+      const rowStatus = row.status || "published";
+      if (statusFilter === "all" && rowStatus === "recently_deleted") return false;
+      if (statusFilter !== "all" && rowStatus !== statusFilter) return false;
+      if (vendorFilter.length > 0 && !vendorFilter.some((item) => item.toLowerCase() === String(row.vendor || "").toLowerCase())) return false;
       const rowClass = String(row.detail?.className || "").trim().toLowerCase();
-      if (classFilter !== "all" && rowClass !== classFilter.toLowerCase()) return false;
+      if (classFilter.length > 0 && !classFilter.some((item) => item.toLowerCase() === rowClass)) return false;
       if (!q) return true;
       const hay = [row.name, row.vendor, row.id, row.gpu, row.status].map((v) => String(v || "").toLowerCase()).join(" ");
       return hay.includes(q);
@@ -80,10 +83,12 @@ export default function AdminProcessorsPage() {
     [rows]
   );
 
-  const classOptions = useMemo(
-    () => ["all", ...Array.from(new Set(rows.map((row) => String(row.detail?.className || "").trim()).filter(Boolean))).sort((a, b) => a.localeCompare(b))],
-    [rows]
-  );
+  const classOptions = useMemo(() => {
+    const seen = new Set(rows.map((row) => String(row.detail?.className || "").trim()).filter(Boolean));
+    const ordered = CLASS_FILTER_ORDER.filter((item) => seen.has(item));
+    const extras = Array.from(seen).filter((item) => !CLASS_FILTER_ORDER.includes(item as (typeof CLASS_FILTER_ORDER)[number])).sort((a, b) => a.localeCompare(b));
+    return ["all", ...ordered, ...extras];
+  }, [rows]);
 
   async function changeStatus(id: string, status: ProcessorAdmin["status"]) {
     const response = await fetch(`/api/processors/${id}`, {
@@ -151,6 +156,42 @@ export default function AdminProcessorsPage() {
       await refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Bulk move failed.");
+    }
+  }
+
+  async function restoreSelectedProcessors() {
+    if (selectedIds.length === 0) return;
+    if (!window.confirm(`Restore ${selectedIds.length} selected processor(s) as draft?`)) return;
+    setError("");
+    setMessage("");
+    try {
+      await Promise.all(selectedIds.map((id) => changeStatus(id, "draft")));
+      setSelectedIds([]);
+      setMessage("Selected processors restored as draft.");
+      await refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Bulk restore failed.");
+    }
+  }
+
+  async function forceDeleteSelectedProcessors() {
+    if (selectedIds.length === 0) return;
+    if (!window.confirm(`Delete ${selectedIds.length} selected processor(s) permanently?`)) return;
+    setError("");
+    setMessage("");
+    try {
+      await Promise.all(
+        selectedIds.map(async (id) => {
+          const response = await fetch(`/api/processors/${id}`, { method: "DELETE", credentials: "include" });
+          const json = await response.json();
+          if (!response.ok) throw new Error(json.error || "Permanent delete failed.");
+        })
+      );
+      setSelectedIds([]);
+      setMessage("Selected processors deleted permanently.");
+      await refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Bulk permanent delete failed.");
     }
   }
 
@@ -304,41 +345,86 @@ export default function AdminProcessorsPage() {
               ))}
             </div>
 
-            <div className="flex items-center gap-2">
-              <select
-                value={vendorFilter}
-                onChange={(e) => setVendorFilter(e.target.value)}
-                className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700"
-              >
-                {vendorOptions.map((item) => (
-                  <option key={`vendor-${item}`} value={item}>
-                    {item === "all" ? "All Vendors" : item}
-                  </option>
-                ))}
-              </select>
-
-              <select
-                value={classFilter}
-                onChange={(e) => setClassFilter(e.target.value)}
-                className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700"
-              >
-                {classOptions.map((item) => (
-                  <option key={`class-${item}`} value={item}>
-                    {item === "all" ? "All Classes" : item}
-                  </option>
-                ))}
-              </select>
+            <div className="text-xs font-medium text-slate-500">
+              {classFilter.length > 0 ? `${classFilter.length} class filter${classFilter.length > 1 ? "s" : ""} selected` : "All classes"}
             </div>
           </div>
 
-          <button
-            type="button"
-            onClick={moveSelectedToRecentlyDeleted}
-            disabled={selectedIds.length === 0}
-            className="w-fit rounded-md border border-slate-200 bg-slate-100 px-3 py-2 text-xs font-semibold text-slate-400 disabled:cursor-not-allowed"
-          >
-            Move Selected to Recently Deleted ({selectedIds.length})
-          </button>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => setVendorFilter([])}
+              className={`rounded-full border px-3 py-1.5 text-xs font-medium leading-none transition ${vendorFilter.length === 0 ? "border-slate-900 bg-slate-900 text-white" : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"}`}
+            >
+              All Vendors
+            </button>
+            {vendorOptions.filter((item) => item !== "all").map((item) => {
+              const selected = vendorFilter.some((value) => value.toLowerCase() === item.toLowerCase());
+              return (
+                <button
+                  key={`vendor-chip-${item}`}
+                  type="button"
+                  onClick={() => setVendorFilter((prev) => selected ? prev.filter((value) => value.toLowerCase() !== item.toLowerCase()) : [...prev, item])}
+                  className={`rounded-full border px-3 py-1.5 text-xs font-medium leading-none transition ${selected ? "border-blue-700 bg-blue-700 text-white" : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"}`}
+                >
+                  {item}
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => setClassFilter([])}
+              className={`rounded-full border px-3 py-1.5 text-xs font-medium leading-none transition ${classFilter.length === 0 ? "border-slate-900 bg-slate-900 text-white" : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"}`}
+            >
+              All Classes
+            </button>
+            {classOptions.filter((item) => item !== "all").map((item) => {
+              const selected = classFilter.some((value) => value.toLowerCase() === item.toLowerCase());
+              return (
+                <button
+                  key={`class-chip-${item}`}
+                  type="button"
+                  onClick={() => setClassFilter((prev) => selected ? prev.filter((value) => value.toLowerCase() !== item.toLowerCase()) : [...prev, item])}
+                  className={`rounded-full border px-3 py-1.5 text-xs font-medium leading-none transition ${selected ? "border-violet-700 bg-violet-700 text-white" : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"}`}
+                >
+                  {item}
+                </button>
+              );
+            })}
+          </div>
+
+          {statusFilter === "recently_deleted" ? (
+            <div className="flex flex-wrap gap-3">
+              <button
+                type="button"
+                onClick={restoreSelectedProcessors}
+                disabled={selectedIds.length === 0}
+                className={`w-fit rounded-md border px-3 py-2 text-xs font-semibold transition ${selectedIds.length > 0 ? "border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100" : "border-slate-200 bg-slate-100 text-slate-400 disabled:cursor-not-allowed"}`}
+              >
+                Restore Selected ({selectedIds.length})
+              </button>
+              <button
+                type="button"
+                onClick={forceDeleteSelectedProcessors}
+                disabled={selectedIds.length === 0}
+                className={`w-fit rounded-md border px-3 py-2 text-xs font-semibold transition ${selectedIds.length > 0 ? "border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100" : "border-slate-200 bg-slate-100 text-slate-400 disabled:cursor-not-allowed"}`}
+              >
+                Force Delete Selected ({selectedIds.length})
+              </button>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={moveSelectedToRecentlyDeleted}
+              disabled={selectedIds.length === 0}
+              className={`w-fit rounded-md border px-3 py-2 text-xs font-semibold transition ${selectedIds.length > 0 ? "border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100" : "border-slate-200 bg-slate-100 text-slate-400 disabled:cursor-not-allowed"}`}
+            >
+              Move Selected to Recently Deleted ({selectedIds.length})
+            </button>
+          )}
         </div>
 
         <div className="mt-4 overflow-x-auto rounded-xl border border-slate-200">
@@ -432,3 +518,7 @@ export default function AdminProcessorsPage() {
     </main>
   );
 }
+
+
+
+
