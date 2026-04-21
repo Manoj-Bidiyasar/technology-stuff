@@ -5,5 +5,6 @@ export function slugify(input: string): string {
     .replace(/\+/g, " plus ")
     .replace(/[^a-z0-9\s-]/g, "")
     .replace(/\s+/g, "-")
-    .replace(/-+/g, "-");
+    .replace(/-+/g, "-")
+    .replace(/^-+|-+$/g, "");
 }

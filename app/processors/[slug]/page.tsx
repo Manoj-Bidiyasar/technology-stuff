@@ -9,12 +9,13 @@ import ProcessorChipVisual from "@/components/ProcessorChipVisual";
 import ProcessorNameLabel from "@/components/ProcessorNameLabel";
 import SectionChipNav from "@/components/SectionChipNav";
 import SimilarProcessorsGrid from "@/components/SimilarProcessorsGrid";
-import { getProcessorDetailBySlug, type ProcessorDetail } from "@/lib/processors/details";
+import { getProcessorDetailBySlug, listProcessorDetailsBySlug, type ProcessorDetail } from "@/lib/processors/details";
 import { listProcessorProfiles, type ProcessorProfile } from "@/lib/processors/profiles";
 import { getProcessorAdminById } from "@/lib/firestore/processors";
 import { getAdminViewerFromSessionToken } from "@/lib/auth/admin";
 import { hasCapability } from "@/lib/admin/permissions";
 import { ADMIN_SESSION_COOKIE } from "@/lib/auth/constants";
+import { PROCESSOR_TOTAL_SCORE_LABEL, calculateAiScore, calculateAiScoreReferences, calculateEfficiencyScore, calculateGamingScore, calculateGamingScoreReferences, calculatePerformanceScore, calculatePerformanceScoreReferences, calculateTotalScore } from "@/lib/processors/scoring";
 import { getPublicSiteUrl } from "@/lib/seo/site";
 import { slugify } from "@/utils/slugify";
 
@@ -36,31 +37,6 @@ const poppins = Poppins({
 function decimal(value?: number, digits = 1): string {
   if (!Number.isFinite(value)) return "-";
   return Number.isInteger(value) ? String(value) : (value as number).toFixed(digits);
-}
-
-function perfIndex(score: number): number {
-  return Math.max(0, Math.min(100, Math.round((score / 3000000) * 100)));
-}
-
-function efficiency(nm?: number): number {
-  if (!Number.isFinite(nm)) return 60;
-  if ((nm as number) <= 3) return 94;
-  if ((nm as number) <= 4) return 88;
-  if ((nm as number) <= 5) return 80;
-  if ((nm as number) <= 6) return 72;
-  return 64;
-}
-
-function gaming(profile: ProcessorProfile): number {
-  const base = perfIndex(profile.antutu || 0);
-  const gpuBonus = profile.gpu ? 6 : 0;
-  return Math.min(100, Math.round(base * 0.85 + gpuBonus));
-}
-
-function value(profile: ProcessorProfile): number {
-  const usage = Math.min(100, (profile.phoneCount || 0) * 12);
-  const avg = Math.min(100, Math.round((profile.avgPhoneScore || 0) * 10));
-  return Math.round(avg * 0.7 + usage * 0.3);
 }
 
 function neighbors(target: ProcessorProfile, all: ProcessorProfile[]) {
@@ -296,13 +272,21 @@ function inferCoreCount(detail?: { coreCount?: number; cores?: string }): string
   return m ? m[1] : "-";
 }
 
+function normalizeCpuClockDisplay(value: string): string {
+  return String(value || "").replace(/(\d+(?:\.\d+)?)\s*ghz/gi, (_, num) => {
+    const text = String(num || "").trim();
+    const normalized = text.includes(".") ? text : `${text}.0`;
+    return `${normalized}GHz`;
+  });
+}
+
 function inferCoreConfig(detail?: { coreConfiguration?: string; cores?: string }): string {
   const explicit = String(detail?.coreConfiguration || "").trim();
-  if (explicit) return explicit;
+  if (explicit) return normalizeCpuClockDisplay(explicit);
   const raw = String(detail?.cores || "").trim();
   const bracket = raw.match(/\((.+)\)/);
-  if (bracket?.[1]) return bracket[1].trim();
-  return raw || "-";
+  if (bracket?.[1]) return normalizeCpuClockDisplay(bracket[1].trim());
+  return normalizeCpuClockDisplay(raw || "-");
 }
 
 function inferGpuCores(gpuName?: string, pipelines?: number): string {
@@ -594,9 +578,24 @@ function normalizeCameraMode(raw: string): string {
 }
 
 function formatCameraSupportModes(modes: string[] | undefined, fallback?: string | number): string {
-  const list = (modes || []).map((m) => normalizeCameraMode(m)).filter(Boolean);
+  const fallbackText = String(fallback || "-").trim();
+  const fallbackMatch = fallbackText.match(/([\d.]+)/);
+  const fallbackMp = fallbackMatch?.[1] ? Number(fallbackMatch[1]) : NaN;
+  const rawModes = (modes || []).map((m) => String(m || "").trim()).filter(Boolean);
+  const hasSingleMode = rawModes.some((mode) => !mode.includes("+"));
+  const sourceModes = !hasSingleMode && Number.isFinite(fallbackMp) ? [String(fallbackMp), ...rawModes] : rawModes;
+  const list = sourceModes.map((m, idx) => {
+    const original = String(m || "").trim();
+    const parts = original.split("+").map((part) => part.trim()).filter(Boolean);
+    const singleMatch = original.match(/([\d.]+)/);
+    const singleMp = singleMatch?.[1] ? Number(singleMatch[1]) : NaN;
+    if (idx === 0 && parts.length < 2 && Number.isFinite(singleMp) && Number.isFinite(fallbackMp) && fallbackMp > singleMp) {
+      return normalizeCameraMode(String(fallbackMp));
+    }
+    return normalizeCameraMode(original);
+  }).filter(Boolean);
   if (list.length > 0) return list.join(", ");
-  return normalizeCameraMode(String(fallback || "-"));
+  return normalizeCameraMode(fallbackText);
 }
 
 function clusterRows(value: string): ReactNode {
@@ -1073,7 +1072,10 @@ export default async function ProcessorDetailPage({ params, searchParams }: Prop
   const previewFlag = String(query?.preview || "").trim() === "1";
   const previewId = String(query?.id || slug || "").trim();
 
-  const all = await listProcessorProfiles();
+  const [all, allDetailsBySlug] = await Promise.all([
+    listProcessorProfiles(),
+    listProcessorDetailsBySlug(),
+  ]);
   let p = all.find((item) => item.slug === slug);
   let detail = await getProcessorDetailBySlug(slug);
   let previewMode = false;
@@ -1151,10 +1153,86 @@ export default async function ProcessorDetailPage({ params, searchParams }: Prop
 
   const allForSimilar = all.some((item) => item.slug === p.slug) ? all : [p, ...all];
   const similar = neighbors(p, allForSimilar);
-  const perf = perfIndex(p.antutu || 0);
-  const eff = efficiency(p.fabricationNm);
-  const game = gaming(p);
-  const val = value(p);
+  const gamingReferences = calculateGamingScoreReferences(Object.values(allDetailsBySlug));
+  const aiReferences = calculateAiScoreReferences(Object.values(allDetailsBySlug));
+  const performanceReferences = calculatePerformanceScoreReferences(
+    Object.values(allDetailsBySlug),
+    all.map((item) => Number(item.antutu || 0)),
+    all.map((item) => Number(item.maxCpuGhz || 0))
+  );
+  const perf = calculatePerformanceScore({
+    processorName: p.name,
+    antutuScore: detail?.benchmarks?.antutuCalc,
+    antutuFallbackScore: detail?.benchmarks?.antutu || p.antutu,
+    geekbenchSingle: detail?.benchmarks?.geekbenchSingle,
+    geekbenchMulti: detail?.benchmarks?.geekbenchMulti,
+    maxCpuGhz: p.maxCpuGhz,
+    fabricationNm: p.fabricationNm,
+    process: detail?.process,
+    instructionSet: detail?.instructionSet,
+    architectureBits: detail?.architectureBits,
+    coreConfiguration: detail?.coreConfiguration,
+    cores: detail?.cores,
+    memoryType: detail?.memoryType,
+    memoryTypes: detail?.memoryTypes,
+    memoryFreqMhz: detail?.memoryFreqMhz,
+    memoryFreqByType: detail?.memoryFreqByType,
+    memoryBusWidthBits: detail?.memoryBusWidthBits,
+    totalRamBusWidthBits: detail?.totalRamBusWidthBits,
+    storageType: detail?.storageType,
+    storageTypes: detail?.storageTypes,
+  }, performanceReferences).score;
+  const eff = calculateEfficiencyScore({
+    fabricationNm: p.fabricationNm,
+    process: detail?.process,
+    instructionSet: detail?.instructionSet,
+    architectureBits: detail?.architectureBits,
+    coreConfiguration: detail?.coreConfiguration,
+    cores: detail?.cores,
+  });
+  const game = calculateGamingScore({
+    fabricationNm: p.fabricationNm,
+    process: detail?.process,
+    instructionSet: detail?.instructionSet,
+    architectureBits: detail?.architectureBits,
+    coreConfiguration: detail?.coreConfiguration,
+    cores: detail?.cores,
+    memoryType: detail?.memoryType,
+    memoryTypes: detail?.memoryTypes,
+    memoryFreqMhz: detail?.memoryFreqMhz,
+    memoryFreqByType: detail?.memoryFreqByType,
+    memoryBusWidthBits: detail?.memoryBusWidthBits,
+    totalRamBusWidthBits: detail?.totalRamBusWidthBits,
+    storageType: detail?.storageType,
+    storageTypes: detail?.storageTypes,
+    gpuFlops: detail?.gpuFlops,
+    wildLifeScore: detail?.benchmarks?.threeDMarkWildLife,
+    antutu11GpuScore: detail?.benchmarks?.antutuCalcGpu,
+  }, gamingReferences).score;
+  const ai = calculateAiScore({
+    processorName: p.name,
+    aiBenchmarkScore: detail?.benchmarks?.aiScore,
+    fabricationNm: p.fabricationNm,
+    process: detail?.process,
+    instructionSet: detail?.instructionSet,
+    architectureBits: detail?.architectureBits,
+    coreConfiguration: detail?.coreConfiguration,
+    cores: detail?.cores,
+    memoryType: detail?.memoryType,
+    memoryTypes: detail?.memoryTypes,
+    memoryFreqMhz: detail?.memoryFreqMhz,
+    memoryFreqByType: detail?.memoryFreqByType,
+    memoryBusWidthBits: detail?.memoryBusWidthBits,
+    totalRamBusWidthBits: detail?.totalRamBusWidthBits,
+    storageType: detail?.storageType,
+    storageTypes: detail?.storageTypes,
+  }, aiReferences).score;
+  const totalScore = calculateTotalScore({
+    performance: perf,
+    gaming: game,
+    efficiency: eff,
+    ai,
+  });
 
   const benchAntutu = detail?.benchmarks?.antutu || p.antutu || 0;
   const benchAntutuVersion = String(detail?.benchmarks?.antutuVersion || "").trim();
@@ -1229,7 +1307,7 @@ export default async function ProcessorDetailPage({ params, searchParams }: Prop
     { label: "GPU", value: benchAntutuGpu },
     { label: "Memory", value: benchAntutuMemory },
     { label: "UX", value: benchAntutuUx },
-    { label: "Total Score", value: benchAntutu },
+    { label: "AnTuTu Total", value: benchAntutu },
   ].filter((row) => Number.isFinite(row.value) && row.value > 0);
   const hasBenchmarksSection = benchmarkRows.length > 0 || antutuBreakdownRows.length > 0;
   const coreCount = inferCoreCount(detail);
@@ -1906,12 +1984,14 @@ export default async function ProcessorDetailPage({ params, searchParams }: Prop
 
         <aside className="space-y-5">
           <article className="panel p-4">
-            <h2 className="text-base font-extrabold text-slate-900">Real-World Score</h2>
+            <h2 className="text-base font-extrabold text-slate-900">{PROCESSOR_TOTAL_SCORE_LABEL}</h2>
+            <p className="mt-1 text-xs text-slate-500">Based on Performance, Gaming, Efficiency, and AI</p>
             <div className="mt-3 space-y-2">
+              <ProgressRow label={PROCESSOR_TOTAL_SCORE_LABEL} value={totalScore} />
               <ProgressRow label="Performance" value={perf} />
               <ProgressRow label="Efficiency" value={eff} />
               <ProgressRow label="Gaming" value={game} />
-              <ProgressRow label="Value for Money" value={val} />
+              <ProgressRow label="AI Score" value={ai} />
             </div>
             <div className="mt-3 rounded-lg bg-slate-50 p-3 text-xs text-slate-600">
               Avg Device Rating: <span className="font-bold text-slate-800">{decimal(p.avgPhoneScore)} / 10</span>
@@ -2099,4 +2179,13 @@ export default async function ProcessorDetailPage({ params, searchParams }: Prop
     </main>
   );
 }
+
+
+
+
+
+
+
+
+
 

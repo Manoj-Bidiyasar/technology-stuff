@@ -35,6 +35,7 @@ export type ProcessorDetail = {
   memoryFreqByType?: Record<string, number | string>;
   maxMemoryGb?: number;
   memoryBusWidthBits?: number;
+  totalRamBusWidthBits?: number;
   memoryChannels?: string;
   storageType?: string;
   storageTypes?: string[];
@@ -57,6 +58,7 @@ export type ProcessorDetail = {
   aiFeatures?: string[];
   modem?: string;
   networkSupport?: string[];
+  lteCat?: string;
   dual5g?: boolean;
   downloadMbps?: number;
   uploadMbps?: number;
@@ -90,6 +92,11 @@ export type ProcessorDetail = {
   audioCodecs?: string[];
   multimediaFeatures?: string[];
   benchmarks?: {
+    aiScore?: number;
+    antutuCalcVersion?: string;
+    antutuCalc?: number;
+    antutuCalcCpu?: number;
+    antutuCalcGpu?: number;
     antutuVersion?: string;
     antutu?: number;
     antutuCpu?: number;
@@ -99,6 +106,12 @@ export type ProcessorDetail = {
     geekbenchVersion?: string;
     geekbenchSingle?: number;
     geekbenchMulti?: number;
+    threeDMarkWildLife?: number;
+    threeDMarkSolarBay?: number;
+    threeDMarkSteelNomadLight?: number;
+    threeDMarkWildLifeExtreme?: number;
+    threeDMarkWildLifeExtremeMin?: number;
+    threeDMarkWildLifeExtremeMax?: number;
     threeDMarkName?: string;
     threeDMark?: number;
   };
@@ -114,6 +127,14 @@ const getCachedCustomDetails = unstable_cache(
   }
 );
 
+export async function listProcessorDetailsBySlug(): Promise<Record<string, ProcessorDetail>> {
+  try {
+    return await getCachedCustomDetails();
+  } catch {
+    return {};
+  }
+}
+
 export async function getProcessorDetailBySlug(slug: string): Promise<ProcessorDetail | undefined> {
   const key = String(slug || "").trim().toLowerCase();
   let remote: ProcessorDetail | undefined;
@@ -125,4 +146,5 @@ export async function getProcessorDetailBySlug(slug: string): Promise<ProcessorD
   }
   return remote;
 }
+
 

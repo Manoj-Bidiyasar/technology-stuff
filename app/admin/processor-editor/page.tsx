@@ -5,13 +5,14 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import type { ProcessorAdmin } from "@/lib/firestore/processors";
 import type { ProcessorDetail } from "@/lib/processors/details";
+import { calculateAiScore, calculateEfficiencyScore, calculateGamingScore, calculateMemoryStorageScore, calculatePerformanceScore, calculateTotalScore } from "@/lib/processors/scoring";
 import { getPublicSiteUrl } from "@/lib/seo/site";
 import { slugify } from "@/utils/slugify";
 
 type DetailFieldType = "text" | "number" | "csv" | "boolean" | "kv";
 type DetailField = { key: string; label: string; type: DetailFieldType; placeholder?: string };
 type DetailSection = { title: string; fields: DetailField[] };
-type CpuCluster = { id: string; count: number; core: string; ghz: number | ""; isMax: boolean };
+type CpuCluster = { id: string; count: number; core: string; ghz: string; isMax: boolean };
 type RamProfile = { id: string; type: string; freq: number | "" };
 type DisplayModeProfile = { id: string; mode: string; resolution: string; rr: number | "" };
 type CameraLensProfile = { id: string; value: string };
@@ -32,7 +33,7 @@ type BulkRow = { path: string; value: string; type?: string };
 
 const BRAND_OPTIONS = ["Samsung", "Qualcomm", "MediaTek", "Apple", "Google", "Unisoc", "Huawei", "Intel", "AMD"];
 const CLASS_OPTIONS = ["Ultra Flagship", "Flagship", "Upper Midrange", "Midrange", "Budget", "Entry"];
-const MANUFACTURER_OPTIONS = ["TSMC", "Samsung"];
+const FABRICATED_BY_OPTIONS = ["TSMC", "Samsung"];
 const BRAND_TITLE_HINTS: Record<string, string[]> = {
   Samsung: ["Exynos"],
   Qualcomm: ["Snapdragon"],
@@ -47,9 +48,11 @@ const BRAND_TITLE_HINTS: Record<string, string[]> = {
 const INSTRUCTION_SET_OPTIONS = [
   "ARMv8-A",
   "ARMv8.2-A",
+  "ARMv8.4-A",
   "ARMv8.6-A",
   "ARMv9-A",
   "ARMv9.2-A",
+  "ARMv9.3-A",
   "x86-64",
 ];
 const ARCHITECTURE_BITS_OPTIONS = ["64bit", "32bit"];
@@ -86,7 +89,7 @@ const WIFI_OPTIONS = ["Wi-Fi 4", "Wi-Fi 5", "Wi-Fi 6", "Wi-Fi 6E", "Wi-Fi 7"];
 const BLUETOOTH_OPTIONS = ["4.2", "5.0", "5.1", "5.2", "5.3", "5.4", "6.0"];
 const NAVIGATION_OPTIONS = ["GPS", "A-GPS", "GLONASS", "Galileo", "BeiDou", "QZSS", "NavIC"];
 const GNSS_TYPE_OPTIONS = ["Single GNSS", "Dual GNSS (L1/L5)", "Triple GNSS (L1/L5/L2)", "Quad GNSS (L1/L5/L2/L6)"];
-const MEMORY_BUS_WIDTH_OPTIONS = [8, 12, 16, 32, 64];
+const MEMORY_BUS_WIDTH_OPTIONS = [8, 12, 16, 32, 64, 132];
 const CAMERA_SETUP_OPTIONS = [
   { label: "Single", count: 1 },
   { label: "Dual", count: 2 },
@@ -187,7 +190,6 @@ const DETAIL_SECTIONS: DetailSection[] = [
       { key: "cores", label: "Cores (raw text)", type: "text" },
       { key: "instructionSet", label: "Instruction Set", type: "text" },
       { key: "architectureBits", label: "Architecture", type: "text" },
-      { key: "process", label: "Fabrication", type: "text" },
       { key: "transistorCount", label: "Transistor Count", type: "text" },
       { key: "l2Cache", label: "L2 Cache", type: "text" },
       { key: "l3Cache", label: "L3 Cache", type: "text" },
@@ -227,6 +229,7 @@ const DETAIL_SECTIONS: DetailSection[] = [
       { key: "memoryChannels", label: "Memory Channels", type: "text" },
       { key: "storageChannels", label: "Storage Channels", type: "text" },
       { key: "memoryBusWidthBits", label: "Memory Bus Width (bits)", type: "number" },
+      { key: "totalRamBusWidthBits", label: "Total RAM Bus Width (bits)", type: "number" },
       { key: "maxMemoryGb", label: "Max Memory (GB)", type: "number" },
       { key: "storageType", label: "Storage Type", type: "text" },
       { key: "storageTypes", label: "Storage Types", type: "csv" },
@@ -268,6 +271,7 @@ const DETAIL_SECTIONS: DetailSection[] = [
     fields: [
       { key: "modem", label: "Modem Name", type: "text" },
       { key: "networkSupport", label: "Network Support", type: "csv" },
+      { key: "lteCat", label: "LTE Cat", type: "text" },
       { key: "downloadMbps", label: "Download Speed (Mbps)", type: "number" },
       { key: "uploadMbps", label: "Upload Speed (Mbps)", type: "number" },
       { key: "wifi", label: "Wi-Fi", type: "text" },
@@ -321,16 +325,26 @@ const SEO_FIELDS: DetailField[] = [
 
 const QUALITY_FIELDS: Array<{ label: string; path: string; sectionId: string }> = [
   { label: "Launch Date", path: "announced", sectionId: "detail-basic" },
-  { label: "Manufacturer", path: "manufacturer", sectionId: "detail-basic" },
+  { label: "Fabricated By", path: "manufacturer", sectionId: "detail-basic" },
+  { label: "Fabrication", path: "process", sectionId: "detail-basic" },
   { label: "Class", path: "className", sectionId: "detail-basic" },
   { label: "Model Number", path: "model", sectionId: "detail-basic" },
+  { label: "AnTuTu Perf Version", path: "benchmarks.antutuCalcVersion", sectionId: "detail-benchmarks" },
+  { label: "AnTuTu Perf Total", path: "benchmarks.antutuCalc", sectionId: "detail-benchmarks" },
+  { label: "AnTuTu Perf CPU", path: "benchmarks.antutuCalcCpu", sectionId: "detail-benchmarks" },
+  { label: "AnTuTu Perf GPU", path: "benchmarks.antutuCalcGpu", sectionId: "detail-benchmarks" },
   { label: "AnTuTu Version", path: "benchmarks.antutuVersion", sectionId: "detail-benchmarks" },
   { label: "AnTuTu Total", path: "benchmarks.antutu", sectionId: "detail-benchmarks" },
   { label: "Geekbench Version", path: "benchmarks.geekbenchVersion", sectionId: "detail-benchmarks" },
   { label: "Geekbench Single", path: "benchmarks.geekbenchSingle", sectionId: "detail-benchmarks" },
   { label: "Geekbench Multi", path: "benchmarks.geekbenchMulti", sectionId: "detail-benchmarks" },
-  { label: "3DMark Name", path: "benchmarks.threeDMarkName", sectionId: "detail-benchmarks" },
-  { label: "3DMark Score", path: "benchmarks.threeDMark", sectionId: "detail-benchmarks" },
+  { label: "AI Score", path: "benchmarks.aiScore", sectionId: "detail-benchmarks" },
+  { label: "3DMark Wild Life", path: "benchmarks.threeDMarkWildLife", sectionId: "detail-benchmarks" },
+  { label: "3DMark Solar Bay", path: "benchmarks.threeDMarkSolarBay", sectionId: "detail-benchmarks" },
+  { label: "3DMark Steel Nomad Light", path: "benchmarks.threeDMarkSteelNomadLight", sectionId: "detail-benchmarks" },
+  { label: "3DMark Wild Life Extreme", path: "benchmarks.threeDMarkWildLifeExtreme", sectionId: "detail-benchmarks" },
+  { label: "3DMark Wild Life Extreme Min", path: "benchmarks.threeDMarkWildLifeExtremeMin", sectionId: "detail-benchmarks" },
+  { label: "3DMark Wild Life Extreme Max", path: "benchmarks.threeDMarkWildLifeExtremeMax", sectionId: "detail-benchmarks" },
   ...DETAIL_SECTIONS.flatMap((section) =>
     section.fields.map((field) => ({
       label: field.label,
@@ -426,6 +440,7 @@ const BULK_ALLOWED_FIELDS = new Set<string>([
   "memoryChannels",
   "storageChannels",
   "memoryBusWidthBits",
+  "totalRamBusWidthBits",
   "maxMemoryGb",
   "storageType",
   "storageTypes",
@@ -452,6 +467,7 @@ const BULK_ALLOWED_FIELDS = new Set<string>([
   "multimediaFeatures",
   "modem",
   "networkSupport",
+  "lteCat",
   "downloadMbps",
   "uploadMbps",
   "wifi",
@@ -463,6 +479,10 @@ const BULK_ALLOWED_FIELDS = new Set<string>([
   "chargingSpeed",
   "sourceUrl",
   "benchmarks",
+  "benchmarks.antutuCalcVersion",
+  "benchmarks.antutuCalc",
+  "benchmarks.antutuCalcCpu",
+  "benchmarks.antutuCalcGpu",
   "benchmarks.antutuVersion",
   "benchmarks.antutu",
   "benchmarks.antutuCpu",
@@ -472,15 +492,27 @@ const BULK_ALLOWED_FIELDS = new Set<string>([
   "benchmarks.geekbenchVersion",
   "benchmarks.geekbenchSingle",
   "benchmarks.geekbenchMulti",
-  "benchmarks.threeDMarkName",
-  "benchmarks.threeDMark",
+  "benchmarks.aiScore",
+  "benchmarks.threeDMarkWildLife",
+  "benchmarks.threeDMarkSolarBay",
+  "benchmarks.threeDMarkSteelNomadLight",
+  "benchmarks.threeDMarkWildLifeExtreme",
+  "benchmarks.threeDMarkWildLifeExtremeMin",
+  "benchmarks.threeDMarkWildLifeExtremeMax",
   "adminPrivateFields",
 ]);
 
 const PUBLIC_SITE_URL = getPublicSiteUrl();
-const VIDEO_CODEC_OPTIONS = ["H.264", "H.265/HEVC", "APV", "AV1", "VP8", "VP9", "MPEG-4"] as const;
+const VIDEO_CODEC_OPTIONS = ["H.264", "H.265/HEVC", "APV", "AV1", "VP8", "VP9", "MPEG-1/2/4", "MPEG-4", "Motion JPEG"] as const;
 const VIDEO_HDR_FORMAT_OPTIONS = ["HDR", "HDR10", "HDR10+", "Ultra HDR", "HDR Vivid", "HLG", "Dolby Vision"] as const;
+const DISPLAY_HDR_FEATURE_OPTIONS = VIDEO_HDR_FORMAT_OPTIONS;
 const STORAGE_CHANNEL_OPTIONS = ["X-Lane", "Single-channel", "Dual-channel", "Quad-channel", "Octa-channel"] as const;
+const GPU_API_GROUPS = [
+  { key: "opengles", label: "OpenGL ES", options: ["OpenGL ES 3.2", "OpenGL ES 3.1", "OpenGL ES 3.0", "OpenGL ES 2.0"] as const },
+  { key: "opencl", label: "OpenCL", options: ["OpenCL 3.2", "OpenCL 3.0", "OpenCL 2.0", "OpenCL 1.2"] as const },
+  { key: "vulkan", label: "Vulkan", options: ["Vulkan 1.4", "Vulkan 1.3", "Vulkan 1.2", "Vulkan 1.1", "Vulkan 1.0"] as const },
+  { key: "directx", label: "DirectX", options: ["DirectX 12.1", "DirectX 12", "DirectX 11.2", "DirectX 11.1", "DirectX 11.0"] as const },
+] as const;
 const VIDEO_CODEC_ALIAS_MAP: Record<string, string> = {
   [normalizeLookupKey("H.264")]: "H.264",
   [normalizeLookupKey("H264")]: "H.264",
@@ -491,9 +523,14 @@ const VIDEO_CODEC_ALIAS_MAP: Record<string, string> = {
   [normalizeLookupKey("AV1")]: "AV1",
   [normalizeLookupKey("VP8")]: "VP8",
   [normalizeLookupKey("VP9")]: "VP9",
+  [normalizeLookupKey("MPEG-1/2/4")]: "MPEG-1/2/4",
+  [normalizeLookupKey("MPEG124")]: "MPEG-1/2/4",
   [normalizeLookupKey("MPEG-4")]: "MPEG-4",
   [normalizeLookupKey("MPEG4")]: "MPEG-4",
-  [normalizeLookupKey("MPEG")]: "MPEG-4",
+  [normalizeLookupKey("MPEG")]: "MPEG-1/2/4",
+  [normalizeLookupKey("Motion JPEG")]: "Motion JPEG",
+  [normalizeLookupKey("MotionJPEG")]: "Motion JPEG",
+  [normalizeLookupKey("MJPEG")]: "Motion JPEG",
 };
 const VIDEO_HDR_ALIAS_MAP: Record<string, string> = {
   [normalizeLookupKey("HDR")]: "HDR",
@@ -506,6 +543,31 @@ const VIDEO_HDR_ALIAS_MAP: Record<string, string> = {
   [normalizeLookupKey("HLG")]: "HLG",
   [normalizeLookupKey("Hybrid Log-Gamma")]: "HLG",
   [normalizeLookupKey("Dolby Vision")]: "Dolby Vision",
+};
+
+const GPU_API_ALIAS_MAP: Record<string, string> = {
+  [normalizeLookupKey("OpenGL ES 3.2")]: "OpenGL ES 3.2",
+  [normalizeLookupKey("OpenGL ES 3.1")]: "OpenGL ES 3.1",
+  [normalizeLookupKey("OpenGL ES 3.0")]: "OpenGL ES 3.0",
+  [normalizeLookupKey("OpenGL ES 2.0")]: "OpenGL ES 2.0",
+  [normalizeLookupKey("OpenGL 3.2")]: "OpenGL ES 3.2",
+  [normalizeLookupKey("OpenGL 3.1")]: "OpenGL ES 3.1",
+  [normalizeLookupKey("OpenGL 3.0")]: "OpenGL ES 3.0",
+  [normalizeLookupKey("OpenGL 2.0")]: "OpenGL ES 2.0",
+    [normalizeLookupKey("OpenCL 3.2")]: "OpenCL 3.2",
+  [normalizeLookupKey("OpenCL 3.0")]: "OpenCL 3.0",
+  [normalizeLookupKey("OpenCL 2.0")]: "OpenCL 2.0",
+  [normalizeLookupKey("OpenCL 1.2")]: "OpenCL 1.2",
+  [normalizeLookupKey("Vulkan 1.4")]: "Vulkan 1.4",
+  [normalizeLookupKey("Vulkan 1.3")]: "Vulkan 1.3",
+  [normalizeLookupKey("Vulkan 1.2")]: "Vulkan 1.2",
+  [normalizeLookupKey("Vulkan 1.1")]: "Vulkan 1.1",
+  [normalizeLookupKey("Vulkan 1.0")]: "Vulkan 1.0",
+  [normalizeLookupKey("DirectX 12.1")]: "DirectX 12.1",
+  [normalizeLookupKey("DirectX 12")]: "DirectX 12",
+  [normalizeLookupKey("DirectX 11.2")]: "DirectX 11.2",
+  [normalizeLookupKey("DirectX 11.1")]: "DirectX 11.1",
+  [normalizeLookupKey("DirectX 11.0")]: "DirectX 11.0",
 };
 
 
@@ -585,6 +647,38 @@ function formatOrderedVideoHdrFormats(value: unknown): string {
   return normalizeOrderedVideoHdrFormats(value).join(", ");
 }
 
+function normalizeGpuApiToken(value: string): string {
+  const compact = String(value || "").trim();
+  if (!compact) return "";
+  return GPU_API_ALIAS_MAP[normalizeLookupKey(compact)] || compact;
+}
+
+function normalizeOrderedGpuApis(value: unknown): string[] {
+  const raw = Array.isArray(value) ? value.map((item) => String(item)) : parseCsv(String(value || ""));
+  const known = new Set<string>();
+  const custom: string[] = [];
+  const seenCustom = new Set<string>();
+  raw.forEach((item) => {
+    const normalized = normalizeGpuApiToken(item);
+    if (!normalized) return;
+    const knownGroup = GPU_API_GROUPS.find((group) => group.options.includes(normalized as never));
+    if (knownGroup) {
+      known.add(normalized);
+      return;
+    }
+    const customKey = normalizeLookupKey(normalized);
+    if (seenCustom.has(customKey)) return;
+    seenCustom.add(customKey);
+    custom.push(normalized);
+  });
+  const orderedKnown = GPU_API_GROUPS.flatMap((group) => group.options.filter((item) => known.has(item)));
+  return [...orderedKnown, ...custom];
+}
+
+function formatOrderedGpuApis(value: unknown): string {
+  return normalizeOrderedGpuApis(value).join(", ");
+}
+
 function normalizeStorageChannelsValue(value: string): string {
   const compact = String(value || "").trim().replace(/\s+/g, " ");
   if (!compact) return "";
@@ -607,6 +701,29 @@ function normalizeStorageChannelsValue(value: string): string {
   return channelMap[normalizedKey] || compact;
 }
 
+
+function normalizeMemoryChannelsValue(value: string): string {
+  const compact = String(value || "").trim().replace(/\s+/g, " ");
+  if (!compact) return "";
+  const normalizedKey = normalizeLookupKey(compact);
+  const channelMap: Record<string, string> = {
+    [normalizeLookupKey("Single-channel")]: "Single-channel",
+    [normalizeLookupKey("single channel")]: "Single-channel",
+    [normalizeLookupKey("Dual-channel")]: "Dual-channel",
+    [normalizeLookupKey("dual channel")]: "Dual-channel",
+    [normalizeLookupKey("Triple-channel")]: "Triple-channel",
+    [normalizeLookupKey("triple channel")]: "Triple-channel",
+    [normalizeLookupKey("3-channel")]: "Triple-channel",
+    [normalizeLookupKey("triple")]: "Triple-channel",
+    [normalizeLookupKey("Quad-channel")]: "Quad-channel",
+    [normalizeLookupKey("quad channel")]: "Quad-channel",
+    [normalizeLookupKey("Octa-channel")]: "Octa-channel",
+    [normalizeLookupKey("octa channel")]: "Octa-channel",
+    [normalizeLookupKey("8-channel")]: "Octa-channel",
+    [normalizeLookupKey("octa")]: "Octa-channel",
+  };
+  return channelMap[normalizedKey] || compact;
+}
 function normalizeNavigationToken(value: string): string {
   const compact = String(value || "").trim().replace(/\s+/g, " ");
   if (!compact) return "";
@@ -916,6 +1033,21 @@ function parseBitCount(value: unknown): number | undefined {
   return Number.isFinite(parsed) ? parsed : undefined;
 }
 
+function parseMemoryChannelCount(value: unknown): number | undefined {
+  const raw = String(value || "").trim().toLowerCase();
+  if (!raw) return undefined;
+  if (raw.includes("single")) return 1;
+  if (raw.includes("dual")) return 2;
+  if (raw.includes("triple")) return 3;
+  if (raw.includes("quad")) return 4;
+  if (raw.includes("hexa")) return 6;
+  if (raw.includes("octa")) return 8;
+  const match = raw.match(/(\d+)/);
+  if (!match?.[1]) return undefined;
+  const parsed = Number(match[1]);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined;
+}
+
 function parseResolutionPixels(value: string): number | null {
   const raw = String(value || "").trim();
   const m = raw.match(/(\d{3,5})\s*[xX]\s*(\d{3,5})/);
@@ -963,11 +1095,36 @@ function parseDisplayModeString(value: string, idx: number): DisplayModeProfile 
 }
 
 function parseBulkCsv(raw: string): BulkRow[] {
+  const splitCsvLine = (line: string): string[] => {
+    const cells: string[] = [];
+    let current = "";
+    let inQuotes = false;
+    for (let index = 0; index < line.length; index += 1) {
+      const char = line[index];
+      if (char === "\"") {
+        if (inQuotes && line[index + 1] === "\"") {
+          current += "\"";
+          index += 1;
+          continue;
+        }
+        inQuotes = !inQuotes;
+        continue;
+      }
+      if (char === "," && !inQuotes) {
+        cells.push(current.trim());
+        current = "";
+        continue;
+      }
+      current += char;
+    }
+    cells.push(current.trim());
+    return cells;
+  };
   const text = String(raw || "").trim();
   if (!text) return [];
   const rows = text.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
   if (!rows.length) return [];
-  const header = rows[0].split(",").map((h) => h.trim().toLowerCase());
+  const header = splitCsvLine(rows[0]).map((h) => h.trim().toLowerCase());
   const pathIndex = header.indexOf("path");
   const keyIndex = header.indexOf("key");
   const valueIndex = header.indexOf("value");
@@ -976,12 +1133,40 @@ function parseBulkCsv(raw: string): BulkRow[] {
   const start = hasHeader ? 1 : 0;
   const pickPathIndex = pathIndex >= 0 ? pathIndex : (keyIndex >= 0 ? keyIndex : 0);
   return rows.slice(start).map((line) => {
-    const cols = line.split(",").map((c) => c.trim());
+    const cols = splitCsvLine(line);
     const path = cols[pickPathIndex] || "";
     const value = cols[valueIndex >= 0 ? valueIndex : 1] || "";
     const type = typeIndex >= 0 ? cols[typeIndex] : "";
     return { path, value, type };
   }).filter((row) => row.path);
+}
+
+function normalizeBulkImportPath(path: string): string {
+  return path.startsWith("detail.") ? path.slice(7) : path;
+}
+
+function normalizeArchitectureBitsValue(value: string): string {
+  const compact = value.replace(/\s+/g, "").toLowerCase();
+  if (compact === "32" || compact === "32bit" || compact === "32-bit") return "32bit";
+  if (compact === "64" || compact === "64bit" || compact === "64-bit") return "64bit";
+  return value.trim();
+}
+
+function parseArchitectureComposite(value: unknown): { instructionSet?: string; architectureBits?: string } | null {
+  const raw = String(value ?? "").trim();
+  if (!raw) return null;
+
+  const bitMatch = raw.match(/(32|64)\s*-?\s*bit/i);
+  const architectureBits = bitMatch ? normalizeArchitectureBitsValue(bitMatch[0]) : undefined;
+  const instructionSet = raw
+    .replace(/(32|64)\s*-?\s*bit/gi, "")
+    .replace(/[|/]+/g, ",")
+    .replace(/\s*,\s*,+/g, ",")
+    .replace(/(^[\s,]+|[\s,]+$)/g, "")
+    .trim() || undefined;
+
+  if (!instructionSet && !architectureBits) return null;
+  return { instructionSet, architectureBits };
 }
 
 function applyBulkRows(
@@ -1005,7 +1190,27 @@ function applyBulkRows(
   rows.forEach((row) => {
     const path = String(row.path || "").trim();
     if (!path) return;
-    const normalizedPath = path.startsWith("detail.") ? path.slice(7) : path;
+    const normalizedPath = normalizeBulkImportPath(path);
+    if (normalizedPath === "architecture") {
+      const parsedArchitecture = parseArchitectureComposite(row.value);
+      if (!parsedArchitecture) {
+        warnings.push("Could not parse architecture. Use a value like ARMv9.2-A, 64bit.");
+        return;
+      }
+      (
+        [
+          ["instructionSet", parsedArchitecture.instructionSet],
+          ["architectureBits", parsedArchitecture.architectureBits],
+        ] as const
+      ).forEach(([targetPath, rawTargetValue]) => {
+        if (!rawTargetValue) return;
+        const currentValue = getByPath(nextDetail as Record<string, unknown>, targetPath);
+        if (mode === "insert" && isFilled(currentValue)) return;
+        const normalizedValue = normalizeBulkValueForPath(targetPath, rawTargetValue);
+        nextDetail = setByPath(nextDetail as Record<string, unknown>, targetPath, normalizedValue);
+      });
+      return;
+    }
     const allowed = isBulkFieldAllowed(normalizedPath, includeSeo);
     if (!allowed) {
       warnings.push(`Unknown field: ${normalizedPath}`);
@@ -1090,8 +1295,11 @@ function parseMaxCameraSupportNumber(value: unknown): number | undefined {
 
 function getBulkDetailPayload(detail: Record<string, unknown>, includeSeo: boolean): Record<string, unknown> {
   const ordered = orderDetailFields(detail);
-  if (includeSeo) return ordered;
-  const { seo: _seo, ...contentOnly } = ordered;
+  const withoutGeneratedArchitecture = { ...ordered };
+  delete withoutGeneratedArchitecture.architecture;
+  if (includeSeo) return withoutGeneratedArchitecture;
+  const contentOnly = { ...withoutGeneratedArchitecture };
+  delete contentOnly.seo;
   return contentOnly;
 }
 
@@ -1119,6 +1327,7 @@ function normalizeBulkValueForPath(path: string, value: unknown): unknown {
 }
 
 function isBulkFieldAllowed(path: string, includeSeo: boolean): boolean {
+  if (path === "architecture") return true;
   if (path.startsWith("benchmarks.")) return true;
   if (!includeSeo && path.startsWith("seo.")) return false;
   return BULK_ALLOWED_FIELDS.has(path);
@@ -1126,6 +1335,11 @@ function isBulkFieldAllowed(path: string, includeSeo: boolean): boolean {
 
 function detailToBulkCsv(detail: Record<string, unknown>): string {
   const rows: string[] = ["path,value,type"];
+  const escapeCsvCell = (value: string) => {
+    const normalized = String(value ?? "");
+    const escaped = normalized.replace(/"/g, "\"\"");
+    return /[",\r\n]/.test(escaped) ? `"${escaped}"` : escaped;
+  };
   const addRow = (path: string, value: unknown) => {
     if (value === undefined || value === null) return;
     if (typeof value === "object" && !Array.isArray(value)) {
@@ -1133,18 +1347,18 @@ function detailToBulkCsv(detail: Record<string, unknown>): string {
       return;
     }
     if (Array.isArray(value)) {
-      rows.push(`${path},${value.map((v) => String(v)).join("|")},csv`);
+      rows.push(`${escapeCsvCell(path)},${escapeCsvCell(value.map((v) => String(v)).join("|"))},csv`);
       return;
     }
     if (typeof value === "number") {
-      rows.push(`${path},${String(value)},number`);
+      rows.push(`${escapeCsvCell(path)},${escapeCsvCell(String(value))},number`);
       return;
     }
     if (typeof value === "boolean") {
-      rows.push(`${path},${String(value)},boolean`);
+      rows.push(`${escapeCsvCell(path)},${escapeCsvCell(String(value))},boolean`);
       return;
     }
-    rows.push(`${path},${String(value)},text`);
+    rows.push(`${escapeCsvCell(path)},${escapeCsvCell(String(value))},text`);
   };
   Object.entries(detail).forEach(([key, value]) => addRow(key, value));
   return rows.join("\n");
@@ -1182,7 +1396,7 @@ function getProcessorBulkTemplate(includeSeo: boolean): Record<string, unknown> 
     gpuArchitecture: "Adreno",
     pipelines: 6,
     gpuFrequencyMhz: 900,
-    gpuApis: ["Vulkan /* OpenGL | DirectX | OpenCL */", "OpenGL", "DirectX", "OpenCL"],
+    gpuApis: ["OpenGL ES 3.2", "OpenCL 3.2", "Vulkan 1.4", "DirectX 12.1"],
     gpuFlops: "5.6 TFLOPS",
     gpuFeatures: ["Ray tracing /* Variable Rate Shading | HDR rendering */", "Variable Rate Shading", "HDR rendering"],
     aiEngine: "Hexagon NPU",
@@ -1196,6 +1410,7 @@ function getProcessorBulkTemplate(includeSeo: boolean): Record<string, unknown> 
     memoryChannels: "Quad-channel /* Single-channel | Dual-channel */",
     storageChannels: "X-Lane /* Single-channel | Dual-channel | Quad-channel | Octa-channel */",
     memoryBusWidthBits: 64,
+    totalRamBusWidthBits: 256,
     maxMemoryGb: 32,
     storageType: withChoices("NVMe", STORAGE_TYPE_SUGGESTIONS),
     storageTypes: [withChoices("UFS 4.0", STORAGE_TYPE_SUGGESTIONS), "UFS 4.1", "NVMe"],
@@ -1222,6 +1437,7 @@ function getProcessorBulkTemplate(includeSeo: boolean): Record<string, unknown> 
     multimediaFeatures: ["Dolby Vision /* Dolby Atmos */", "Dolby Atmos"],
     modem: "Snapdragon X75",
     networkSupport: [withChoices("5G", NETWORK_SUPPORT_OPTIONS), ...NETWORK_SUPPORT_OPTIONS.filter((item) => item !== "5G")],
+    lteCat: "24",
     dual5g: true,
     downloadMbps: 10000,
     uploadMbps: 3000,
@@ -1234,7 +1450,11 @@ function getProcessorBulkTemplate(includeSeo: boolean): Record<string, unknown> 
     chargingSpeed: "120W",
     sourceUrl: "https://example.com",
     benchmarks: {
-      antutuVersion: "10",
+      antutuCalcVersion: "11",
+      antutuCalc: 1300000,
+      antutuCalcCpu: 420000,
+      antutuCalcGpu: 520000,
+      antutuVersion: "11",
       antutu: 2200000,
       antutuCpu: 520000,
       antutuGpu: 780000,
@@ -1430,6 +1650,7 @@ export default function ProcessorEditorPage() {
   const [activePrivateSection, setActivePrivateSection] = useState<string | null>(null);
   const [processorDetailsCollapsed, setProcessorDetailsCollapsed] = useState(false);
   const [maxResolutionManualOverride, setMaxResolutionManualOverride] = useState(false);
+  const [maxCameraSupportManualOverride, setMaxCameraSupportManualOverride] = useState(false);
   const [maxResolutionRowId, setMaxResolutionRowId] = useState("");
   const [bulkJsonInput, setBulkJsonInput] = useState("");
   const [bulkCsvInput, setBulkCsvInput] = useState("");
@@ -1506,7 +1727,8 @@ export default function ProcessorEditorPage() {
     return hints.filter((item) => item.toLowerCase().startsWith(afterBrand.toLowerCase()));
   }, [name, vendor]);
   const isUpcoming = String(getDetailField("announced") || "").toLowerCase() === "upcoming";
-  const antutuTotal = (getDetailField("benchmarks.antutu") ?? form.antutu) as number | string | undefined;
+  const antutuCalcTotal = (getDetailField("benchmarks.antutuCalc") ?? form.antutu) as number | string | undefined;
+  const antutuTotal = getDetailField("benchmarks.antutu") as number | string | undefined;
   const coreConfigurationRaw = String(getDetailField("coreConfiguration") || "").trim();
   const processNm = extractFabricationNm(getDetailField("process"));
   const tdpValue = String(getDetailField("tdpW") ?? "");
@@ -1516,6 +1738,111 @@ export default function ProcessorEditorPage() {
   const l3Cache = parseCacheSize(getDetailField("l3Cache"));
   const slcCache = parseCacheSize(getDetailField("slcCache"));
   const memoryBusWidthValue = parseBitCount(getDetailField("memoryBusWidthBits"));
+  const memoryChannelCount = parseMemoryChannelCount(getDetailField("memoryChannels"));
+  const totalRamBusWidthValue = memoryBusWidthValue && memoryChannelCount
+    ? memoryBusWidthValue * memoryChannelCount
+    : undefined;
+  const scorePreview = useMemo(() => {
+    const memoryTypes = ((getDetailField("memoryTypes") as string[] | undefined) || []).filter(Boolean);
+    const storageTypes = ((getDetailField("storageTypes") as string[] | undefined) || []).filter(Boolean);
+    const memoryFreqByType = (getDetailField("memoryFreqByType") as Record<string, number | string> | undefined) || undefined;
+    const performance = calculatePerformanceScore({
+      processorName: String(form.name || ""),
+      antutuScore: Number(getDetailField("benchmarks.antutuCalc") || 0) || undefined,
+      antutuFallbackScore: Number(getDetailField("benchmarks.antutu") || form.antutu || 0) || undefined,
+      geekbenchSingle: Number(getDetailField("benchmarks.geekbenchSingle") || 0) || undefined,
+      geekbenchMulti: Number(getDetailField("benchmarks.geekbenchMulti") || 0) || undefined,
+      maxCpuGhz: Number(form.maxCpuGhz || 0) || undefined,
+      fabricationNm: processNm || undefined,
+      process: String(getDetailField("process") || ""),
+      instructionSet: String(getDetailField("instructionSet") || ""),
+      architectureBits: String(getDetailField("architectureBits") || ""),
+      coreConfiguration: String(getDetailField("coreConfiguration") || ""),
+      cores: String(getDetailField("cores") || ""),
+      memoryType: String(getDetailField("memoryType") || ""),
+      memoryTypes,
+      memoryFreqMhz: Number(getDetailField("memoryFreqMhz") || 0) || undefined,
+      memoryFreqByType,
+      memoryBusWidthBits: memoryBusWidthValue || undefined,
+      totalRamBusWidthBits: totalRamBusWidthValue || undefined,
+      storageType: String(getDetailField("storageType") || ""),
+      storageTypes,
+    }, {
+      antutuReference: 3000000,
+      geekbenchSingleReference: 3500,
+      geekbenchMultiReference: 12000,
+      maxCpuGhzReference: 4.5,
+      memoryFrequencyReference: 5333,
+    }).score;
+    const efficiency = calculateEfficiencyScore({
+      fabricationNm: processNm || undefined,
+      process: String(getDetailField("process") || ""),
+      instructionSet: String(getDetailField("instructionSet") || ""),
+      architectureBits: String(getDetailField("architectureBits") || ""),
+      coreConfiguration: String(getDetailField("coreConfiguration") || ""),
+      cores: String(getDetailField("cores") || ""),
+    });
+    const gamingBreakdown = calculateGamingScore({
+      fabricationNm: processNm || undefined,
+      process: String(getDetailField("process") || ""),
+      instructionSet: String(getDetailField("instructionSet") || ""),
+      architectureBits: String(getDetailField("architectureBits") || ""),
+      coreConfiguration: String(getDetailField("coreConfiguration") || ""),
+      cores: String(getDetailField("cores") || ""),
+      memoryType: String(getDetailField("memoryType") || ""),
+      memoryTypes,
+      memoryFreqMhz: Number(getDetailField("memoryFreqMhz") || 0) || undefined,
+      memoryFreqByType,
+      memoryBusWidthBits: memoryBusWidthValue || undefined,
+      totalRamBusWidthBits: totalRamBusWidthValue || undefined,
+      storageType: String(getDetailField("storageType") || ""),
+      storageTypes,
+      gpuFlops: String(getDetailField("gpuFlops") || ""),
+      wildLifeScore: Number(getDetailField("benchmarks.threeDMarkWildLife") || 0) || undefined,
+      antutu11GpuScore: Number(getDetailField("benchmarks.antutuCalcGpu") || 0) || undefined,
+    }, {
+      gpuFlopsReference: 6000,
+      wildLifeReference: 20000,
+      antutuGpuReference: 1000000,
+      memoryFrequencyReference: 5333,
+    });
+    const ai = calculateAiScore({
+      processorName: String(form.name || ""),
+      aiBenchmarkScore: Number(getDetailField("benchmarks.aiScore") || 0) || undefined,
+      fabricationNm: processNm || undefined,
+      process: String(getDetailField("process") || ""),
+      instructionSet: String(getDetailField("instructionSet") || ""),
+      architectureBits: String(getDetailField("architectureBits") || ""),
+      coreConfiguration: String(getDetailField("coreConfiguration") || ""),
+      cores: String(getDetailField("cores") || ""),
+      memoryType: String(getDetailField("memoryType") || ""),
+      memoryTypes,
+      memoryFreqMhz: Number(getDetailField("memoryFreqMhz") || 0) || undefined,
+      memoryFreqByType,
+      memoryBusWidthBits: memoryBusWidthValue || undefined,
+      totalRamBusWidthBits: totalRamBusWidthValue || undefined,
+      storageType: String(getDetailField("storageType") || ""),
+      storageTypes,
+    }, {
+      aiBenchmarkReference: 350000,
+      memoryFrequencyReference: 5333,
+    }).score;
+    const memoryStorage = calculateMemoryStorageScore({
+      memoryType: String(getDetailField("memoryType") || ""),
+      memoryTypes,
+      memoryFreqMhz: Number(getDetailField("memoryFreqMhz") || 0) || undefined,
+      memoryFreqByType,
+      memoryBusWidthBits: memoryBusWidthValue || undefined,
+      totalRamBusWidthBits: totalRamBusWidthValue || undefined,
+      storageType: String(getDetailField("storageType") || ""),
+      storageTypes,
+      frequencyReferenceMhz: 5333,
+    }).score;
+    const gpuParts = [gamingBreakdown.gpuComputeScore, gamingBreakdown.gpuBenchmarkScore].filter((value): value is number => Number.isFinite(value));
+    const gpu = gpuParts.length ? Math.round(gpuParts.reduce((sum, value) => sum + value, 0) / gpuParts.length) : gamingBreakdown.score;
+    const total = calculateTotalScore({ performance, gaming: gamingBreakdown.score, efficiency, ai });
+    return { total, performance, gpu, efficiency, ai, memoryStorage };
+  }, [form.antutu, form.maxCpuGhz, form.name, getDetailField, memoryBusWidthValue, processNm, totalRamBusWidthValue]);
   const appliedRamSummary = (() => {
     const types = (getDetailField("memoryTypes") as string[] | undefined) || [];
     const freqMap = (getDetailField("memoryFreqByType") as Record<string, number | string> | undefined) || {};
@@ -1547,9 +1874,9 @@ export default function ProcessorEditorPage() {
     return modes.map((item) => String(item).trim()).filter(Boolean).join(", ");
   })();
   const appliedVideoPlaybackSummary = (() => String(getDetailField("videoPlayback") || "").trim())();
+  const antutuCalcVersionValue = String(getDetailField("benchmarks.antutuCalcVersion") || "").trim();
   const antutuVersionValue = String(getDetailField("benchmarks.antutuVersion") || "").trim();
   const geekbenchVersionValue = String(getDetailField("benchmarks.geekbenchVersion") || "").trim();
-  const threeDMarkNameValue = String(getDetailField("benchmarks.threeDMarkName") || "").trim();
   const csvSuggestionPool = useMemo(() => buildCsvSuggestionPool(HELPER_SUGGESTIONS), [helperAliasVersion]);
   const helperSectionSuggestions = useMemo(() => {
     return HELPER_SUGGESTIONS_BY_SECTION;
@@ -1657,6 +1984,103 @@ export default function ProcessorEditorPage() {
     );
   };
 
+  const renderGpuApiInput = (placeholder?: string) => {
+    const fieldKey = "gpuApis";
+    const rawValue = csvInputValue(getDetailField(fieldKey));
+    const normalizedKey = normalizeLookupKey(fieldKey);
+    const normalizedTokens = normalizeOrderedGpuApis(rawValue);
+    const selected = new Set(normalizedTokens.filter((item) => GPU_API_GROUPS.some((group) => group.options.includes(item as never))));
+    return (
+      <div className="grid gap-3">
+        <div className="grid gap-3 lg:grid-cols-4">
+          {GPU_API_GROUPS.map((group) => (
+            <div key={group.key} className="grid gap-1.5 rounded-xl border border-slate-200 p-2.5">
+              <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-600">{group.label}</span>
+              <div className="flex flex-wrap gap-1.5">
+                {group.options.map((item) => {
+                  const active = selected.has(item);
+                  return (
+                    <button
+                      key={`${group.key}-${item}`}
+                      type="button"
+                      onClick={() => {
+                        const current = normalizeOrderedGpuApis(getDetailField(fieldKey));
+                        const nextKnown = new Set(current.filter((token) => GPU_API_GROUPS.some((apiGroup) => apiGroup.options.includes(token as never))));
+                        const custom = current.filter((token) => !GPU_API_GROUPS.some((apiGroup) => apiGroup.options.includes(token as never)));
+                        group.options.forEach((option) => nextKnown.delete(option));
+                        if (!active) nextKnown.add(item);
+                        const ordered = GPU_API_GROUPS.flatMap((apiGroup) => apiGroup.options.filter((option) => nextKnown.has(option)));
+                        const nextValue = [...ordered, ...custom].join(", ");
+                        setDetailField(fieldKey, nextValue);
+                        setCsvSuggestKey(normalizedKey);
+                        setCsvSuggestTerm(getLastCsvToken(nextValue));
+                      }}
+                      className={`rounded-full border px-2 py-1 text-[10px] font-semibold leading-tight transition ${
+                        active
+                          ? "border-blue-700 bg-blue-700 text-white shadow-sm shadow-blue-200 ring-2 ring-blue-200"
+                          : "border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50 hover:text-slate-800"
+                      }`}
+                    >
+                      {item.replace(`${group.label} `, "")}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+        </div>
+        <div
+          className="relative"
+          ref={(node) => {
+            csvSuggestRefs.current[normalizedKey] = node;
+          }}
+        >
+          <input
+            value={rawValue}
+            onChange={(e) => {
+              const next = e.target.value;
+              setDetailField(fieldKey, next);
+              setCsvSuggestKey(normalizedKey);
+              setCsvSuggestTerm(getLastCsvToken(next));
+              setCsvSuggestOpen(true);
+            }}
+            onFocus={() => {
+              setCsvSuggestKey(normalizedKey);
+              setCsvSuggestTerm(getLastCsvToken(rawValue));
+              setCsvSuggestOpen(true);
+            }}
+            onBlur={(e) => {
+              const next = e.target.value;
+              setDetailField(fieldKey, formatOrderedGpuApis(next));
+            }}
+            placeholder={placeholder}
+            className="h-9 w-full rounded-lg border border-slate-200 px-3 text-sm"
+          />
+          {csvSuggestOpen && csvSuggestKey === normalizedKey && csvSuggestions.length > 0 ? (
+            <div className="absolute z-20 mt-1 max-h-56 w-full overflow-auto rounded-xl border border-slate-200 bg-white shadow-lg">
+              {csvSuggestions.map((item) => (
+                <button
+                  key={item}
+                  type="button"
+                  onPointerDown={(e) => e.preventDefault()}
+                  onClick={() => {
+                    const next = replaceLastCsvToken(rawValue, item);
+                    setDetailField(fieldKey, next);
+                    setCsvSuggestTerm("");
+                    setCsvSuggestOpen(false);
+                  }}
+                  className="flex min-h-11 w-full items-center justify-between gap-2 border-b border-slate-100 px-3 py-2.5 text-left text-[15px] font-medium text-slate-700 last:border-b-0 hover:bg-blue-50 sm:min-h-0 sm:py-2 sm:text-sm"
+                >
+                  {item}
+                </button>
+              ))}
+            </div>
+          ) : null}
+        </div>
+      </div>
+    );
+  };
+
   const renderVideoCodecInput = (fieldKey: "videoRecordingCodecs" | "videoPlaybackCodecs", placeholder?: string) => {
     const rawValue = csvInputValue(getDetailField(fieldKey));
     const normalizedKey = normalizeLookupKey(fieldKey);
@@ -1746,15 +2170,15 @@ export default function ProcessorEditorPage() {
     );
   };
 
-  const renderVideoHdrInput = (fieldKey: "videoRecordingHdrFormats" | "videoPlaybackHdrFormats", placeholder?: string) => {
+  const renderVideoHdrInput = (fieldKey: "videoRecordingHdrFormats" | "videoPlaybackHdrFormats" | "displayFeatures", placeholder?: string) => {
     const rawValue = csvInputValue(getDetailField(fieldKey));
     const normalizedKey = normalizeLookupKey(fieldKey);
     const normalizedTokens = normalizeOrderedVideoHdrFormats(rawValue);
-    const selected = new Set(normalizedTokens.filter((item) => (VIDEO_HDR_FORMAT_OPTIONS as readonly string[]).includes(item)));
+    const selected = new Set(normalizedTokens.filter((item) => (DISPLAY_HDR_FEATURE_OPTIONS as readonly string[]).includes(item)));
     return (
       <div className="grid gap-2">
         <div className="grid grid-cols-4 gap-1 sm:flex sm:flex-wrap sm:gap-2">
-          {VIDEO_HDR_FORMAT_OPTIONS.map((item) => {
+          {DISPLAY_HDR_FEATURE_OPTIONS.map((item) => {
             const active = selected.has(item);
             return (
               <button
@@ -1762,11 +2186,11 @@ export default function ProcessorEditorPage() {
                 type="button"
                 onClick={() => {
                   const current = normalizeOrderedVideoHdrFormats(getDetailField(fieldKey));
-                  const nextKnown = new Set(current.filter((token) => (VIDEO_HDR_FORMAT_OPTIONS as readonly string[]).includes(token)));
-                  const custom = current.filter((token) => !(VIDEO_HDR_FORMAT_OPTIONS as readonly string[]).includes(token));
+                  const nextKnown = new Set(current.filter((token) => (DISPLAY_HDR_FEATURE_OPTIONS as readonly string[]).includes(token)));
+                  const custom = current.filter((token) => !(DISPLAY_HDR_FEATURE_OPTIONS as readonly string[]).includes(token));
                   if (nextKnown.has(item)) nextKnown.delete(item);
                   else nextKnown.add(item);
-                  const ordered = VIDEO_HDR_FORMAT_OPTIONS.filter((format) => nextKnown.has(format));
+                  const ordered = DISPLAY_HDR_FEATURE_OPTIONS.filter((format) => nextKnown.has(format));
                   const nextValue = [...ordered, ...custom].join(", ");
                   setDetailField(fieldKey, nextValue);
                   setCsvSuggestKey(normalizedKey);
@@ -2147,23 +2571,16 @@ export default function ProcessorEditorPage() {
   }, [canonicalAutoValue, currentCanonical]);
 
   useEffect(() => {
-    if (!antutuVersionValue) setDetailField("benchmarks.antutuVersion", "10");
+    if (!antutuCalcVersionValue) setDetailField("benchmarks.antutuCalcVersion", "11");
+  }, [antutuCalcVersionValue]);
+
+  useEffect(() => {
+    if (!antutuVersionValue) setDetailField("benchmarks.antutuVersion", "11");
   }, [antutuVersionValue]);
 
   useEffect(() => {
     if (!geekbenchVersionValue) setDetailField("benchmarks.geekbenchVersion", "6");
   }, [geekbenchVersionValue]);
-
-  useEffect(() => {
-    const normalized = normalizeBenchmarkLabel(threeDMarkNameValue);
-    if (!normalized) {
-      setDetailField("benchmarks.threeDMarkName", "Wild Life");
-      return;
-    }
-    if (normalized !== threeDMarkNameValue) {
-      setDetailField("benchmarks.threeDMarkName", normalized);
-    }
-  }, [threeDMarkNameValue]);
 
   useEffect(() => {
     const gpuName = String(getDetailField("gpuName") || "").trim();
@@ -2320,7 +2737,7 @@ export default function ProcessorEditorPage() {
           id: `p${idx + 1}`,
           count: Number(match[1]) || 1,
           core: normalizeCpuCoreName(String(match[2] || "").trim()),
-          ghz: Number(match[3]) || 1,
+          ghz: String(match[3] || "1"),
           isMax: idx === 0,
         } as CpuCluster;
       })
@@ -2450,21 +2867,7 @@ export default function ProcessorEditorPage() {
     const detail = form.detail || {};
     const ordered = getBulkDetailPayload(detail, bulkMode === "fullBulk");
     setBulkJsonInput(JSON.stringify(ordered, null, 2));
-    const csvRows: string[] = ["path,value,type"];
-    const addRow = (path: string, value: unknown) => {
-      if (value === undefined || value === null) return;
-      if (typeof value === "object" && !Array.isArray(value)) {
-        Object.entries(value as Record<string, unknown>).forEach(([k, v]) => {
-          addRow(path ? `${path}.${k}` : k, v);
-        });
-        return;
-      }
-      const type = Array.isArray(value) ? "csv" : typeof value === "number" ? "number" : typeof value === "boolean" ? "boolean" : "text";
-      const valStr = Array.isArray(value) ? value.join('|') : String(value);
-      csvRows.push(`${path},${valStr.includes(',') ? `"${valStr}"` : valStr},${type}`);
-    };
-    Object.entries(ordered).forEach(([key, value]) => addRow(key, value));
-    setBulkCsvInput(csvRows.join("\n"));
+    setBulkCsvInput(detailToBulkCsv(ordered));
   }, [form.detail, bulkMode]);
 
   useEffect(() => {
@@ -2506,16 +2909,19 @@ export default function ProcessorEditorPage() {
       .map((row) => ({
         ...row,
         count: Math.max(1, Number(row.count) || 1),
-        ghz: Math.max(0.1, Number(row.ghz) || 0.1),
+        ghz: String(Math.max(0.1, Number(row.ghz) || 0.1)),
         core: normalizeCpuCoreName(row.core),
       }))
       .filter((row) => row.core);
     if (cleaned.length === 0) return;
     setCpuClusters(cleaned);
-    const config = cleaned.map((row) => `${row.count}x ${row.core} @ ${row.ghz}GHz`).join(", ");
+    const config = cleaned.map((row) => {
+      const ghz = String(row.ghz || "").includes(".") ? String(row.ghz) : `${row.ghz}.0`;
+      return `${row.count}x ${row.core} @ ${ghz}GHz`;
+    }).join(", ");
     const total = cleaned.reduce((sum, row) => sum + row.count, 0);
     const selected = cleaned.find((row) => row.isMax);
-    const maxGhz = selected ? selected.ghz : Math.max(...cleaned.map((row) => row.ghz));
+    const maxGhz = selected ? Number(selected.ghz) : Math.max(...cleaned.map((row) => Number(row.ghz)));
     setDetailField("coreConfiguration", config);
     setDetailField("coreCount", total);
     setField("maxCpuGhz", maxGhz);
@@ -2675,7 +3081,7 @@ export default function ProcessorEditorPage() {
     rows.forEach((row) => {
       const path = String(row.path || "").trim();
       if (!path) return;
-      const normalizedPath = path.startsWith("detail.") ? path.slice(7) : path;
+      const normalizedPath = normalizeBulkImportPath(path);
       if (!isBulkFieldAllowed(normalizedPath, includeSeo)) {
         warnings.push(`Unknown field: ${normalizedPath}`);
       }
@@ -2797,7 +3203,7 @@ export default function ProcessorEditorPage() {
     const formatted = normalized.map((row) => formatCameraSetupRow(row)).map((x) => x.trim()).filter(Boolean);
     const lensMpValues = normalized
       .flatMap((row) => row.lenses.map((lens) => {
-        const m = String(lens.value || "").match(/([\d.]+)\s*mp?/i);
+        const m = String(lens.value || "").match(/([\d.]+)/);
         return m?.[1] ? Number(m[1]) : NaN;
       }))
       .filter((n) => Number.isFinite(n)) as number[];
@@ -2805,7 +3211,8 @@ export default function ProcessorEditorPage() {
       ? Math.max(...lensMpValues)
       : undefined;
     setDetailField("cameraSupportModes", formatted);
-    setDetailField("maxCameraSupport", maxCameraSupportValue);
+    const currentMaxCameraSupport = parseMaxCameraSupportNumber(getDetailField("maxCameraSupport"));
+    if (currentMaxCameraSupport === undefined) setDetailField("maxCameraSupport", maxCameraSupportValue);
   }
 
   function makeCameraSetupDraft(count: number, source: CameraLensProfile[], clearValues = false): CameraLensProfile[] {
@@ -2868,7 +3275,11 @@ export default function ProcessorEditorPage() {
               detail[key] = normalizeOrderedVideoCodecs(raw);
               return;
             }
-            if (key === "videoRecordingHdrFormats" || key === "videoPlaybackHdrFormats") {
+            if (key === "gpuApis") {
+              detail[key] = normalizeOrderedGpuApis(raw);
+              return;
+            }
+            if (key === "videoRecordingHdrFormats" || key === "videoPlaybackHdrFormats" || key === "displayFeatures") {
               detail[key] = normalizeOrderedVideoHdrFormats(raw);
               return;
             }
@@ -2881,16 +3292,21 @@ export default function ProcessorEditorPage() {
             if (Array.isArray(raw)) setByPath(detail, key, normalizeCsvArray(raw.map((item) => String(item))));
           });
           Object.entries(detail).forEach(([key, raw]) => {
-            if (typeof raw === "string" && key !== "sourceUrl") detail[key] = normalizeTextToken(raw);
+            if (typeof raw === "string" && key !== "sourceUrl") {
+              if (key === "storageChannels") detail[key] = normalizeStorageChannelsValue(raw);
+              else detail[key] = normalizeTextToken(raw);
+            }
             if (Array.isArray(raw) && key !== "cameraSupportModes") {
               const items = raw.map((item) => String(item));
               if (key === "videoRecordingCodecs" || key === "videoPlaybackCodecs") detail[key] = normalizeOrderedVideoCodecs(items);
-              else if (key === "videoRecordingHdrFormats" || key === "videoPlaybackHdrFormats") detail[key] = normalizeOrderedVideoHdrFormats(items);
+              else if (key === "gpuApis") detail[key] = normalizeOrderedGpuApis(items);
+              else if (key === "videoRecordingHdrFormats" || key === "videoPlaybackHdrFormats" || key === "displayFeatures") detail[key] = normalizeOrderedVideoHdrFormats(items);
               else detail[key] = normalizeCsvArray(items);
             }
           });
           const ins = String(detail.instructionSet || "").trim();
           const bits = String(detail.architectureBits || "").trim();
+          detail.totalRamBusWidthBits = totalRamBusWidthValue;
           if (ins && bits) detail.architecture = `${ins}, ${bits}`;
           return orderDetailFields(detail);
         })()) as ProcessorDetail | undefined,
@@ -3108,7 +3524,7 @@ export default function ProcessorEditorPage() {
                               ))}
                             </div>
                           ) : (
-                            <p className="mt-2 text-xs font-semibold text-emerald-700">Bypassed — this section will be ignored in quality checks.</p>
+                            <p className="mt-2 text-xs font-semibold text-emerald-700">Bypassed â€” this section will be ignored in quality checks.</p>
                           )}
                         </div>
                       );
@@ -3338,141 +3754,232 @@ export default function ProcessorEditorPage() {
         {bulkMode === "single" ? (
         <>
         <section className="grid gap-3 lg:grid-cols-3">
-          <div className="panel p-4" id="detail-basic">
-            <h2 className="text-base font-bold text-slate-900">Basic Information</h2>
-            <div className="mt-3 grid gap-3">
-              <label className="grid gap-1">
-                <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">Launch Date</span>
-                <input
-                  type="date"
-                  value={isUpcoming ? "" : String(getDetailField("announced") || "")}
-                  onChange={(e) => setDetailField("announced", e.target.value)}
-                  disabled={isUpcoming}
-                  className={`h-9 rounded-lg border border-slate-200 px-3 text-sm ${isUpcoming ? "bg-slate-50 text-slate-500" : ""}`}
-                />
-              </label>
-              <label className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-600">
-                <input
-                  type="checkbox"
-                  checked={isUpcoming}
-                  onChange={(e) => setDetailField("announced", e.target.checked ? "upcoming" : "")}
-                  className="h-4 w-4 rounded border-slate-300"
-                />
-                Upcoming
-              </label>
-              <label className="grid gap-1">
-                <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">Class</span>
-                <select
-                  value={String(getDetailField("className") || "")}
-                  onChange={(e) => setDetailField("className", e.target.value)}
-                  className="h-9 rounded-lg border border-slate-200 px-3 text-sm"
-                >
-                  <option value="">Select Class</option>
-                  {CLASS_OPTIONS.map((item) => (
-                    <option key={item} value={item}>{item}</option>
-                  ))}
-                </select>
-              </label>
-              <label className="grid gap-1">
-                <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">Manufacturer</span>
-                <div className="flex flex-wrap gap-2">
-                  {MANUFACTURER_OPTIONS.map((item) => {
-                    const selected = String(getDetailField("manufacturer") || "") === item;
-                    return (
-                      <button
-                        key={item}
-                        type="button"
-                        onClick={() => setDetailField("manufacturer", selected ? "" : item)}
-                        className={`rounded-full border px-3 py-1 text-xs font-semibold transition ${selected ? "border-blue-600 bg-blue-600 text-white shadow-sm" : "border-slate-200 bg-white text-slate-700 hover:border-blue-300 hover:text-blue-700"}`}
-                      >
-                        {item}
-                      </button>
-                    );
-                  })}
-                </div>
-                {renderTextSuggestInput(
-                  "manufacturer",
-                  String(getDetailField("manufacturer") || ""),
-                  (next) => setDetailField("manufacturer", next),
-                  { className: "h-9 rounded-lg border border-slate-200 px-3 text-sm", placeholder: "TSMC or Samsung" }
-                )}
-              </label>
-              <label className="grid gap-1">
-                <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">Model Number</span>
-                <input
-                  value={String(getDetailField("model") || "")}
-                  onChange={(e) => setDetailField("model", e.target.value)}
-                  className="h-9 rounded-lg border border-slate-200 px-3 text-sm"
-                />
-              </label>
+          <div className="space-y-3">
+            <div className="panel p-4" id="detail-basic">
+              <h2 className="text-base font-bold text-slate-900">Basic Information</h2>
+              <div className="mt-3 grid gap-3">
+                <label className="grid gap-1">
+                  <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">Launch Date</span>
+                  <input
+                    type="date"
+                    value={isUpcoming ? "" : String(getDetailField("announced") || "")}
+                    onChange={(e) => setDetailField("announced", e.target.value)}
+                    disabled={isUpcoming}
+                    className={`h-9 rounded-lg border border-slate-200 px-3 text-sm ${isUpcoming ? "bg-slate-50 text-slate-500" : ""}`}
+                  />
+                </label>
+                <label className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-600">
+                  <input
+                    type="checkbox"
+                    checked={isUpcoming}
+                    onChange={(e) => setDetailField("announced", e.target.checked ? "upcoming" : "")}
+                    className="h-4 w-4 rounded border-slate-300"
+                  />
+                  Upcoming
+                </label>
+                <label className="grid gap-1">
+                  <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">Class</span>
+                  <select
+                    value={String(getDetailField("className") || "")}
+                    onChange={(e) => setDetailField("className", e.target.value)}
+                    className="h-9 rounded-lg border border-slate-200 px-3 text-sm"
+                  >
+                    <option value="">Select Class</option>
+                    {CLASS_OPTIONS.map((item) => (
+                      <option key={item} value={item}>{item}</option>
+                    ))}
+                  </select>
+                </label>
+                <label className="grid gap-1">
+                  <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">Fabricated By</span>
+                  <div className="flex flex-wrap gap-2">
+                    {FABRICATED_BY_OPTIONS.map((item) => {
+                      const selected = String(getDetailField("manufacturer") || "") === item;
+                      return (
+                        <button
+                          key={item}
+                          type="button"
+                          onClick={() => setDetailField("manufacturer", selected ? "" : item)}
+                          className={`rounded-full border px-3 py-1 text-xs font-semibold transition ${selected ? "border-blue-600 bg-blue-600 text-white shadow-sm" : "border-slate-200 bg-white text-slate-700 hover:border-blue-300 hover:text-blue-700"}`}
+                        >
+                          {item}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {renderTextSuggestInput(
+                    "manufacturer",
+                    String(getDetailField("manufacturer") || ""),
+                    (next) => setDetailField("manufacturer", next),
+                    { className: "h-9 rounded-lg border border-slate-200 px-3 text-sm", placeholder: "TSMC or Samsung" }
+                  )}
+                </label>
+                <label className="grid gap-1">
+                  <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">Fabrication</span>
+                  <div className="relative">
+                    <input
+                      type="number"
+                      step="0.1"
+                      min={1}
+                      value={extractFabricationNm(getDetailField("process"))}
+                      onChange={(e) => setDetailField("process", e.target.value ? `${e.target.value}nm` : "")}
+                      className="h-9 w-full rounded-lg border border-slate-200 px-3 pr-12 text-sm"
+                    />
+                    <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-sm text-slate-500">nm</span>
+                  </div>
+                </label>
+                <label className="grid gap-1">
+                  <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">Model Number</span>
+                  <input
+                    value={String(getDetailField("model") || "")}
+                    onChange={(e) => setDetailField("model", e.target.value)}
+                    className="h-9 rounded-lg border border-slate-200 px-3 text-sm"
+                  />
+                </label>
+              </div>
+            </div>
+
+            <div className="panel p-4">
+              <h2 className="text-base font-bold text-slate-900">Score Section</h2>
+              <p className="mt-1 text-xs text-slate-600">Live score preview based on the current processor details and benchmark values.</p>
+              <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                {[
+                  { label: "Total Score", value: scorePreview.total },
+                  { label: "Performance Score", value: scorePreview.performance },
+                  { label: "GPU Score", value: scorePreview.gpu },
+                  { label: "Efficiency Score", value: scorePreview.efficiency },
+                  { label: "AI Score", value: scorePreview.ai },
+                  { label: "Memory & Storage Score", value: scorePreview.memoryStorage },
+                ].map((item) => (
+                  <div key={item.label} className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+                    <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">{item.label}</span>
+                    <p className="mt-1 text-lg font-bold text-slate-900">{item.value}</p>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
 
           <div className="panel p-4" id="detail-benchmarks">
             <h2 className="text-base font-bold text-slate-900">AnTuTu Benchmark</h2>
-            <div className="mt-3 grid gap-3">
-              <label className="grid gap-1">
-                <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">AnTuTu Version</span>
-                <input
-                  value={antutuVersionValue || "10"}
-                  onChange={(e) => setDetailField("benchmarks.antutuVersion", e.target.value)}
-                  className="h-9 rounded-lg border border-slate-200 px-3 text-sm"
-                />
-              </label>
-              <label className="grid gap-1">
-                <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">Total Score</span>
-                <input
-                  type="number"
-                  step="any"
-                  value={String(antutuTotal ?? "")}
-                  onChange={(e) => {
-                    const value = e.target.value === "" ? undefined : Number(e.target.value);
-                    setDetailField("benchmarks.antutu", value);
-                    setField("antutu", value ?? 0);
-                  }}
-                  className="h-9 rounded-lg border border-slate-200 px-3 text-sm"
-                />
-              </label>
-              <label className="grid gap-1">
-                <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">CPU</span>
-                <input
-                  type="number"
-                  step="any"
-                  value={String(getDetailField("benchmarks.antutuCpu") ?? "")}
-                  onChange={(e) => setDetailField("benchmarks.antutuCpu", e.target.value === "" ? undefined : Number(e.target.value))}
-                  className="h-9 rounded-lg border border-slate-200 px-3 text-sm"
-                />
-              </label>
-              <label className="grid gap-1">
-                <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">GPU</span>
-                <input
-                  type="number"
-                  step="any"
-                  value={String(getDetailField("benchmarks.antutuGpu") ?? "")}
-                  onChange={(e) => setDetailField("benchmarks.antutuGpu", e.target.value === "" ? undefined : Number(e.target.value))}
-                  className="h-9 rounded-lg border border-slate-200 px-3 text-sm"
-                />
-              </label>
-              <label className="grid gap-1">
-                <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">Memory</span>
-                <input
-                  type="number"
-                  step="any"
-                  value={String(getDetailField("benchmarks.antutuMemory") ?? "")}
-                  onChange={(e) => setDetailField("benchmarks.antutuMemory", e.target.value === "" ? undefined : Number(e.target.value))}
-                  className="h-9 rounded-lg border border-slate-200 px-3 text-sm"
-                />
-              </label>
-              <label className="grid gap-1">
-                <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">UX</span>
-                <input
-                  type="number"
-                  step="any"
-                  value={String(getDetailField("benchmarks.antutuUx") ?? "")}
-                  onChange={(e) => setDetailField("benchmarks.antutuUx", e.target.value === "" ? undefined : Number(e.target.value))}
-                  className="h-9 rounded-lg border border-slate-200 px-3 text-sm"
-                />
-              </label>
+            <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 p-3">
+              <h3 className="text-sm font-bold text-slate-900">AnTuTu for Normal Use</h3>
+              <p className="mt-1 text-xs text-slate-600">Use this for the regular AnTuTu benchmark breakdown shown with full phone-style values.</p>
+              <div className="mt-3 grid gap-3">
+                <label className="grid gap-1">
+                  <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">AnTuTu Version</span>
+                  <input
+                    value={antutuVersionValue || "11"}
+                    onChange={(e) => setDetailField("benchmarks.antutuVersion", e.target.value)}
+                    className="h-9 rounded-lg border border-slate-200 px-3 text-sm"
+                  />
+                </label>
+                <label className="grid gap-1">
+                  <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">Total Score</span>
+                  <input
+                    type="number"
+                    step="any"
+                    value={String(antutuTotal ?? "")}
+                    onChange={(e) => {
+                      const value = e.target.value === "" ? undefined : Number(e.target.value);
+                      setDetailField("benchmarks.antutu", value);
+                    }}
+                    className="h-9 rounded-lg border border-slate-200 px-3 text-sm"
+                  />
+                </label>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <label className="grid gap-1">
+                    <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">CPU</span>
+                    <input
+                      type="number"
+                      step="any"
+                      value={String(getDetailField("benchmarks.antutuCpu") ?? "")}
+                      onChange={(e) => setDetailField("benchmarks.antutuCpu", e.target.value === "" ? undefined : Number(e.target.value))}
+                      className="h-9 rounded-lg border border-slate-200 px-3 text-sm"
+                    />
+                  </label>
+                  <label className="grid gap-1">
+                    <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">GPU</span>
+                    <input
+                      type="number"
+                      step="any"
+                      value={String(getDetailField("benchmarks.antutuGpu") ?? "")}
+                      onChange={(e) => setDetailField("benchmarks.antutuGpu", e.target.value === "" ? undefined : Number(e.target.value))}
+                      className="h-9 rounded-lg border border-slate-200 px-3 text-sm"
+                    />
+                  </label>
+                  <label className="grid gap-1">
+                    <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">Memory</span>
+                    <input
+                      type="number"
+                      step="any"
+                      value={String(getDetailField("benchmarks.antutuMemory") ?? "")}
+                      onChange={(e) => setDetailField("benchmarks.antutuMemory", e.target.value === "" ? undefined : Number(e.target.value))}
+                      className="h-9 rounded-lg border border-slate-200 px-3 text-sm"
+                    />
+                  </label>
+                  <label className="grid gap-1">
+                    <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">UX</span>
+                    <input
+                      type="number"
+                      step="any"
+                      value={String(getDetailField("benchmarks.antutuUx") ?? "")}
+                      onChange={(e) => setDetailField("benchmarks.antutuUx", e.target.value === "" ? undefined : Number(e.target.value))}
+                      className="h-9 rounded-lg border border-slate-200 px-3 text-sm"
+                    />
+                  </label>
+                </div>
+              </div>
+            </div>
+            <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3">
+              <h3 className="text-sm font-bold text-slate-900">AnTuTu for Ranking Score</h3>
+              <p className="mt-1 text-xs text-slate-600">Use this compact score for processor ranking and performance calculation. It keeps only version, total, CPU, and GPU.</p>
+              <div className="mt-3 grid gap-3">
+                <label className="grid gap-1">
+                  <span className="text-xs font-semibold uppercase tracking-wide text-amber-700">AnTuTu Perf Version</span>
+                  <input
+                    value={antutuCalcVersionValue || "11"}
+                    onChange={(e) => setDetailField("benchmarks.antutuCalcVersion", e.target.value)}
+                    className="h-9 rounded-lg border border-amber-200 bg-white px-3 text-sm"
+                  />
+                </label>
+                <label className="grid gap-1">
+                  <span className="text-xs font-semibold uppercase tracking-wide text-amber-700">AnTuTu Perf Total</span>
+                  <input
+                    type="number"
+                    step="any"
+                    value={String(antutuCalcTotal ?? "")}
+                    onChange={(e) => {
+                      const value = e.target.value === "" ? undefined : Number(e.target.value);
+                      setDetailField("benchmarks.antutuCalc", value);
+                      setField("antutu", value ?? 0);
+                    }}
+                    className="h-9 rounded-lg border border-amber-200 bg-white px-3 text-sm"
+                  />
+                </label>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <label className="grid gap-1">
+                    <span className="text-xs font-semibold uppercase tracking-wide text-amber-700">AnTuTu Perf CPU</span>
+                    <input
+                      type="number"
+                      step="any"
+                      value={String(getDetailField("benchmarks.antutuCalcCpu") ?? "")}
+                      onChange={(e) => setDetailField("benchmarks.antutuCalcCpu", e.target.value === "" ? undefined : Number(e.target.value))}
+                      className="h-9 rounded-lg border border-amber-200 bg-white px-3 text-sm"
+                    />
+                  </label>
+                  <label className="grid gap-1">
+                    <span className="text-xs font-semibold uppercase tracking-wide text-amber-700">AnTuTu Perf GPU</span>
+                    <input
+                      type="number"
+                      step="any"
+                      value={String(getDetailField("benchmarks.antutuCalcGpu") ?? "")}
+                      onChange={(e) => setDetailField("benchmarks.antutuCalcGpu", e.target.value === "" ? undefined : Number(e.target.value))}
+                      className="h-9 rounded-lg border border-amber-200 bg-white px-3 text-sm"
+                    />
+                  </label>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -3512,24 +4019,80 @@ export default function ProcessorEditorPage() {
                 </div>
               </div>
               <div className="rounded-lg border border-slate-200 p-2.5 sm:p-3">
-                <h2 className="text-sm font-bold text-slate-900">3DMark</h2>
+                <h2 className="text-sm font-bold text-slate-900">AI Score</h2>
                 <div className="mt-2 grid gap-3">
                   <label className="grid gap-1">
-                    <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">3DMark Test Name</span>
+                    <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">AI Score</span>
                     <input
-                      value={threeDMarkNameValue || "Wild Life"}
-                      onChange={(e) => setDetailField("benchmarks.threeDMarkName", e.target.value)}
-                      onBlur={(e) => setDetailField("benchmarks.threeDMarkName", normalizeBenchmarkLabel(e.target.value) || "Wild Life")}
+                      type="number"
+                      step="any"
+                      value={String(getDetailField("benchmarks.aiScore") ?? "")}
+                      onChange={(e) => setDetailField("benchmarks.aiScore", e.target.value === "" ? undefined : Number(e.target.value))}
+                      className="h-9 rounded-lg border border-slate-200 px-3 text-sm"
+                    />
+                  </label>
+                </div>
+              </div>
+              <div className="rounded-lg border border-slate-200 p-2.5 sm:p-3">
+                <h2 className="text-sm font-bold text-slate-900">3DMark</h2>
+                <div className="mt-2 grid gap-3 sm:grid-cols-2">
+                  <label className="grid gap-1">
+                    <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">Wild Life</span>
+                    <input
+                      type="number"
+                      step="any"
+                      value={String(getDetailField("benchmarks.threeDMarkWildLife") ?? "")}
+                      onChange={(e) => setDetailField("benchmarks.threeDMarkWildLife", e.target.value === "" ? undefined : Number(e.target.value))}
                       className="h-9 rounded-lg border border-slate-200 px-3 text-sm"
                     />
                   </label>
                   <label className="grid gap-1">
-                    <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">3DMark Score</span>
+                    <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">Solar Bay</span>
                     <input
                       type="number"
                       step="any"
-                      value={String(getDetailField("benchmarks.threeDMark") ?? "")}
-                      onChange={(e) => setDetailField("benchmarks.threeDMark", e.target.value === "" ? undefined : Number(e.target.value))}
+                      value={String(getDetailField("benchmarks.threeDMarkSolarBay") ?? "")}
+                      onChange={(e) => setDetailField("benchmarks.threeDMarkSolarBay", e.target.value === "" ? undefined : Number(e.target.value))}
+                      className="h-9 rounded-lg border border-slate-200 px-3 text-sm"
+                    />
+                  </label>
+                  <label className="grid gap-1">
+                    <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">Steel Nomad Light</span>
+                    <input
+                      type="number"
+                      step="any"
+                      value={String(getDetailField("benchmarks.threeDMarkSteelNomadLight") ?? "")}
+                      onChange={(e) => setDetailField("benchmarks.threeDMarkSteelNomadLight", e.target.value === "" ? undefined : Number(e.target.value))}
+                      className="h-9 rounded-lg border border-slate-200 px-3 text-sm"
+                    />
+                  </label>
+                  <label className="grid gap-1">
+                    <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">Wild Life Extreme</span>
+                    <input
+                      type="number"
+                      step="any"
+                      value={String(getDetailField("benchmarks.threeDMarkWildLifeExtreme") ?? "")}
+                      onChange={(e) => setDetailField("benchmarks.threeDMarkWildLifeExtreme", e.target.value === "" ? undefined : Number(e.target.value))}
+                      className="h-9 rounded-lg border border-slate-200 px-3 text-sm"
+                    />
+                  </label>
+                  <label className="grid gap-1">
+                    <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">Wild Life Extreme Min</span>
+                    <input
+                      type="number"
+                      step="any"
+                      value={String(getDetailField("benchmarks.threeDMarkWildLifeExtremeMin") ?? "")}
+                      onChange={(e) => setDetailField("benchmarks.threeDMarkWildLifeExtremeMin", e.target.value === "" ? undefined : Number(e.target.value))}
+                      className="h-9 rounded-lg border border-slate-200 px-3 text-sm"
+                    />
+                  </label>
+                  <label className="grid gap-1">
+                    <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">Wild Life Extreme Max</span>
+                    <input
+                      type="number"
+                      step="any"
+                      value={String(getDetailField("benchmarks.threeDMarkWildLifeExtremeMax") ?? "")}
+                      onChange={(e) => setDetailField("benchmarks.threeDMarkWildLifeExtremeMax", e.target.value === "" ? undefined : Number(e.target.value))}
                       className="h-9 rounded-lg border border-slate-200 px-3 text-sm"
                     />
                   </label>
@@ -3573,7 +4136,7 @@ export default function ProcessorEditorPage() {
                     </p>
                     <div className="mt-2 space-y-2">
                       {cpuClusters.map((row) => (
-                        <div key={row.id} className="grid gap-2 sm:grid-cols-[64px_minmax(0,3fr)_96px_48px_76px]">
+                        <div key={row.id} className="grid gap-2 sm:grid-cols-[64px_minmax(0,3fr)_112px_56px_76px]">
                           <input
                             type="number"
                             min={1}
@@ -3595,15 +4158,14 @@ export default function ProcessorEditorPage() {
                           )}
                           <div className="relative">
                             <input
-                              type="number"
-                              step="0.01"
-                              min={0.1}
+                              type="text"
+                              inputMode="decimal"
                               value={row.ghz}
-                              onChange={(e) => setCpuClusters((prev) => prev.map((item) => (item.id === row.id ? { ...item, ghz: e.target.value === "" ? "" : Number(e.target.value) } : item)))}
-                              className="h-9 w-full rounded-lg border border-slate-200 px-2 pr-12 text-sm"
+                              onChange={(e) => setCpuClusters((prev) => prev.map((item) => (item.id === row.id ? { ...item, ghz: e.target.value } : item)))}
+                              className="h-9 w-full rounded-lg border border-slate-200 px-2.5 pr-11 text-sm tabular-nums"
                               title="Clock (GHz)"
                             />
-                            <span className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3 text-sm text-slate-500">GHz</span>
+                            <span className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-2 text-sm text-slate-500">GHz</span>
                           </div>
                           <label className="inline-flex items-center gap-2 text-xs font-semibold text-slate-700">
                             <input
@@ -4022,8 +4584,8 @@ export default function ProcessorEditorPage() {
                 </div>
                 <div className="grid gap-3 lg:grid-cols-[minmax(0,3fr)_minmax(0,1fr)]">
                   <label className="grid gap-1">
-                    <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">API Support</span>
-                    {renderCsvInput("gpuApis", "Comma separated")}
+                    <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">API Support <span className="normal-case tracking-normal text-slate-500">(structured + manual)</span></span>
+                    {renderGpuApiInput("OpenGL ES 3.2, OpenCL 3.2, Vulkan 1.3, DirectX 12")}
                   </label>
                   <label className="grid gap-1">
                     <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">FLOPS</span>
@@ -4091,7 +4653,7 @@ export default function ProcessorEditorPage() {
                     <p className="text-xs font-semibold uppercase tracking-wide text-slate-600">RAM Type & Frequency</p>
                     <div className="mt-2 space-y-2">
                       {ramProfiles.map((row) => (
-                        <div key={row.id} className="grid gap-2 sm:grid-cols-[180px_120px_110px_auto]">
+                        <div key={row.id} className="grid gap-2 sm:grid-cols-[minmax(180px,1fr)_120px_110px_max-content]">
                           <select
                             value={row.type}
                             onChange={(e) => setRamProfiles((prev) => prev.map((item) => (item.id === row.id ? { ...item, type: e.target.value } : item)))}
@@ -4128,7 +4690,7 @@ export default function ProcessorEditorPage() {
                           <button
                             type="button"
                             onClick={() => setRamProfiles((prev) => (prev.length > 1 ? prev.filter((item) => item.id !== row.id) : prev))}
-                            className="h-9 rounded-lg border border-slate-200 px-2 text-xs font-semibold text-slate-700"
+                            className="h-9 justify-self-start rounded-lg border border-slate-200 px-3 text-xs font-semibold text-slate-700 whitespace-nowrap"
                           >
                             Remove
                           </button>
@@ -4205,7 +4767,19 @@ export default function ProcessorEditorPage() {
                           })}
                         </div>
                       </label>
-                      <label className="grid gap-1 sm:col-span-2">
+                      <label className="grid gap-1">
+                        <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">Total Bus Width</span>
+                        <div className="relative">
+                          <input
+                            type="text"
+                            readOnly
+                            value={totalRamBusWidthValue ? String(totalRamBusWidthValue) : ""}
+                            className="h-9 w-full rounded-lg border border-slate-200 bg-slate-50 px-3 pr-12 text-sm text-slate-700"
+                          />
+                          <span className="pointer-events-none absolute inset-y-0 right-2 flex items-center text-xs text-slate-500">bit</span>
+                        </div>
+                      </label>
+                      <label className="grid gap-1">
                         <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">Maximum Bandwidth</span>
                         <div className="grid grid-cols-[minmax(0,1fr)_72px] gap-2">
                           <input type="number" step="any" min={0} value={String(getDetailField("bandwidthGbps") ?? "")} onChange={(e) => setDetailField("bandwidthGbps", e.target.value === "" ? undefined : Number(e.target.value))} className="h-9 w-full rounded-lg border border-slate-200 px-3 text-sm" />
@@ -4298,7 +4872,11 @@ export default function ProcessorEditorPage() {
                             min={0}
                             step="0.1"
                             value={String(parseMaxCameraSupportNumber(getDetailField("maxCameraSupport")) ?? "")}
-                            onChange={(e) => setDetailField("maxCameraSupport", e.target.value === "" ? undefined : Number(e.target.value))}
+                            onChange={(e) => {
+                              const raw = e.target.value;
+                              setMaxCameraSupportManualOverride(raw !== "");
+                              setDetailField("maxCameraSupport", raw === "" ? undefined : Number(raw));
+                            }}
                             placeholder="320"
                             className="h-9 w-full rounded-lg border border-slate-200 px-3 pr-10 text-sm"
                           />
@@ -4807,8 +5385,8 @@ export default function ProcessorEditorPage() {
                         </div>
                       </label>
                       <label className="grid gap-1">
-                        <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">Display Features <span className="normal-case tracking-normal text-slate-500">(comma separated)</span></span>
-                        {renderCsvInput("displayFeatures")}
+                        <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">Display Features <span className="normal-case tracking-normal text-slate-500">(multi select + manual)</span></span>
+                        {renderVideoHdrInput("displayFeatures", "HDR, HDR10, HDR10+, HDR Vivid, Dolby Vision, DC dimming")}
                       </label>
                       <label className="grid gap-1">
                         <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">Audio Codecs <span className="normal-case tracking-normal text-slate-500">(comma separated)</span></span>
@@ -4826,8 +5404,8 @@ export default function ProcessorEditorPage() {
             {section.title === "Connectivity" ? (
               <div className="mt-3 grid gap-3 lg:grid-cols-[1.4fr_1fr]">
                 <div className="rounded-lg border border-slate-200 bg-white p-2.5 sm:p-3">
-                  <div className="grid gap-3 lg:grid-cols-2">
-                    <label className="grid gap-1">
+                  <div className="grid gap-3 lg:grid-cols-12">
+                    <label className="grid gap-1 lg:col-span-6">
                       <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">Modem Name</span>
                       {renderTextSuggestInput(
                         "modem",
@@ -4836,7 +5414,7 @@ export default function ProcessorEditorPage() {
                         { className: "h-9 w-full rounded-lg border border-slate-200 px-3 text-sm" }
                       )}
                     </label>
-                    <label className="grid gap-1">
+                    <label className="grid gap-1 lg:col-span-4">
                       <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">Network Support</span>
                       <div className="flex flex-wrap gap-2">
                         {NETWORK_SUPPORT_OPTIONS.map((item) => {
@@ -4864,21 +5442,32 @@ export default function ProcessorEditorPage() {
                         })}
                       </div>
                     </label>
-                    <label className="grid gap-1">
+                    <label className="grid gap-1 lg:col-span-2">
+                      <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">LTE Cat</span>
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        placeholder="24"
+                        value={String(getDetailField("lteCat") || "")}
+                        onChange={(e) => setDetailField("lteCat", e.target.value)}
+                        className="h-9 w-full rounded-lg border border-slate-200 px-3 text-sm"
+                      />
+                    </label>
+                    <label className="grid gap-1 lg:col-span-6">
                       <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">Download Speed</span>
                       <div className="grid grid-cols-[minmax(0,1fr)_72px] gap-2">
                         <input type="number" step="any" min={0} value={String(getDetailField("downloadMbps") ?? "")} onChange={(e) => setDetailField("downloadMbps", e.target.value === "" ? undefined : Number(e.target.value))} className="h-9 w-full rounded-lg border border-slate-200 px-3 text-sm" />
                         <span className="inline-flex h-9 items-center justify-center rounded-lg border border-slate-200 bg-slate-50 px-2 text-xs font-semibold text-slate-600">Mbps</span>
                       </div>
                     </label>
-                    <label className="grid gap-1">
+                    <label className="grid gap-1 lg:col-span-6">
                       <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">Upload Speed</span>
                       <div className="grid grid-cols-[minmax(0,1fr)_72px] gap-2">
                         <input type="number" step="any" min={0} value={String(getDetailField("uploadMbps") ?? "")} onChange={(e) => setDetailField("uploadMbps", e.target.value === "" ? undefined : Number(e.target.value))} className="h-9 w-full rounded-lg border border-slate-200 px-3 text-sm" />
                         <span className="inline-flex h-9 items-center justify-center rounded-lg border border-slate-200 bg-slate-50 px-2 text-xs font-semibold text-slate-600">Mbps</span>
                       </div>
                     </label>
-                    <label className="grid gap-1 lg:col-span-2">
+                    <label className="grid gap-1 lg:col-span-3">
                       <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">Wi-Fi</span>
                       <div className="flex flex-wrap gap-2">
                         {WIFI_OPTIONS.map((item) => {
@@ -4900,7 +5489,7 @@ export default function ProcessorEditorPage() {
                         })}
                       </div>
                     </label>
-                    <label className="grid gap-1">
+                    <label className="grid gap-1 lg:col-span-3">
                       <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">Bluetooth</span>
                       <div className="flex flex-wrap gap-2">
                         {BLUETOOTH_OPTIONS.map((item) => {
@@ -4922,7 +5511,7 @@ export default function ProcessorEditorPage() {
                         })}
                       </div>
                     </label>
-                    <label className="grid gap-1">
+                    <label className="grid gap-1 lg:col-span-3">
                       <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">Bluetooth Features</span>
                       {renderCsvInput("bluetoothFeatures", "Comma separated (e.g. LE Audio, aptX)")}
                     </label>
@@ -5034,13 +5623,13 @@ export default function ProcessorEditorPage() {
                 if (section.title === "Graphics (GPU)" && (field.key === "gpuName" || field.key === "gpuArchitecture" || field.key === "pipelines" || field.key === "gpuFrequencyMhz" || field.key === "gpuFeatures" || field.key === "gpuApis" || field.key === "gpuFlops")) {
                   return null;
                 }
-                if (section.title === "Memory / Storage" && (field.key === "memoryType" || field.key === "memoryTypes" || field.key === "memoryFreqMhz" || field.key === "memoryFreqByType" || field.key === "memoryChannels" || field.key === "storageChannels" || field.key === "maxMemoryGb" || field.key === "memoryBusWidthBits" || field.key === "bandwidthGbps" || field.key === "storageType" || field.key === "storageTypes")) {
+                if (section.title === "Memory / Storage" && (field.key === "memoryType" || field.key === "memoryTypes" || field.key === "memoryFreqMhz" || field.key === "memoryFreqByType" || field.key === "memoryChannels" || field.key === "storageChannels" || field.key === "maxMemoryGb" || field.key === "memoryBusWidthBits" || field.key === "totalRamBusWidthBits" || field.key === "bandwidthGbps" || field.key === "storageType" || field.key === "storageTypes")) {
                   return null;
                 }
                 if (section.title === "Display & Multimedia" && (field.key === "displayModes" || field.key === "outputDisplay" || field.key === "maxDisplayResolution" || field.key === "maxRefreshRateHz" || field.key === "displayFeatures" || field.key === "audioCodecs" || field.key === "multimediaFeatures")) {
                   return null;
                 }
-                if (section.title === "Connectivity" && (field.key === "modem" || field.key === "networkSupport" || field.key === "downloadMbps" || field.key === "uploadMbps" || field.key === "wifi" || field.key === "bluetooth" || field.key === "bluetoothFeatures" || field.key === "gnssType" || field.key === "navigation" || field.key === "dual5g")) {
+                if (section.title === "Connectivity" && (field.key === "modem" || field.key === "networkSupport" || field.key === "lteCat" || field.key === "downloadMbps" || field.key === "uploadMbps" || field.key === "wifi" || field.key === "bluetooth" || field.key === "bluetoothFeatures" || field.key === "gnssType" || field.key === "navigation" || field.key === "dual5g")) {
                   return null;
                 }
                 if (section.title === "Charging & Source" && (field.key === "quickCharging" || field.key === "chargingSpeed" || field.key === "sourceUrl")) {
@@ -5521,3 +6110,29 @@ export default function ProcessorEditorPage() {
     </main>
   );
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

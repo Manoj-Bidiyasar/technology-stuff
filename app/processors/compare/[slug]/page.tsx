@@ -5,7 +5,8 @@ import { isValidElement, type ReactNode } from "react";
 import ProcessorChipVisual from "@/components/ProcessorChipVisual";
 import ProcessorNameLabel, { getProcessorLabelLines } from "@/components/ProcessorNameLabel";
 import ProcessorCompareMoreSection from "@/components/ProcessorCompareMoreSection";
-import { getProcessorDetailBySlug } from "@/lib/processors/details";
+import { getProcessorDetailBySlug, listProcessorDetailsBySlug } from "@/lib/processors/details";
+import { PROCESSOR_TOTAL_SCORE_LABEL, calculateAiScore, calculateAiScoreReferences, calculateEfficiencyScore, calculateGamingScore, calculateGamingScoreReferences, calculatePerformanceScore, calculatePerformanceScoreReferences, calculateTotalScore, type AiScoreReferences, type GamingScoreReferences, type PerformanceScoreReferences } from "@/lib/processors/scoring";
 import { listProcessorProfiles, type ProcessorProfile } from "@/lib/processors/profiles";
 import { getPublicSiteUrl } from "@/lib/seo/site";
 
@@ -188,31 +189,6 @@ function toMonthYear(value?: string): string {
   return raw;
 }
 
-function perfIndex(score: number): number {
-  return Math.max(0, Math.min(100, Math.round((score / 3000000) * 100)));
-}
-
-function efficiency(nm?: number): number {
-  if (!Number.isFinite(nm)) return 60;
-  if ((nm as number) <= 3) return 94;
-  if ((nm as number) <= 4) return 88;
-  if ((nm as number) <= 5) return 80;
-  if ((nm as number) <= 6) return 72;
-  return 64;
-}
-
-function gaming(profile: ProcessorProfile): number {
-  const base = perfIndex(profile.antutu || 0);
-  const gpuBonus = profile.gpu ? 6 : 0;
-  return Math.min(100, Math.round(base * 0.85 + gpuBonus));
-}
-
-function valueScore(profile: ProcessorProfile): number {
-  const usage = Math.min(100, (profile.phoneCount || 0) * 12);
-  const avg = Math.min(100, Math.round((profile.avgPhoneScore || 0) * 10));
-  return Math.round(avg * 0.7 + usage * 0.3);
-}
-
 function compareNameLines(name: string, vendor: string): { line1: string; line2: string } {
   const lines = getProcessorLabelLines(name, vendor);
   return { line1: lines.line1, line2: lines.line2 || "" };
@@ -225,13 +201,21 @@ function inferCoreCount(detail?: Awaited<ReturnType<typeof getProcessorDetailByS
   return m ? m[1] : "-";
 }
 
+function normalizeCpuClockDisplay(value: string): string {
+  return String(value || "").replace(/(\d+(?:\.\d+)?)\s*ghz/gi, (_, num) => {
+    const text = String(num || "").trim();
+    const normalized = text.includes(".") ? text : `${text}.0`;
+    return `${normalized}GHz`;
+  });
+}
+
 function inferCoreConfig(detail?: Awaited<ReturnType<typeof getProcessorDetailBySlug>>): string {
   const explicit = String(detail?.coreConfiguration || "").trim();
-  if (explicit) return explicit;
+  if (explicit) return normalizeCpuClockDisplay(explicit);
   const raw = String(detail?.cores || "").trim();
   const bracket = raw.match(/\((.+)\)/);
-  if (bracket?.[1]) return bracket[1].trim();
-  return raw || "-";
+  if (bracket?.[1]) return normalizeCpuClockDisplay(bracket[1].trim());
+  return normalizeCpuClockDisplay(raw || "-");
 }
 
 function formatCoreConfigForCompare(detail?: Awaited<ReturnType<typeof getProcessorDetailBySlug>>): string {
@@ -655,9 +639,24 @@ function normalizeCameraMode(raw: string): string {
 
 function formatCameraSupportModes(detail: Awaited<ReturnType<typeof getProcessorDetailBySlug>>): string {
   if (!detail) return "-";
-  const list = (detail.cameraSupportModes || []).map((m) => normalizeCameraMode(m)).filter(Boolean);
+  const fallbackText = String(detail.maxCameraSupport || detail.cameraSupport || "-").trim();
+  const fallbackMatch = fallbackText.match(/([\d.]+)/);
+  const fallbackMp = fallbackMatch?.[1] ? Number(fallbackMatch[1]) : NaN;
+  const rawModes = (detail.cameraSupportModes || []).map((m) => String(m || "").trim()).filter(Boolean);
+  const hasSingleMode = rawModes.some((mode) => !mode.includes("+"));
+  const sourceModes = !hasSingleMode && Number.isFinite(fallbackMp) ? [String(fallbackMp), ...rawModes] : rawModes;
+  const list = sourceModes.map((m, idx) => {
+    const original = String(m || "").trim();
+    const parts = original.split("+").map((part) => part.trim()).filter(Boolean);
+    const singleMatch = original.match(/([\d.]+)/);
+    const singleMp = singleMatch?.[1] ? Number(singleMatch[1]) : NaN;
+    if (idx === 0 && parts.length < 2 && Number.isFinite(singleMp) && Number.isFinite(fallbackMp) && fallbackMp > singleMp) {
+      return normalizeCameraMode(String(fallbackMp));
+    }
+    return normalizeCameraMode(original);
+  }).filter(Boolean);
   if (list.length) return list.join("\n");
-  return normalizeCameraMode(String(detail.maxCameraSupport || detail.cameraSupport || "-"));
+  return normalizeCameraMode(fallbackText);
 }
 
 function formatVideoRows(raw: string): string {
@@ -708,12 +707,161 @@ function buildSections(
   left: ProcessorProfile,
   right: ProcessorProfile,
   leftDetail: Awaited<ReturnType<typeof getProcessorDetailBySlug>>,
-  rightDetail: Awaited<ReturnType<typeof getProcessorDetailBySlug>>
+  rightDetail: Awaited<ReturnType<typeof getProcessorDetailBySlug>>,
+  gamingReferences: GamingScoreReferences,
+  performanceReferences: PerformanceScoreReferences,
+  aiReferences: AiScoreReferences
 ): SpecSection[] {
   const left3dName = asText(leftDetail?.benchmarks?.threeDMarkName);
   const right3dName = asText(rightDetail?.benchmarks?.threeDMarkName);
   const left3dScore = asText(leftDetail?.benchmarks?.threeDMark);
   const right3dScore = asText(rightDetail?.benchmarks?.threeDMark);
+  const leftEfficiency = calculateEfficiencyScore({
+    fabricationNm: left.fabricationNm,
+    process: leftDetail?.process,
+    instructionSet: leftDetail?.instructionSet,
+    architectureBits: leftDetail?.architectureBits,
+    coreConfiguration: leftDetail?.coreConfiguration,
+    cores: leftDetail?.cores,
+  });
+  const rightEfficiency = calculateEfficiencyScore({
+    fabricationNm: right.fabricationNm,
+    process: rightDetail?.process,
+    instructionSet: rightDetail?.instructionSet,
+    architectureBits: rightDetail?.architectureBits,
+    coreConfiguration: rightDetail?.coreConfiguration,
+    cores: rightDetail?.cores,
+  });
+  const leftGaming = calculateGamingScore({
+    fabricationNm: left.fabricationNm,
+    process: leftDetail?.process,
+    instructionSet: leftDetail?.instructionSet,
+    architectureBits: leftDetail?.architectureBits,
+    coreConfiguration: leftDetail?.coreConfiguration,
+    cores: leftDetail?.cores,
+    memoryType: leftDetail?.memoryType,
+    memoryTypes: leftDetail?.memoryTypes,
+    memoryFreqMhz: leftDetail?.memoryFreqMhz,
+    memoryFreqByType: leftDetail?.memoryFreqByType,
+    memoryBusWidthBits: leftDetail?.memoryBusWidthBits,
+    totalRamBusWidthBits: leftDetail?.totalRamBusWidthBits,
+    storageType: leftDetail?.storageType,
+    storageTypes: leftDetail?.storageTypes,
+    gpuFlops: leftDetail?.gpuFlops,
+    wildLifeScore: leftDetail?.benchmarks?.threeDMarkWildLife,
+    antutu11GpuScore: leftDetail?.benchmarks?.antutuCalcGpu,
+  }, gamingReferences).score;
+  const rightGaming = calculateGamingScore({
+    fabricationNm: right.fabricationNm,
+    process: rightDetail?.process,
+    instructionSet: rightDetail?.instructionSet,
+    architectureBits: rightDetail?.architectureBits,
+    coreConfiguration: rightDetail?.coreConfiguration,
+    cores: rightDetail?.cores,
+    memoryType: rightDetail?.memoryType,
+    memoryTypes: rightDetail?.memoryTypes,
+    memoryFreqMhz: rightDetail?.memoryFreqMhz,
+    memoryFreqByType: rightDetail?.memoryFreqByType,
+    memoryBusWidthBits: rightDetail?.memoryBusWidthBits,
+    totalRamBusWidthBits: rightDetail?.totalRamBusWidthBits,
+    storageType: rightDetail?.storageType,
+    storageTypes: rightDetail?.storageTypes,
+    gpuFlops: rightDetail?.gpuFlops,
+    wildLifeScore: rightDetail?.benchmarks?.threeDMarkWildLife,
+    antutu11GpuScore: rightDetail?.benchmarks?.antutuCalcGpu,
+  }, gamingReferences).score;
+  const leftPerformance = calculatePerformanceScore({
+    processorName: left.name,
+    antutuScore: leftDetail?.benchmarks?.antutuCalc,
+    antutuFallbackScore: leftDetail?.benchmarks?.antutu || left.antutu,
+    geekbenchSingle: leftDetail?.benchmarks?.geekbenchSingle,
+    geekbenchMulti: leftDetail?.benchmarks?.geekbenchMulti,
+    maxCpuGhz: left.maxCpuGhz,
+    fabricationNm: left.fabricationNm,
+    process: leftDetail?.process,
+    instructionSet: leftDetail?.instructionSet,
+    architectureBits: leftDetail?.architectureBits,
+    coreConfiguration: leftDetail?.coreConfiguration,
+    cores: leftDetail?.cores,
+    memoryType: leftDetail?.memoryType,
+    memoryTypes: leftDetail?.memoryTypes,
+    memoryFreqMhz: leftDetail?.memoryFreqMhz,
+    memoryFreqByType: leftDetail?.memoryFreqByType,
+    memoryBusWidthBits: leftDetail?.memoryBusWidthBits,
+    totalRamBusWidthBits: leftDetail?.totalRamBusWidthBits,
+    storageType: leftDetail?.storageType,
+    storageTypes: leftDetail?.storageTypes,
+  }, performanceReferences).score;
+  const rightPerformance = calculatePerformanceScore({
+    processorName: right.name,
+    antutuScore: rightDetail?.benchmarks?.antutuCalc,
+    antutuFallbackScore: rightDetail?.benchmarks?.antutu || right.antutu,
+    geekbenchSingle: rightDetail?.benchmarks?.geekbenchSingle,
+    geekbenchMulti: rightDetail?.benchmarks?.geekbenchMulti,
+    maxCpuGhz: right.maxCpuGhz,
+    fabricationNm: right.fabricationNm,
+    process: rightDetail?.process,
+    instructionSet: rightDetail?.instructionSet,
+    architectureBits: rightDetail?.architectureBits,
+    coreConfiguration: rightDetail?.coreConfiguration,
+    cores: rightDetail?.cores,
+    memoryType: rightDetail?.memoryType,
+    memoryTypes: rightDetail?.memoryTypes,
+    memoryFreqMhz: rightDetail?.memoryFreqMhz,
+    memoryFreqByType: rightDetail?.memoryFreqByType,
+    memoryBusWidthBits: rightDetail?.memoryBusWidthBits,
+    totalRamBusWidthBits: rightDetail?.totalRamBusWidthBits,
+    storageType: rightDetail?.storageType,
+    storageTypes: rightDetail?.storageTypes,
+  }, performanceReferences).score;
+  const leftAi = calculateAiScore({
+    processorName: left.name,
+    aiBenchmarkScore: leftDetail?.benchmarks?.aiScore,
+    fabricationNm: left.fabricationNm,
+    process: leftDetail?.process,
+    instructionSet: leftDetail?.instructionSet,
+    architectureBits: leftDetail?.architectureBits,
+    coreConfiguration: leftDetail?.coreConfiguration,
+    cores: leftDetail?.cores,
+    memoryType: leftDetail?.memoryType,
+    memoryTypes: leftDetail?.memoryTypes,
+    memoryFreqMhz: leftDetail?.memoryFreqMhz,
+    memoryFreqByType: leftDetail?.memoryFreqByType,
+    memoryBusWidthBits: leftDetail?.memoryBusWidthBits,
+    totalRamBusWidthBits: leftDetail?.totalRamBusWidthBits,
+    storageType: leftDetail?.storageType,
+    storageTypes: leftDetail?.storageTypes,
+  }, aiReferences).score;
+  const rightAi = calculateAiScore({
+    processorName: right.name,
+    aiBenchmarkScore: rightDetail?.benchmarks?.aiScore,
+    fabricationNm: right.fabricationNm,
+    process: rightDetail?.process,
+    instructionSet: rightDetail?.instructionSet,
+    architectureBits: rightDetail?.architectureBits,
+    coreConfiguration: rightDetail?.coreConfiguration,
+    cores: rightDetail?.cores,
+    memoryType: rightDetail?.memoryType,
+    memoryTypes: rightDetail?.memoryTypes,
+    memoryFreqMhz: rightDetail?.memoryFreqMhz,
+    memoryFreqByType: rightDetail?.memoryFreqByType,
+    memoryBusWidthBits: rightDetail?.memoryBusWidthBits,
+    totalRamBusWidthBits: rightDetail?.totalRamBusWidthBits,
+    storageType: rightDetail?.storageType,
+    storageTypes: rightDetail?.storageTypes,
+  }, aiReferences).score;
+  const leftTotalScore = calculateTotalScore({
+    performance: leftPerformance,
+    gaming: leftGaming,
+    efficiency: leftEfficiency,
+    ai: leftAi,
+  });
+  const rightTotalScore = calculateTotalScore({
+    performance: rightPerformance,
+    gaming: rightGaming,
+    efficiency: rightEfficiency,
+    ai: rightAi,
+  });
   const same3dName = left3dName !== "-" && right3dName !== "-" && left3dName.toLowerCase() === right3dName.toLowerCase();
   const markName = same3dName ? left3dName : (left3dName !== "-" ? left3dName : (right3dName !== "-" ? right3dName : ""));
   const markRowLabel = markName ? `3DMark ${markName}` : "3DMark";
@@ -726,10 +874,11 @@ function buildSections(
         { label: "Model Number", left: asText(leftDetail?.model), right: asText(rightDetail?.model) },
         { label: "Manufacturer", left: asText(leftDetail?.manufacturer), right: asText(rightDetail?.manufacturer) },
         { label: "Class", left: chipClass(left.antutu, leftDetail?.className), right: chipClass(right.antutu, rightDetail?.className) },
-        { label: "Performance Score", left: `${perfIndex(left.antutu || 0)}/100`, right: `${perfIndex(right.antutu || 0)}/100`, leftNum: perfIndex(left.antutu || 0), rightNum: perfIndex(right.antutu || 0) },
-        { label: "Efficiency Score", left: `${efficiency(left.fabricationNm)}/100`, right: `${efficiency(right.fabricationNm)}/100`, leftNum: efficiency(left.fabricationNm), rightNum: efficiency(right.fabricationNm) },
-        { label: "Gaming Score", left: `${gaming(left)}/100`, right: `${gaming(right)}/100`, leftNum: gaming(left), rightNum: gaming(right) },
-        { label: "Value Score", left: `${valueScore(left)}/100`, right: `${valueScore(right)}/100`, leftNum: valueScore(left), rightNum: valueScore(right) },
+        { label: PROCESSOR_TOTAL_SCORE_LABEL, left: `${leftTotalScore}/100`, right: `${rightTotalScore}/100`, leftNum: leftTotalScore, rightNum: rightTotalScore },
+        { label: "Performance Score", left: `${leftPerformance}/100`, right: `${rightPerformance}/100`, leftNum: leftPerformance, rightNum: rightPerformance },
+        { label: "Efficiency Score", left: `${leftEfficiency}/100`, right: `${rightEfficiency}/100`, leftNum: leftEfficiency, rightNum: rightEfficiency },
+        { label: "Gaming Score", left: `${leftGaming}/100`, right: `${rightGaming}/100`, leftNum: leftGaming, rightNum: rightGaming },
+        { label: "AI Score", left: `${leftAi}/100`, right: `${rightAi}/100`, leftNum: leftAi, rightNum: rightAi },
       ],
     },
     {
@@ -1044,7 +1193,10 @@ export default async function ProcessorCompareSlugPage({ params }: Props) {
   const siteUrl = getPublicSiteUrl();
   const canonicalUrl = `${siteUrl}/processors/compare/${slug}`;
 
-  const profiles = await listProcessorProfiles();
+  const [profiles, allDetailsBySlug] = await Promise.all([
+    listProcessorProfiles(),
+    listProcessorDetailsBySlug(),
+  ]);
   const bySlug = new Map(profiles.map((p) => [p.slug, p]));
   const left = bySlug.get(leftSlug);
   const right = bySlug.get(rightSlug);
@@ -1054,7 +1206,14 @@ export default async function ProcessorCompareSlugPage({ params }: Props) {
     getProcessorDetailBySlug(left.slug),
     getProcessorDetailBySlug(right.slug),
   ]);
-  const sections = buildSections(left, right, leftDetail, rightDetail);
+  const gamingReferences = calculateGamingScoreReferences(Object.values(allDetailsBySlug));
+  const performanceReferences = calculatePerformanceScoreReferences(
+    Object.values(allDetailsBySlug),
+    profiles.map((item) => Number(item.antutu || 0)),
+    profiles.map((item) => Number(item.maxCpuGhz || 0))
+  );
+  const aiReferences = calculateAiScoreReferences(Object.values(allDetailsBySlug));
+  const sections = buildSections(left, right, leftDetail, rightDetail, gamingReferences, performanceReferences, aiReferences);
   const moreMatchups = buildMoreMatchups(left, right, profiles);
   const breadcrumbJsonLd = {
     "@context": "https://schema.org",
@@ -1258,4 +1417,13 @@ export default async function ProcessorCompareSlugPage({ params }: Props) {
     </main>
   );
 }
+
+
+
+
+
+
+
+
+
 

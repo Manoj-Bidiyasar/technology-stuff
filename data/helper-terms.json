@@ -1,6 +1,214 @@
 {
   "processor": [
     {
+      "section": "AI",
+      "field": "aiEngine",
+      "name": "Apple Neural Engine",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-04-20T19:17:13.337Z"
+    },
+    {
+      "section": "Graphics (GPU)",
+      "field": "gpuArchitecture",
+      "name": "Apple A GPU",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-04-20T19:15:48.875Z"
+    },
+    {
+      "section": "Graphics (GPU)",
+      "field": "gpuName",
+      "name": "Apple 9th Gen GPU",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-04-20T19:15:17.127Z"
+    },
+    {
+      "section": "CPU",
+      "field": "cpuCoreName",
+      "name": "Sawtooth 3rd Gen",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-04-20T19:13:09.853Z"
+    },
+    {
+      "section": "CPU",
+      "field": "cpuCoreName",
+      "name": "Everest 3rd Gen",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-04-20T19:12:46.918Z"
+    },
+    {
+      "section": "Graphics (GPU)",
+      "field": "gpuName",
+      "name": "IMG PowerVR GE8320",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-04-08T19:32:18.904Z"
+    },
+    {
+      "section": "Graphics (GPU)",
+      "field": "gpuArchitecture",
+      "name": "Bifrost 1st Gen",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-04-08T18:17:13.366Z"
+    },
+    {
+      "section": "Graphics (GPU)",
+      "field": "gpuArchitecture",
+      "name": "Bifrost 2nd Gen",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-04-08T18:16:59.877Z"
+    },
+    {
+      "section": "Graphics (GPU)",
+      "field": "gpuArchitecture",
+      "name": "Bifrost 3rd Gen",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-04-08T18:16:48.561Z"
+    },
+    {
+      "section": "Graphics (GPU)",
+      "field": "gpuName",
+      "name": "IMG BXM-8-256",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-04-08T13:09:49.005Z"
+    },
+    {
+      "section": "Camera",
+      "field": "cameraIsp",
+      "name": "Media Imagiq ISP (dual 18-bit)",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-04-06T18:05:52.509Z"
+    },
+    {
+      "section": "AI",
+      "field": "aiEngine",
+      "name": "MediaTek NPU",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-04-06T17:58:27.667Z"
+    },
+    {
+      "section": "Graphics (GPU)",
+      "field": "gpuName",
+      "name": "Mali G1-Premium",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-04-06T17:57:04.897Z"
+    },
+    {
+      "section": "Graphics (GPU)",
+      "field": "gpuName",
+      "name": "Mali G1-Pro",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-04-06T17:56:49.408Z"
+    },
+    {
+      "section": "Graphics (GPU)",
+      "field": "gpuName",
+      "name": "Mali G1-Ultra",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-04-06T17:56:29.036Z"
+    },
+    {
+      "section": "CPU",
+      "field": "cpuCoreName",
+      "name": "ARM C1 Premium",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-04-06T17:43:04.630Z"
+    },
+    {
+      "section": "CPU",
+      "field": "cpuCoreName",
+      "name": "ARM C1 Pro",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-04-06T17:40:18.181Z"
+    },
+    {
+      "section": "CPU",
+      "field": "cpuCoreName",
+      "name": "ARM C1 Ultra",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-04-06T17:40:07.353Z"
+    },
+    {
+      "section": "Graphics (GPU)",
+      "field": "gpuArchitecture",
+      "name": "Valhall 1st Gen",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-04-06T12:12:46.502Z"
+    },
+    {
+      "section": "Graphics (GPU)",
+      "field": "gpuArchitecture",
+      "name": "Valhall 5th Gen",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-04-06T12:12:28.159Z"
+    },
+    {
+      "section": "Graphics (GPU)",
+      "field": "gpuArchitecture",
+      "name": "Valhall 4th Gen",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-04-06T12:12:11.588Z"
+    },
+    {
+      "section": "Graphics (GPU)",
+      "field": "gpuArchitecture",
+      "name": "Valhall 3rd Gen",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-04-06T12:11:56.131Z"
+    },
+    {
+      "section": "Graphics (GPU)",
+      "field": "gpuArchitecture",
+      "name": "Valhall 2nd Gen",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-04-06T12:11:43.528Z"
+    },
+    {
+      "section": "Connectivity",
+      "field": "modem",
+      "name": "Integrated 5G Modem",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-04-06T09:07:17.217Z"
+    },
+    {
+      "section": "Graphics (GPU)",
+      "field": "gpuName",
+      "name": "Mali-G",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-04-06T08:59:10.879Z"
+    },
+    {
+      "section": "Graphics (GPU)",
+      "field": "gpuName",
+      "name": "Xclipse",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-04-04T18:19:19.469Z"
+    },
+    {
       "section": "Graphics (GPU)",
       "field": "gpuName",
       "name": "Mali G1-Ultra",

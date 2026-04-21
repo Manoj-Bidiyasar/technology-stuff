@@ -42,17 +42,17 @@ const SECTION_SUGGESTIONS = [
 
 const PROCESSOR_FIELD_SUGGESTIONS: Record<string, string[]> = {
   Basic: ["announced", "manufacturer", "className", "model"],
-  Benchmark: ["benchmarks.antutuVersion", "benchmarks.antutu", "benchmarks.geekbenchVersion", "benchmarks.geekbenchSingle", "benchmarks.geekbenchMulti", "benchmarks.threeDMarkName", "benchmarks.threeDMark"],
+  Benchmark: ["benchmarks.aiScore", "benchmarks.antutuCalcVersion", "benchmarks.antutuCalc", "benchmarks.antutuCalcCpu", "benchmarks.antutuCalcGpu", "benchmarks.antutuVersion", "benchmarks.antutu", "benchmarks.antutuCpu", "benchmarks.antutuGpu", "benchmarks.antutuMemory", "benchmarks.antutuUx", "benchmarks.geekbenchVersion", "benchmarks.geekbenchSingle", "benchmarks.geekbenchMulti", "benchmarks.threeDMarkWildLife", "benchmarks.threeDMarkSolarBay", "benchmarks.threeDMarkSteelNomadLight", "benchmarks.threeDMarkWildLifeExtreme", "benchmarks.threeDMarkWildLifeExtremeMin", "benchmarks.threeDMarkWildLifeExtremeMax", "benchmarks.threeDMarkName", "benchmarks.threeDMark"],
   CPU: ["cpuCoreName", "coreCount", "coreConfiguration", "cores", "instructionSet", "architectureBits", "process", "transistorCount", "l2Cache", "l3Cache", "slcCache", "tdpW", "cpuFeatures"],
   "Graphics (GPU)": ["gpuName", "gpuArchitecture", "pipelines", "shadingUnits", "gpuFrequencyMhz", "vulkanVersion", "openclVersion", "directxVersion", "gpuFeatures", "gpuApis", "gpuFlops"],
   AI: ["aiEngine", "aiPerformanceTops", "aiPrecision", "aiFeatures"],
-  Memory: ["memoryType", "memoryTypes", "memoryFreqMhz", "memoryFreqByType", "memoryChannels", "memoryBusWidthBits", "maxMemoryGb", "bandwidthGbps"],
+  Memory: ["memoryType", "memoryTypes", "memoryFreqMhz", "memoryFreqByType", "memoryChannels", "memoryBusWidthBits", "totalRamBusWidthBits", "maxMemoryGb", "bandwidthGbps"],
   Storage: ["storageChannels", "storageType", "storageTypes"],
   Camera: ["cameraIsp", "maxCameraSupport", "cameraSupportModes", "cameraFeatures"],
   Video: ["maxVideoCapture", "videoCapture", "videoRecordingModes", "videoRecordingCodecs", "videoPlaybackCodecs", "videoRecordingHdrFormats", "videoPlaybackHdrFormats", "videoFeatures", "videoPlayback"],
   Display: ["maxDisplayResolution", "maxRefreshRateHz", "displayModes", "outputDisplay", "displayFeatures"],
   Multimedia: ["audioCodecs", "multimediaFeatures"],
-  Connectivity: ["modem", "networkSupport", "dual5g", "downloadMbps", "uploadMbps", "wifi", "bluetooth", "bluetoothFeatures", "navigation", "gnssType"],
+  Connectivity: ["modem", "networkSupport", "lteCat", "dual5g", "downloadMbps", "uploadMbps", "wifi", "bluetooth", "bluetoothFeatures", "navigation", "gnssType"],
   Charging: ["quickCharging", "chargingSpeed"],
   Source: ["sourceUrl"],
   Other: ["seo.metaTitle", "seo.metaDescription", "seo.canonicalUrl", "seo.summary", "seo.focusKeyword", "seo.tags", "seo.ogImage", "seo.noIndex"],
@@ -492,3 +492,4 @@ export default function AdminHelperPage() {
     </main>
   );
 }
+
