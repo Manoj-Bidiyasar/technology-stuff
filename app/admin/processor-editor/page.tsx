@@ -1731,6 +1731,10 @@ export default function ProcessorEditorPage() {
   const antutuTotal = getDetailField("benchmarks.antutu") as number | string | undefined;
   const coreConfigurationRaw = String(getDetailField("coreConfiguration") || "").trim();
   const processNm = extractFabricationNm(getDetailField("process"));
+  const fabricationNmValue = (() => {
+    const parsed = Number(processNm);
+    return Number.isFinite(parsed) ? parsed : undefined;
+  })();
   const tdpValue = String(getDetailField("tdpW") ?? "");
   const transistorRaw = String(getDetailField("transistorCount") || "");
   const transistor = parseTransistorCount(transistorRaw);
@@ -1753,7 +1757,7 @@ export default function ProcessorEditorPage() {
       geekbenchSingle: Number(getDetailField("benchmarks.geekbenchSingle") || 0) || undefined,
       geekbenchMulti: Number(getDetailField("benchmarks.geekbenchMulti") || 0) || undefined,
       maxCpuGhz: Number(form.maxCpuGhz || 0) || undefined,
-      fabricationNm: processNm || undefined,
+      fabricationNm: fabricationNmValue,
       process: String(getDetailField("process") || ""),
       instructionSet: String(getDetailField("instructionSet") || ""),
       architectureBits: String(getDetailField("architectureBits") || ""),
@@ -1775,7 +1779,7 @@ export default function ProcessorEditorPage() {
       memoryFrequencyReference: 5333,
     }).score;
     const efficiency = calculateEfficiencyScore({
-      fabricationNm: processNm || undefined,
+      fabricationNm: fabricationNmValue,
       process: String(getDetailField("process") || ""),
       instructionSet: String(getDetailField("instructionSet") || ""),
       architectureBits: String(getDetailField("architectureBits") || ""),
@@ -1783,7 +1787,7 @@ export default function ProcessorEditorPage() {
       cores: String(getDetailField("cores") || ""),
     });
     const gamingBreakdown = calculateGamingScore({
-      fabricationNm: processNm || undefined,
+      fabricationNm: fabricationNmValue,
       process: String(getDetailField("process") || ""),
       instructionSet: String(getDetailField("instructionSet") || ""),
       architectureBits: String(getDetailField("architectureBits") || ""),
@@ -1809,7 +1813,7 @@ export default function ProcessorEditorPage() {
     const ai = calculateAiScore({
       processorName: String(form.name || ""),
       aiBenchmarkScore: Number(getDetailField("benchmarks.aiScore") || 0) || undefined,
-      fabricationNm: processNm || undefined,
+      fabricationNm: fabricationNmValue,
       process: String(getDetailField("process") || ""),
       instructionSet: String(getDetailField("instructionSet") || ""),
       architectureBits: String(getDetailField("architectureBits") || ""),
