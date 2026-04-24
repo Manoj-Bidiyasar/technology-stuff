@@ -1,4 +1,5 @@
 export type PublishStatus = "draft" | "published";
+export type ProductStatus = PublishStatus | "review" | "scheduled" | "recently_deleted";
 
 export type TimestampLike =
   | Date
@@ -330,7 +331,8 @@ export type Product = {
     source?: "amazon" | "flipkart" | "manual" | string;
     updatedAt?: TimestampLike;
   };
-  status: PublishStatus;
+  status: ProductStatus;
+  scheduledAt?: TimestampLike;
   shortDescription?: string;
   images: string[];
   specs: ProductSpecs;

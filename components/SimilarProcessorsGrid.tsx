@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import ProcessorChipVisual from "@/components/ProcessorChipVisual";
 import ProcessorNameLabel from "@/components/ProcessorNameLabel";
@@ -19,14 +19,34 @@ function antutuLabel(value?: number): string {
 }
 
 export default function SimilarProcessorsGrid({ items }: { items: SimilarCard[] }) {
-  const pageSize = 8;
+  const [pageSize, setPageSize] = useState(8);
   const [page, setPage] = useState(0);
+
+  useEffect(() => {
+    function updatePageSize() {
+      if (typeof window === "undefined") return;
+      if (window.innerWidth >= 1536) {
+        setPageSize(12);
+        return;
+      }
+      if (window.innerWidth >= 1280) {
+        setPageSize(8);
+        return;
+      }
+      setPageSize(8);
+    }
+
+    updatePageSize();
+    window.addEventListener("resize", updatePageSize);
+    return () => window.removeEventListener("resize", updatePageSize);
+  }, []);
+
   const totalPages = Math.max(1, Math.ceil(items.length / pageSize));
   const safePage = Math.min(page, totalPages - 1);
 
   const visible = useMemo(
     () => items.slice(safePage * pageSize, safePage * pageSize + pageSize),
-    [items, safePage]
+    [items, safePage, pageSize]
   );
 
   const canPrev = safePage > 0;
@@ -63,7 +83,7 @@ export default function SimilarProcessorsGrid({ items }: { items: SimilarCard[] 
         </>
       ) : null}
 
-      <div className="grid grid-cols-2 gap-2 max-[360px]:gap-1.5 sm:gap-2.5 lg:grid-cols-3 xl:grid-cols-6">
+      <div className="grid grid-cols-2 gap-2 max-[360px]:gap-1.5 sm:gap-2.5 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-6">
         {visible.map((item) => {
           return (
             <Link

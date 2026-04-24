@@ -12,6 +12,7 @@ import SimilarProcessorsGrid from "@/components/SimilarProcessorsGrid";
 import { getProcessorDetailBySlug, listProcessorDetailsBySlug, type ProcessorDetail } from "@/lib/processors/details";
 import { listProcessorProfiles, type ProcessorProfile } from "@/lib/processors/profiles";
 import { getProcessorAdminById } from "@/lib/firestore/processors";
+import { listProcessorDiscussionPublic } from "@/lib/firestore/processorDiscussion";
 import { getAdminViewerFromSessionToken } from "@/lib/auth/admin";
 import { hasCapability } from "@/lib/admin/permissions";
 import { ADMIN_SESSION_COOKIE } from "@/lib/auth/constants";
@@ -39,12 +40,144 @@ function decimal(value?: number, digits = 1): string {
   return Number.isInteger(value) ? String(value) : (value as number).toFixed(digits);
 }
 
-function neighbors(target: ProcessorProfile, all: ProcessorProfile[]) {
+type ProcessorTier = "flagship" | "upper" | "mid" | "entry";
+
+function processorSearchText(item: Pick<ProcessorProfile, "name" | "vendor">): string {
+  return `${item.vendor || ""} ${item.name || ""}`.toLowerCase();
+}
+
+function processorGenerationNumber(item: Pick<ProcessorProfile, "name" | "vendor">): number {
+  const text = processorSearchText(item);
+  const apple = text.match(/\ba\s*(\d{2})\b/);
+  if (apple) return Number(apple[1]);
+  const tensor = text.match(/\bg\s*(\d+)\b/);
+  if (text.includes("tensor") && tensor) return Number(tensor[1]);
+  const dimensity = text.match(/\bdimensity\s*(\d{4})/);
+  if (dimensity) return Math.floor(Number(dimensity[1]) / 100);
+  const exynos = text.match(/\bexynos\s*(\d{4})/);
+  if (exynos) return Math.floor(Number(exynos[1]) / 100);
+  if (text.includes("snapdragon") && text.includes("elite")) return 9;
+  const snapdragon = text.match(/\bsnapdragon\s*(\d)(?:s|\+)?(?:\s*gen\s*(\d+))?/);
+  if (snapdragon) return Number(snapdragon[2] || snapdragon[1]);
+  return 0;
+}
+
+function processorTier(item: Pick<ProcessorProfile, "name" | "vendor" | "antutu">): ProcessorTier {
+  const text = processorSearchText(item);
+  const antutu = Number(item.antutu || 0);
+  if (
+    /\bsnapdragon\s*8\b/.test(text) ||
+    /\bdimensity\s*9\d{3}/.test(text) ||
+    /\bexynos\s*2\d{3}/.test(text) ||
+    /\btensor\s*g[4-9]\b/.test(text) ||
+    /\ba1[7-9]\s*pro\b/.test(text) ||
+    /\ba19\b/.test(text) ||
+    antutu >= 1800000
+  ) {
+    return "flagship";
+  }
+  if (
+    /\bsnapdragon\s*7\+?\s*gen\b/.test(text) ||
+    /\bdimensity\s*8\d{3}/.test(text) ||
+    /\bdimensity\s*7[3-9]\d{2}/.test(text) ||
+    /\bexynos\s*1[4-9]\d{2}/.test(text) ||
+    antutu >= 950000
+  ) {
+    return "upper";
+  }
+  if (
+    /\bsnapdragon\s*(7s|6)\b/.test(text) ||
+    /\bdimensity\s*[67]\d{3}/.test(text) ||
+    /\bexynos\s*1[23]\d{2}/.test(text) ||
+    antutu >= 450000
+  ) {
+    return "mid";
+  }
+  return "entry";
+}
+
+function launchYearFromDetail(detail?: ProcessorDetail): number | undefined {
+  const raw = String(detail?.announced || "").trim();
+  const match = raw.match(/\b(20\d{2})\b/);
+  return match ? Number(match[1]) : undefined;
+}
+
+function familyPriority(target: ProcessorProfile, item: ProcessorProfile): number {
+  const targetText = processorSearchText(target);
+  const text = processorSearchText(item);
+  if (targetText.includes("snapdragon 8")) {
+    if (text.includes("snapdragon 8 elite gen 5")) return 100;
+    if (text.includes("snapdragon 8 gen 5")) return 96;
+    if (text.includes("snapdragon 8 elite")) return 88;
+    if (text.includes("dimensity 9500")) return 94;
+    if (text.includes("dimensity 9400")) return 84;
+    if (text.includes("dimensity 9300")) return 72;
+    if (text.includes("exynos 2600")) return 92;
+    if (text.includes("exynos 2500")) return 82;
+    if (text.includes("exynos 2400")) return 70;
+    if (text.includes("tensor g5")) return 90;
+    if (text.includes("tensor g4")) return 78;
+    if (/\ba19\s*pro\b/.test(text)) return 91;
+    if (/\ba19\b/.test(text)) return 89;
+    if (/\ba18\s*pro\b/.test(text)) return 80;
+    if (/\ba18\b/.test(text)) return 74;
+    if (/\ba17\s*pro\b/.test(text)) return 68;
+    if (text.includes("snapdragon 8s")) return 66;
+  }
+  if (targetText.includes("snapdragon 7")) {
+    if (text.includes("snapdragon 7")) return 90;
+    if (text.includes("dimensity 8")) return 84;
+    if (text.includes("dimensity 7")) return 72;
+    if (text.includes("exynos 1")) return 68;
+  }
+  if (targetText.includes("snapdragon 6")) {
+    if (text.includes("snapdragon 6")) return 90;
+    if (text.includes("dimensity 7") || text.includes("dimensity 6")) return 80;
+    if (text.includes("exynos 1")) return 68;
+  }
+  return 0;
+}
+
+function rankedProcessorCandidates(
+  target: ProcessorProfile,
+  all: ProcessorProfile[],
+  detailsBySlug: Record<string, ProcessorDetail>,
+  mode: "similar" | "compare",
+) {
+  const targetTier = processorTier(target);
+  const targetYear = launchYearFromDetail(detailsBySlug[target.slug]);
+  const targetGen = processorGenerationNumber(target);
+  const targetAntutu = Number(target.antutu || 0);
+
   return all
-    .filter((p) => p.slug !== target.slug)
-    .map((p) => ({ ...p, gap: Math.abs((p.antutu || 0) - (target.antutu || 0)) }))
-    .sort((a, b) => a.gap - b.gap)
-    .slice(0, 8);
+    .filter((item) => item.slug !== target.slug)
+    .map((item) => {
+      const itemTier = processorTier(item);
+      const itemYear = launchYearFromDetail(detailsBySlug[item.slug]);
+      const itemGen = processorGenerationNumber(item);
+      const antutuGap = targetAntutu && item.antutu ? Math.abs(item.antutu - targetAntutu) / targetAntutu : 1;
+      const sameTier = itemTier === targetTier;
+      const family = familyPriority(target, item);
+      const yearGap = targetYear && itemYear ? Math.abs(targetYear - itemYear) : undefined;
+      const genGap = targetGen && itemGen ? Math.abs(targetGen - itemGen) : undefined;
+      const sameVendor = target.vendor.toLowerCase() === item.vendor.toLowerCase();
+      let score = 0;
+
+      score += sameTier ? 240 : -260;
+      score += family;
+      score += yearGap === undefined ? 0 : Math.max(0, 80 - yearGap * 28);
+      score += genGap === undefined ? 0 : Math.max(0, 55 - genGap * 16);
+      score += Math.max(0, 75 - antutuGap * (targetTier === "flagship" ? 70 : 150));
+      if (sameVendor) score += mode === "similar" ? 24 : -35;
+      if (mode === "compare" && !sameVendor) score += 35;
+      if (targetTier === "flagship" && sameTier && ["Apple", "Google", "MediaTek", "Samsung"].includes(item.vendor)) score += mode === "compare" ? 36 : 14;
+      if (targetTier !== "flagship" && antutuGap <= 0.25) score += 35;
+
+      return { ...item, similarityScore: score };
+    })
+    .filter((item) => item.similarityScore > 0)
+    .sort((a, b) => b.similarityScore - a.similarityScore || (b.antutu || 0) - (a.antutu || 0))
+    .slice(0, mode === "compare" ? 8 : 12);
 }
 
 function tone(score: number): string {
@@ -61,17 +194,40 @@ function bar(score: number): string {
   return "bg-slate-400";
 }
 
-function ProgressRow({ label, value }: { label: string; value: number }) {
+function renderScoreBadge(value?: number): ReactNode {
+  if (!Number.isFinite(value)) return "-";
+  const score = Math.round(Number(value));
+  const radius = 18;
+  const circumference = 2 * Math.PI * radius;
+  const progress = Math.max(0, Math.min(100, score));
+  const dashOffset = circumference - ((progress / 100) * circumference);
+  const tone =
+    score >= 85
+      ? { track: "#d1fae5", stroke: "#059669", text: "text-emerald-700", ring: "bg-emerald-50" }
+      : score >= 70
+        ? { track: "#dbeafe", stroke: "#2563eb", text: "text-blue-700", ring: "bg-blue-50" }
+        : score >= 55
+          ? { track: "#fef3c7", stroke: "#d97706", text: "text-amber-700", ring: "bg-amber-50" }
+          : { track: "#e5e7eb", stroke: "#64748b", text: "text-slate-700", ring: "bg-slate-50" };
+
   return (
-    <div className="rounded-lg border border-slate-200 bg-white p-3">
-      <div className="flex items-center justify-between text-sm">
-        <p className="font-semibold text-slate-700">{label}</p>
-        <p className={`font-extrabold ${tone(value)}`}>{value}/100</p>
-      </div>
-      <div className="mt-2 h-2 rounded-full bg-slate-200">
-        <div className={`h-2 rounded-full ${bar(value)}`} style={{ width: `${value}%` }} />
-      </div>
-    </div>
+    <span className={`relative inline-flex h-12 w-12 items-center justify-center rounded-full ${tone.ring}`}>
+      <svg viewBox="0 0 44 44" className="absolute inset-0 h-full w-full -rotate-90" aria-hidden="true">
+        <circle cx="22" cy="22" r={radius} fill="none" stroke={tone.track} strokeWidth="4" />
+        <circle
+          cx="22"
+          cy="22"
+          r={radius}
+          fill="none"
+          stroke={tone.stroke}
+          strokeWidth="4"
+          strokeLinecap="round"
+          strokeDasharray={circumference}
+          strokeDashoffset={dashOffset}
+        />
+      </svg>
+      <span className={`relative text-sm font-extrabold ${tone.text}`}>{score}</span>
+    </span>
   );
 }
 
@@ -194,9 +350,9 @@ function ModernSpecCards({
 
 function getChipClass(antutu?: number, explicitClass?: string): string {
   const explicit = String(explicitClass || "").trim();
+  if (explicit.toLowerCase() === "ultra flagship") return "Flagship";
   if (explicit) return explicit;
   const score = Number(antutu || 0);
-  if (score >= 2800000) return "Ultra Flagship";
   if (score >= 1800000) return "Flagship";
   if (score >= 1300000) return "Upper Midrange";
   if (score >= 900000) return "Midrange";
@@ -627,8 +783,8 @@ function formatFlops(value?: string): string {
   const raw = String(value || "").trim();
   if (!raw) return "-";
   if (/\bflops\b/i.test(raw)) return raw;
-  if (/^\d+(\.\d+)?$/.test(raw)) return `${raw} Gigaflops`;
-  return `${raw} Gigaflops`;
+  if (/^\d+(\.\d+)?$/.test(raw)) return `${raw} GFLOPS`;
+  return `${raw} GFLOPS`;
 }
 
 function stripResolutionFromMode(value: string): string {
@@ -655,6 +811,20 @@ function formatDisplayModeLines(values: string[]): string {
   return rows.length ? rows.join(", ") : "-";
 }
 
+function formatTopDisplayMode(values: string[] | undefined, fallback?: string): string {
+  const top = (values || []).map((item) => String(item || "").trim()).find(Boolean);
+  if (top) return formatDisplayModeLines([top]);
+  return formatDisplayModeLines([String(fallback || "-")]);
+}
+
+function formatTopOutputDisplay(value?: string): string {
+  const top = String(value || "")
+    .split(",")
+    .map((item) => item.trim())
+    .find(Boolean);
+  return formatDisplayModeLines([top || "-"]);
+}
+
 function mobileClusterRows(value: string): ReactNode {
   const raw = String(value || "").trim();
   if (!raw || raw === "-") return "-";
@@ -673,51 +843,6 @@ function mobileClusterRows(value: string): ReactNode {
       <span className="hidden sm:inline">{raw}</span>
     </>
   );
-}
-
-function mobileVersionWithDetails(value: string): ReactNode {
-  const raw = String(value || "").trim();
-  const parts = raw.match(/^([A-Za-z0-9.+-]+)\s*(\([^)]*\))$/);
-  if (!parts) return raw || "-";
-  return (
-    <>
-      <span className="sm:hidden">
-        <span className="block leading-tight">{parts[1]}</span>
-        <span className="block whitespace-nowrap text-[11px] leading-tight">{parts[2]}</span>
-      </span>
-      <span className="hidden sm:inline">{raw}</span>
-    </>
-  );
-}
-
-function normalizeFeatureText(value: string): string {
-  return String(value || "")
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "");
-}
-
-function formatOtherCpuFeatures(features: string[] | undefined, architecture?: string): string {
-  const list = (features || [])
-    .map((item) => String(item || "").trim())
-    .filter(Boolean);
-  if (!list.length) return "-";
-  const archRaw = String(architecture || "").trim();
-  const archNorm = normalizeFeatureText(archRaw);
-  const archTokens = archRaw
-    .split(/[^A-Za-z0-9.+-]+/)
-    .map((t) => normalizeFeatureText(t))
-    .filter((t) => t.length >= 4);
-  const filtered = list.filter((item) => {
-    if (!archNorm) return true;
-    const featureNorm = normalizeFeatureText(item);
-    if (!featureNorm) return false;
-    if (featureNorm === archNorm) return false;
-    if (featureNorm.length >= 6 && archNorm.includes(featureNorm)) return false;
-    if (archNorm.length >= 6 && featureNorm.includes(archNorm)) return false;
-    if (archTokens.some((token) => featureNorm.includes(token) || token.includes(featureNorm))) return false;
-    return true;
-  });
-  return filtered.length ? filtered.join(", ") : "-";
 }
 
 function formatCpuArchitecture(detail?: ProcessorDetail): string {
@@ -837,6 +962,49 @@ function getMemoryFrequencyRows(detail: {
   return [single || "-"];
 }
 
+function parseMemoryChannelCount(value?: string): number | undefined {
+  const raw = String(value || "").trim().toLowerCase();
+  if (!raw) return undefined;
+  if (raw.includes("single")) return 1;
+  if (raw.includes("dual")) return 2;
+  if (raw.includes("triple")) return 3;
+  if (raw.includes("quad")) return 4;
+  if (raw.includes("penta")) return 5;
+  if (raw.includes("hexa")) return 6;
+  if (raw.includes("octa")) return 8;
+  const match = raw.match(/(\d+)/);
+  return match?.[1] ? Number(match[1]) : undefined;
+}
+
+function formatMemoryBusWidth(detail?: {
+  memoryBusWidthBits?: number;
+  totalRamBusWidthBits?: number;
+  memoryChannels?: string;
+}): string {
+  const perChannel = Number(detail?.memoryBusWidthBits);
+  const total = Number(detail?.totalRamBusWidthBits);
+  const channelText = String(detail?.memoryChannels || "").trim();
+  const channelCount = parseMemoryChannelCount(channelText);
+  const hasChannelCount = typeof channelCount === "number" && Number.isFinite(channelCount) && channelCount > 0;
+  const resolvedTotal = Number.isFinite(total) && total > 0
+    ? total
+    : (Number.isFinite(perChannel) && perChannel > 0 && hasChannelCount ? perChannel * channelCount : NaN);
+
+  if (Number.isFinite(resolvedTotal) && resolvedTotal > 0 && Number.isFinite(perChannel) && perChannel > 0) {
+    const multiplier = channelText
+      ? channelText.replace(/-?channel/gi, "").trim() || String(channelCount || "")
+      : (hasChannelCount ? String(channelCount) : String(Math.round(resolvedTotal / perChannel)));
+    return `${resolvedTotal}-bit (${multiplier} x ${perChannel}-bit)`;
+  }
+  if (Number.isFinite(resolvedTotal) && resolvedTotal > 0) return `${resolvedTotal}-bit`;
+  if (Number.isFinite(perChannel) && perChannel > 0) return `${perChannel}-bit`;
+  return "-";
+}
+
+function formatMemoryBandwidth(value?: number): string {
+  return Number.isFinite(value) && Number(value) > 0 ? `${value} GB/s` : "-";
+}
+
 function formatNetworkSupport(detail: {
   networkSupport?: string[];
   modem?: string;
@@ -878,31 +1046,22 @@ function compactNetworkBadge(value?: string): string {
 
 function formatBluetooth(version?: string, features?: string[]): string {
   const v = String(version || "").trim();
-  const f = (features || []).map((x) => String(x).trim()).filter(Boolean);
-  if (!v && !f.length) return "-";
-  if (!v) return f.join(", ");
-  if (!f.length) return v;
-  return `${v} (${f.join(", ")})`;
+  if (v) return v.replace(/^Bluetooth\s*/i, "").trim() || "-";
+  const fallback = (features || []).map((x) => String(x).trim()).find((x) => /\d/.test(x));
+  return fallback ? fallback.replace(/^Bluetooth\s*/i, "").trim() : "-";
 }
 
 function formatWifi(value?: string): string {
   const raw = String(value || "").trim();
   if (!raw) return "-";
-  if (/802\.11/i.test(raw)) return raw;
-  const cleaned = raw.toUpperCase().replace(/^WI[-\s]?FI\s*/i, "");
-  const key = cleaned.replace(/\s+/g, "");
-  const map: Record<string, string> = {
-    "7": "7 (802.11 a/b/g/n/ac/ax/be)",
-    "6E": "6E (802.11 a/b/g/n/ac/ax)",
-    "6": "6 (802.11 a/b/g/n/ac/ax)",
-    "5": "5 (802.11 a/b/g/n/ac)",
-    "4": "4 (802.11 a/b/g/n)",
-  };
-  if (map[key]) return map[key];
-  if (/^WIFI\s*\d/i.test(raw.toUpperCase())) {
-    const num = raw.toUpperCase().replace("WIFI", "").trim();
-    if (map[num]) return map[num];
-  }
+  const upper = raw.toUpperCase();
+  if (/\bWI[-\s]?FI\s*7\b|\bWIFI7\b/.test(upper) || /\b802\.11BE\b/i.test(raw)) return "7";
+  if (/\bWI[-\s]?FI\s*6E\b|\bWIFI6E\b/.test(upper)) return "6E";
+  if (/\bWI[-\s]?FI\s*6\b|\bWIFI6\b/.test(upper) || /\b802\.11AX\b/i.test(raw)) return "6";
+  if (/\bWI[-\s]?FI\s*5\b|\bWIFI5\b/.test(upper) || /\b802\.11AC\b/i.test(raw)) return "5";
+  if (/\bWI[-\s]?FI\s*4\b|\bWIFI4\b/.test(upper) || /\b802\.11N\b/i.test(raw)) return "4";
+  const version = raw.match(/\b(7|6E|6|5|4)\b/i);
+  if (version?.[1]) return version[1].toUpperCase();
   return raw;
 }
 
@@ -947,7 +1106,7 @@ function splitSupportLines(value?: string): string[] {
 }
 
 function TopSpecIcon({ kind }: { kind: string }) {
-  const base = "inline-flex h-5 w-5 items-center justify-center rounded-md";
+  const base = "inline-flex h-4.5 w-4.5 items-center justify-center rounded-md sm:h-5 sm:w-5";
   switch (kind) {
     case "gpu":
       return (
@@ -1152,7 +1311,9 @@ export default async function ProcessorDetailPage({ params, searchParams }: Prop
   };
 
   const allForSimilar = all.some((item) => item.slug === p.slug) ? all : [p, ...all];
-  const similar = neighbors(p, allForSimilar);
+  const similar = rankedProcessorCandidates(p, allForSimilar, allDetailsBySlug, "similar");
+  const comparisonCandidates = rankedProcessorCandidates(p, allForSimilar, allDetailsBySlug, "compare");
+  const commentRows = await listProcessorDiscussionPublic(p.slug);
   const gamingReferences = calculateGamingScoreReferences(Object.values(allDetailsBySlug));
   const aiReferences = calculateAiScoreReferences(Object.values(allDetailsBySlug));
   const performanceReferences = calculatePerformanceScoreReferences(
@@ -1245,11 +1406,13 @@ export default async function ProcessorDetailPage({ params, searchParams }: Prop
   const benchSingle = detail?.benchmarks?.geekbenchSingle || 0;
   const benchMulti = detail?.benchmarks?.geekbenchMulti || 0;
   const bench3d = detail?.benchmarks?.threeDMark || 0;
+  const benchAiScore = detail?.benchmarks?.aiScore || 0;
 
   const antutuPct = Math.max(1, Math.min(100, Math.round((benchAntutu / 3500000) * 100)));
   const singlePct = Math.max(1, Math.min(100, Math.round((benchSingle / 3500) * 100)));
   const multiPct = Math.max(1, Math.min(100, Math.round((benchMulti / 14000) * 100)));
   const markPct = Math.max(1, Math.min(100, Math.round((bench3d / 10000) * 100)));
+  const aiBenchPct = Math.max(1, Math.min(100, Math.round((benchAiScore / 100) * 100)));
   const benchmarkRows: Array<{ label: string; value: ReactNode }> = [
     {
       label: `AnTuTu ${benchAntutuVersion || "-"}`,
@@ -1299,6 +1462,18 @@ export default async function ProcessorDetailPage({ params, searchParams }: Prop
       ),
       score: bench3d,
     } as { label: string; value: ReactNode; score: number },
+    {
+      label: "AI Score",
+      value: (
+        <div>
+          <div>{String(benchAiScore)}</div>
+          <div className="mt-1.5 h-2 rounded-full bg-slate-200">
+            <div className="h-2 rounded-full bg-cyan-500" style={{ width: `${aiBenchPct}%` }} />
+          </div>
+        </div>
+      ),
+      score: benchAiScore,
+    } as { label: string; value: ReactNode; score: number },
   ]
     .filter((row) => Number.isFinite((row as { score: number }).score) && (row as { score: number }).score > 0)
     .map((row) => ({ label: row.label, value: row.value }));
@@ -1320,26 +1495,6 @@ export default async function ProcessorDetailPage({ params, searchParams }: Prop
   const gpuName = detail?.gpuName || p.gpu || "-";
   const gpuCores = inferGpuCores(gpuName, detail?.pipelines);
   const supportRows: Array<{ label: string; value: ReactNode; labelAlign?: "top" | "center" }> = [];
-  if (String(detail?.quickCharging || "").trim()) {
-    supportRows.push({
-      label: "Quick Charging",
-      value: formatChargingText(detail?.quickCharging),
-    });
-  }
-  if (String(detail?.chargingSpeed || "").trim()) {
-    const lines = splitSupportLines(detail?.chargingSpeed);
-    supportRows.push({
-      label: "Charging Speed",
-      labelAlign: lines.length > 1 ? "center" : "top",
-      value: (
-        <div className="space-y-1">
-          {lines.map((line) => (
-            <div key={line}>{formatChargingText(line)}</div>
-          ))}
-        </div>
-      ),
-    });
-  }
   if (String(detail?.sourceUrl || "").trim()) {
     supportRows.push({
       label: "Official Page",
@@ -1574,7 +1729,7 @@ export default async function ProcessorDetailPage({ params, searchParams }: Prop
     },
     {
       key: "manufacturer",
-      label: "Manufacturer",
+      label: "Fabricated By",
       value: manufacturerValue,
       iconBg: "bg-violet-50",
       iconColor: "text-violet-700",
@@ -1586,7 +1741,7 @@ export default async function ProcessorDetailPage({ params, searchParams }: Prop
       ),
     },
   ].filter((row) => previewMode || hasValueNode(row.value));
-  const competitorRows = similar.slice(0, 6);
+  const competitorRows = comparisonCandidates.slice(0, 6);
   const similarCards = similar.map((item) => ({
     slug: item.slug,
     antutu: item.antutu,
@@ -1594,21 +1749,6 @@ export default async function ProcessorDetailPage({ params, searchParams }: Prop
     rawName: item.name,
     vendor: item.vendor,
   }));
-  const commentRows = [
-    {
-      user: "TechRanker",
-      at: "February 22, 2026 at 04:45 PM",
-      text: `Please update recent benchmarks for ${p.name}; real-world thermal consistency should be reflected as well.`,
-      score: 12,
-    },
-    {
-      user: "PhoneNerd",
-      at: "February 10, 2026 at 04:49 PM",
-      text: `Interesting positioning. ${p.name} seems strong in sustained performance, but camera pipeline numbers still look conservative.`,
-      score: 8,
-    },
-  ];
-
   return (
     <main className="mobile-container py-6 sm:py-8">
       <script
@@ -1638,9 +1778,9 @@ export default async function ProcessorDetailPage({ params, searchParams }: Prop
         </div>
         <div className="p-4 sm:p-5">
           <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_300px]">
-            <div className="grid grid-cols-[112px_minmax(0,1fr)] gap-3 md:grid-cols-[124px_minmax(0,1fr)] md:gap-4">
+            <div className="grid grid-cols-[96px_minmax(0,1fr)] gap-2 md:grid-cols-[124px_minmax(0,1fr)] md:gap-4">
               <div className="space-y-2">
-                <div className={`relative mx-auto h-28 w-28 overflow-hidden rounded-md border border-white/10 [container-type:inline-size] sm:h-32 sm:w-32 ${chipTile.tone} ${tileContainerEdgeClass}`}>
+                <div className={`relative mx-auto h-24 w-24 overflow-hidden rounded-md border border-white/10 [container-type:inline-size] sm:h-32 sm:w-32 ${chipTile.tone} ${tileContainerEdgeClass}`}>
                   <div className="absolute inset-0 bg-[radial-gradient(circle_at_18%_15%,rgba(255,255,255,0.15),transparent_36%)]" />
                   <div className="absolute inset-0 bg-[linear-gradient(135deg,transparent_15%,rgba(255,255,255,0.06)_35%,transparent_60%)]" />
                   <div className="absolute inset-0 opacity-20 [background-image:linear-gradient(120deg,transparent_0%,transparent_42%,rgba(255,255,255,0.12)_42%,rgba(255,255,255,0.12)_48%,transparent_48%,transparent_100%)]" />
@@ -1682,7 +1822,7 @@ export default async function ProcessorDetailPage({ params, searchParams }: Prop
                     )}
                   </div>
                 </div>
-                <Link href={`/processors?left=${encodeURIComponent(p.slug)}`} className="mx-auto flex w-fit rounded-lg bg-blue-700 px-3 py-1.5 text-xs font-bold text-white hover:bg-blue-800 sm:hidden">
+                <Link href={`/processors?left=${encodeURIComponent(p.slug)}`} className="mx-auto flex w-fit rounded-lg bg-blue-700 px-2.5 py-1.5 text-[11px] font-bold text-white hover:bg-blue-800 sm:hidden">
                   Compare
                 </Link>
                 <span className={`mx-auto hidden w-auto items-center justify-center gap-1.5 whitespace-nowrap rounded-lg border px-2 py-1 text-[9px] font-extrabold uppercase tracking-[0.06em] shadow-sm sm:inline-flex sm:w-full sm:rounded-xl sm:px-2.5 sm:py-1.5 sm:text-[10px] sm:tracking-[0.08em] ${chipClassBadgeTone(chipClass)}`}>
@@ -1691,11 +1831,13 @@ export default async function ProcessorDetailPage({ params, searchParams }: Prop
                 </span>
               </div>
               <div>
-                <ul className="space-y-2 text-xs text-slate-800 sm:text-sm">
+                <ul className="space-y-1.5 text-[11px] text-slate-800 sm:space-y-2 sm:text-sm">
                   {orderedTopSpecs.map((row) => (
-                    <li key={row.label} className="flex items-start gap-3">
+                    <li key={row.label} className="flex items-start gap-2 sm:gap-3">
                       <TopSpecIcon kind={row.kind} />
-                      <span><strong>{row.label}:</strong> {row.value}</span>
+                      <span className="block leading-tight sm:leading-normal">
+                        <strong className="whitespace-nowrap">{row.label}:</strong> {row.value}
+                      </span>
                     </li>
                   ))}
                 </ul>
@@ -1743,7 +1885,7 @@ export default async function ProcessorDetailPage({ params, searchParams }: Prop
         ]}
       />
 
-      <section className="mt-5 grid gap-5 lg:grid-cols-[minmax(0,1fr)_320px]">
+      <section className="mt-5">
         <div className="space-y-5">
           {hasBenchmarksSection ? (
             <article id="benchmarks" className="scroll-mt-28">
@@ -1781,6 +1923,63 @@ export default async function ProcessorDetailPage({ params, searchParams }: Prop
               </div>
             </div>
             ) : null}
+
+            <div className="mt-3 overflow-hidden rounded-xl border border-slate-200 bg-white">
+              <div className="border-b border-slate-200 bg-slate-50 px-4 py-2">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="inline-flex h-4 w-4 items-center justify-center rounded bg-blue-50 text-blue-700">
+                        {renderTitleIcon("chip")}
+                      </span>
+                      <h3 className="text-[13px] font-extrabold uppercase tracking-wide text-blue-700">{PROCESSOR_TOTAL_SCORE_LABEL}</h3>
+                    </div>
+                    <p className="mt-1 text-xs text-slate-600">Based on Performance, Gaming, Efficiency, and AI</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {renderScoreBadge(totalScore)}
+                  </div>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3 p-4 xl:grid-cols-4">
+                <div className="rounded-xl border border-slate-200 bg-white p-3">
+                  <div className="flex flex-col items-center gap-2 text-center sm:flex-row sm:items-center sm:text-left">
+                    {renderScoreBadge(perf)}
+                    <div>
+                      <div className="text-sm font-bold text-slate-900">Performance</div>
+                      <div className="text-xs text-slate-500">{perf}/100</div>
+                    </div>
+                  </div>
+                </div>
+                <div className="rounded-xl border border-slate-200 bg-white p-3">
+                  <div className="flex flex-col items-center gap-2 text-center sm:flex-row sm:items-center sm:text-left">
+                    {renderScoreBadge(eff)}
+                    <div>
+                      <div className="text-sm font-bold text-slate-900">Efficiency</div>
+                      <div className="text-xs text-slate-500">{eff}/100</div>
+                    </div>
+                  </div>
+                </div>
+                <div className="rounded-xl border border-slate-200 bg-white p-3">
+                  <div className="flex flex-col items-center gap-2 text-center sm:flex-row sm:items-center sm:text-left">
+                    {renderScoreBadge(game)}
+                    <div>
+                      <div className="text-sm font-bold text-slate-900">Gaming</div>
+                      <div className="text-xs text-slate-500">{game}/100</div>
+                    </div>
+                  </div>
+                </div>
+                <div className="rounded-xl border border-slate-200 bg-white p-3">
+                  <div className="flex flex-col items-center gap-2 text-center sm:flex-row sm:items-center sm:text-left">
+                    {renderScoreBadge(ai)}
+                    <div>
+                      <div className="text-sm font-bold text-slate-900">AI Score</div>
+                      <div className="text-xs text-slate-500">{ai}/100</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
             </article>
           ) : null}
 
@@ -1809,10 +2008,6 @@ export default async function ProcessorDetailPage({ params, searchParams }: Prop
                 { label: "Max. Clock Speed", value: clockMhz ? `${clockMhz} MHz` : "-" },
                 { label: "Fabrication Process", value: p.fabricationNm ? `${p.fabricationNm}nm` : (detail?.process || "-") },
                 { label: "Transistor Count", value: detail?.transistorCount || "-" },
-                { label: "TDP", value: Number.isFinite(detail?.tdpW) ? `${detail?.tdpW} W` : "-" },
-                { label: "L2 Cache", value: detail?.l2Cache || "-" },
-                { label: "L3 Cache", value: detail?.l3Cache || "-" },
-                { label: "Other CPU Features", value: formatOtherCpuFeatures(detail?.cpuFeatures, formatCpuArchitecture(detail)) },
               ]}
             />
           </article>
@@ -1824,12 +2019,9 @@ export default async function ProcessorDetailPage({ params, searchParams }: Prop
               showEmptyRows={previewMode}
               rows={[
                 { label: "GPU Name", value: gpuName },
-                { label: "Architecture (GPU)", value: detail?.gpuArchitecture || "-" },
-                { label: "GPU Cores", value: gpuCores },
                 { label: "GPU Frequency", value: detail?.gpuFrequencyMhz ? `${detail.gpuFrequencyMhz} MHz` : "-" },
+                { label: "FLOPS (FP32)", value: formatFlops(detail?.gpuFlops) },
                 { label: "API Support", value: detail?.gpuApis?.length ? detail.gpuApis.join(", ") : "-" },
-                { label: "FLOPS", value: formatFlops(detail?.gpuFlops) },
-                { label: "Other GPU Features", value: detail?.gpuFeatures?.length ? detail.gpuFeatures.join(", ") : "-" },
               ]}
             />
           </article>
@@ -1854,9 +2046,10 @@ export default async function ProcessorDetailPage({ params, searchParams }: Prop
               titleIcon="memory"
               showEmptyRows={previewMode}
               rows={[
-                { label: "Memory Type", value: mobileClusterRows(formatMemoryTypes(detail || {})) },
+                { label: "RAM Type", value: mobileClusterRows(formatMemoryTypes(detail || {})) },
+                { label: "RAM Bus Width", value: formatMemoryBusWidth(detail) },
                 {
-                  label: "Memory Frequency",
+                  label: "RAM Frequency",
                   labelAlign: "center",
                   value: (
                     <div className="space-y-1">
@@ -1866,9 +2059,8 @@ export default async function ProcessorDetailPage({ params, searchParams }: Prop
                     </div>
                   ),
                 },
-                { label: "Max Memory", value: detail?.maxMemoryGb ? `${detail.maxMemoryGb}GB` : "-" },
-                { label: "Storage Type", value: mobileClusterRows(formatStorageTypes(detail || {})) },
-                { label: "Storage Channels", value: detail?.storageChannels || "-" },
+                { label: "RAM Bandwidth", value: formatMemoryBandwidth(detail?.bandwidthGbps) },
+                { label: "Storage Type Support", value: mobileClusterRows(formatStorageTypes(detail || {})) },
               ]}
             />
           </article>
@@ -1880,31 +2072,20 @@ export default async function ProcessorDetailPage({ params, searchParams }: Prop
               showEmptyRows={previewMode}
               rows={[
                 {
-                  label: "Display Modes",
-                  value: clusterRows(
-                    detail?.displayModes?.length
-                      ? formatDisplayModeLines(detail.displayModes)
-                      : ((detail?.maxDisplayResolution || detail?.maxRefreshRateHz)
-                          ? `${detail?.maxDisplayResolution || "-"}${detail?.maxRefreshRateHz ? ` @ ${detail.maxRefreshRateHz}Hz` : ""}`
-                          : "-")
+                  label: "Max Display Support",
+                  value: formatTopDisplayMode(
+                    detail?.displayModes,
+                    (detail?.maxDisplayResolution || detail?.maxRefreshRateHz)
+                      ? `${detail?.maxDisplayResolution || "-"}${detail?.maxRefreshRateHz ? ` @ ${detail.maxRefreshRateHz}Hz` : ""}`
+                      : "-"
                   ),
                   labelAlign: "center",
                 },
                 {
-                  label: "Output Display",
-                  value: clusterRows(
-                    formatDisplayModeLines(
-                      String(detail?.outputDisplay || "-")
-                        .split(",")
-                        .map((item) => item.trim())
-                        .filter(Boolean)
-                    )
-                  ),
+                  label: "Maximum Output Display",
+                  value: formatTopOutputDisplay(detail?.outputDisplay),
                   labelAlign: "center",
                 },
-                { label: "Display Features", value: detail?.displayFeatures?.length ? detail.displayFeatures.join(", ") : "-" },
-                { label: "Audio Codecs", value: detail?.audioCodecs?.length ? detail.audioCodecs.join(", ") : "-" },
-                { label: "Multimedia Features", value: detail?.multimediaFeatures?.length ? detail.multimediaFeatures.join(", ") : "-" },
               ]}
             />
           </article>
@@ -1926,7 +2107,6 @@ export default async function ProcessorDetailPage({ params, searchParams }: Prop
                   ),
                   labelAlign: "center",
                 },
-                { label: "Other Camera Features", value: detail?.cameraFeatures?.length ? detail.cameraFeatures.join(", ") : "-" },
                 {
                   label: "Video Recording Modes",
                   value: clusterRows(
@@ -1936,23 +2116,10 @@ export default async function ProcessorDetailPage({ params, searchParams }: Prop
                   ),
                   labelAlign: "center",
                 },
-                {
-                  label: "Video Recording Codecs",
-                  value: formatCodecList(detail?.videoRecordingCodecs),
-                },
-                {
-                  label: "Video Recording HDR Formats",
-                  value: formatCodecList(detail?.videoRecordingHdrFormats),
-                },
-                { label: "Other Video Features", value: detail?.videoFeatures?.length ? detail.videoFeatures.join(", ") : "-" },
                 { label: "Video Playback", value: clusterRows(detail?.videoPlayback || "-"), labelAlign: "center" },
                 {
-                  label: "Video Playback Codecs",
-                  value: formatCodecList(detail?.videoPlaybackCodecs),
-                },
-                {
-                  label: "Video Playback HDR Formats",
-                  value: formatCodecList(detail?.videoPlaybackHdrFormats),
+                  label: "Video Codec",
+                  value: formatCodecList(detail?.videoRecordingCodecs),
                 },
               ]}
             />
@@ -1966,10 +2133,10 @@ export default async function ProcessorDetailPage({ params, searchParams }: Prop
               rows={[
                 { label: "Modem Name", value: formatModemName(detail?.modem) },
                 { label: "Network Support", value: formatNetworkSupport(detail || {}) },
-                { label: "Download Speed", value: Number.isFinite(detail?.downloadMbps) ? `Up to ${detail?.downloadMbps} Mbps` : "-" },
-                { label: "Upload Speed", value: Number.isFinite(detail?.uploadMbps) ? `Up to ${detail?.uploadMbps} Mbps` : "-" },
-                { label: "Wi-Fi", value: mobileVersionWithDetails(formatWifi(detail?.wifi)) },
-                { label: "Bluetooth", value: mobileVersionWithDetails(formatBluetooth(detail?.bluetooth, detail?.bluetoothFeatures)) },
+                { label: "Download Speed", value: Number.isFinite(detail?.downloadMbps) ? `${detail?.downloadMbps} Mbps` : "-" },
+                { label: "Upload Speed", value: Number.isFinite(detail?.uploadMbps) ? `${detail?.uploadMbps} Mbps` : "-" },
+                { label: "Wi-Fi", value: formatWifi(detail?.wifi) },
+                { label: "Bluetooth", value: formatBluetooth(detail?.bluetooth, detail?.bluetoothFeatures) },
                 { label: "Navigation", value: detail?.navigation?.length ? detail.navigation.join(", ") : "-" },
               ]}
             />
@@ -1982,52 +2149,31 @@ export default async function ProcessorDetailPage({ params, searchParams }: Prop
           ) : null}
         </div>
 
-        <aside className="space-y-5">
-          <article className="panel p-4">
-            <h2 className="text-base font-extrabold text-slate-900">{PROCESSOR_TOTAL_SCORE_LABEL}</h2>
-            <p className="mt-1 text-xs text-slate-500">Based on Performance, Gaming, Efficiency, and AI</p>
-            <div className="mt-3 space-y-2">
-              <ProgressRow label={PROCESSOR_TOTAL_SCORE_LABEL} value={totalScore} />
-              <ProgressRow label="Performance" value={perf} />
-              <ProgressRow label="Efficiency" value={eff} />
-              <ProgressRow label="Gaming" value={game} />
-              <ProgressRow label="AI Score" value={ai} />
-            </div>
-            <div className="mt-3 rounded-lg bg-slate-50 p-3 text-xs text-slate-600">
-              Avg Device Rating: <span className="font-bold text-slate-800">{decimal(p.avgPhoneScore)} / 10</span>
-              <br />
-              Devices Using This Chip: <span className="font-bold text-slate-800">{p.phoneCount}</span>
-            </div>
-          </article>
-
-        </aside>
       </section>
 
-      <section id="devices" className="mt-5 scroll-mt-28 overflow-hidden rounded-xl border border-slate-200 bg-white">
-        <div className="border-b border-slate-200 bg-slate-50 px-4 py-3">
-          <div className="flex items-center gap-2">
-            <h2 className="text-[22px] font-bold text-slate-900">{`Smartphones with ${p.name}`}</h2>
+      {p.topPhones.length > 0 ? (
+        <section id="devices" className="mt-5 scroll-mt-28 overflow-hidden rounded-xl border border-slate-200 bg-white">
+          <div className="border-b border-slate-200 bg-slate-50 px-4 py-3">
+            <div className="flex items-center gap-2">
+              <h2 className="text-[22px] font-bold text-slate-900">{`Smartphones with ${p.name}`}</h2>
+            </div>
+            <p className="mt-1 text-sm text-slate-600">Click device name to open your phone specification page.</p>
           </div>
-          <p className="mt-1 text-sm text-slate-600">Click device name to open your phone specification page.</p>
-        </div>
-        <div className="hidden grid-cols-[44px_minmax(0,1fr)_180px_220px] border-b border-slate-100 bg-white px-4 py-3 text-sm font-semibold text-slate-900 md:grid">
-          <div>#</div>
-          <div>Phone</div>
-          <div>{`AnTuTu ${benchAntutuVersion || "-"}`}</div>
-          <div>Buy</div>
-        </div>
-        {p.topPhones.length > 0 ? (
+          <div className="hidden grid-cols-[44px_minmax(0,1fr)_220px] border-b border-slate-100 bg-white px-4 py-3 text-sm font-semibold text-slate-900 md:grid">
+            <div>#</div>
+            <div>Phone</div>
+            <div>Buy</div>
+          </div>
           <ol className="divide-y divide-slate-100">
             {p.topPhones.map((phone, idx) => (
               <li key={`${p.slug}-${phone.slug}`} className="px-4 py-3 text-sm">
-                <div className="grid grid-cols-[44px_minmax(0,1fr)_180px_220px] items-center md:grid">
+                <div className="grid grid-cols-[44px_minmax(0,1fr)_220px] items-center md:grid">
                   <div className="hidden font-semibold text-slate-500 md:block">{idx + 1}.</div>
                   <div className="hidden min-w-0 md:block">
                     <Link href={`/mobile/${phone.slug}`} className="font-medium text-blue-700 hover:underline">
                       {phone.name}
                     </Link>
                   </div>
-                  <div className="hidden text-slate-800 md:block">{phone.antutu ? String(phone.antutu) : "-"}</div>
                   <div className="hidden flex-wrap items-center gap-2 md:flex">
                     {phone.amazonUrl ? (
                       <a
@@ -2069,10 +2215,6 @@ export default async function ProcessorDetailPage({ params, searchParams }: Prop
                         {phone.name}
                       </Link>
                     </div>
-                    <div className="flex items-center justify-between gap-3">
-                      <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">AnTuTu</span>
-                      <span className="text-sm font-semibold text-slate-800">{phone.antutu ? String(phone.antutu) : "-"}</span>
-                    </div>
                     <div className="flex flex-wrap items-center gap-2">
                       {phone.amazonUrl ? (
                         <a
@@ -2111,10 +2253,8 @@ export default async function ProcessorDetailPage({ params, searchParams }: Prop
               </li>
             ))}
           </ol>
-        ) : (
-          <div className="px-4 py-4 text-sm text-slate-600">No mapped phones yet.</div>
-        )}
-      </section>
+        </section>
+      ) : null}
 
       <section id="similar" className="mt-5 scroll-mt-28 panel p-4">
         <div className="flex items-center gap-2">
@@ -2175,7 +2315,7 @@ export default async function ProcessorDetailPage({ params, searchParams }: Prop
         </div>
       </section>
 
-      <ProcessorComments processorName={p.name} initialComments={commentRows} />
+      <ProcessorComments key={p.slug} processorSlug={p.slug} processorName={p.name} initialComments={commentRows} />
     </main>
   );
 }

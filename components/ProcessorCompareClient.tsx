@@ -103,6 +103,11 @@ export default function ProcessorCompareClient({ processors }: Props) {
     router.push(`/processors/compare/${left.slug}-vs-${right.slug}`);
   }
 
+  function handleSwap() {
+    setQuickLeftText(quickRightText);
+    setQuickRightText(quickLeftText);
+  }
+
   return (
     <main className="mobile-container py-6 sm:py-8">
       <section className="panel p-4 sm:p-5">
@@ -112,7 +117,7 @@ export default function ProcessorCompareClient({ processors }: Props) {
         </p>
         <div className="mt-4 rounded-xl border border-slate-200 bg-white p-3">
           <p className="text-xs font-bold uppercase tracking-wide text-slate-500">Quick Compare</p>
-          <div className="mt-2 flex flex-wrap items-center gap-2">
+          <div className="mt-2 hidden flex-wrap items-center gap-2 sm:flex">
             <div className="flex min-h-10 min-w-[220px] flex-1 items-center rounded-lg border border-slate-300 bg-slate-50 px-2 py-1">
               <input
                 value={quickLeftText}
@@ -149,6 +154,56 @@ export default function ProcessorCompareClient({ processors }: Props) {
               onClick={handleCompare}
               disabled={!left || !right || left.slug === right.slug}
               className="h-10 rounded-lg bg-blue-700 px-4 text-sm font-bold text-white hover:bg-blue-800 disabled:cursor-not-allowed disabled:bg-slate-300"
+            >
+              Compare
+            </button>
+          </div>
+          <div className="mt-2 space-y-2 sm:hidden">
+            <div className="flex min-h-11 w-full items-center rounded-lg border border-slate-300 bg-slate-50 px-2 py-1">
+              <input
+                value={quickLeftText}
+                onChange={(e) => setQuickLeftText(e.target.value)}
+                list="processor-quick-list"
+                placeholder="Select Processor 1"
+                className="h-9 w-full bg-transparent px-1 text-sm text-slate-900 outline-none placeholder:text-slate-500"
+              />
+              {quickLeftText ? (
+                <button type="button" onClick={() => setQuickLeftText("")} className="ml-1 text-xs font-bold text-slate-500 hover:text-slate-800">
+                  x
+                </button>
+              ) : null}
+            </div>
+            <div className="flex justify-center">
+              <button
+                type="button"
+                onClick={handleSwap}
+                className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-blue-200 bg-blue-50 text-blue-700"
+                aria-label="Swap processor inputs"
+              >
+                <svg viewBox="0 0 24 24" fill="none" className="h-4 w-4" aria-hidden="true">
+                  <path d="M7 7h10m0 0-3-3m3 3-3 3M17 17H7m0 0 3-3m-3 3 3 3" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </button>
+            </div>
+            <div className="flex min-h-11 w-full items-center rounded-lg border border-slate-300 bg-slate-50 px-2 py-1">
+              <input
+                value={quickRightText}
+                onChange={(e) => setQuickRightText(e.target.value)}
+                list="processor-quick-list"
+                placeholder="Select Processor 2"
+                className="h-9 w-full bg-transparent px-1 text-sm text-slate-900 outline-none placeholder:text-slate-500"
+              />
+              {quickRightText ? (
+                <button type="button" onClick={() => setQuickRightText("")} className="ml-1 text-xs font-bold text-slate-500 hover:text-slate-800">
+                  x
+                </button>
+              ) : null}
+            </div>
+            <button
+              type="button"
+              onClick={handleCompare}
+              disabled={!left || !right || left.slug === right.slug}
+              className="h-11 w-full rounded-lg bg-blue-700 px-4 text-sm font-bold text-white hover:bg-blue-800 disabled:cursor-not-allowed disabled:bg-slate-300"
             >
               Compare
             </button>

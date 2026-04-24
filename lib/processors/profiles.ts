@@ -9,6 +9,7 @@ export type ProcessorProfile = {
   name: string;
   vendor: string;
   antutu: number;
+  totalScore?: number;
   fabricationNm?: number;
   process?: string;
   maxCpuGhz?: number;

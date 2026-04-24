@@ -98,8 +98,8 @@ export default function AdminHome() {
     const productRows = products.map((item) => ({
       label: item.name || "Untitled Product",
       slug: item.slug || "",
-      kind: "Product",
-      href: "/admin/products",
+      kind: item.deviceType === "tablet" ? "Tablet" : "Smartphone",
+      href: item.deviceType === "tablet" ? "/admin/products/tablets" : "/admin/products/smartphones",
     }));
     const blogRows = blogs.map((item) => ({
       label: item.title || "Untitled Blog",
@@ -130,7 +130,8 @@ export default function AdminHome() {
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h1 className="text-4xl font-bold text-slate-900 sm:text-[2rem]">Dashboard</h1>
           <div className="flex flex-wrap gap-2">
-            <Link href="/admin/products" className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-bold text-slate-900 hover:bg-slate-50">+ Create Product</Link>
+            <Link href="/admin/products/smartphones" className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-bold text-slate-900 hover:bg-slate-50">+ Create Smartphone</Link>
+            <Link href="/admin/products/tablets" className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-bold text-slate-900 hover:bg-slate-50">+ Create Tablet</Link>
             <Link href="/admin/blogs" className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-bold text-slate-900 hover:bg-slate-50">+ Create Blog</Link>
             <Link href="/admin/processors" className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-bold text-slate-900 hover:bg-slate-50">+ Create Processor</Link>
           </div>
@@ -220,4 +221,3 @@ export default function AdminHome() {
     </main>
   );
 }
-

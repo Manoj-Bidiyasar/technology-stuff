@@ -5,7 +5,7 @@ import Link from "next/link";
 import ProcessorChipVisual from "@/components/ProcessorChipVisual";
 import ProcessorNameLabel from "@/components/ProcessorNameLabel";
 
-type ChipClass = "Ultra Flagship" | "Flagship" | "Upper Midrange" | "Midrange" | "Budget" | "Entry";
+type ChipClass = "Flagship" | "Upper Midrange" | "Midrange" | "Budget" | "Entry";
 
 type PairItem = {
   left: string;
@@ -28,7 +28,6 @@ type Props = {
 };
 
 function classTone(chipClass: ChipClass): { badge: string; stripe: string } {
-  if (chipClass === "Ultra Flagship") return { badge: "bg-violet-100 text-violet-800 border-violet-200", stripe: "from-violet-500 to-indigo-500" };
   if (chipClass === "Flagship") return { badge: "bg-blue-100 text-blue-800 border-blue-200", stripe: "from-blue-500 to-cyan-500" };
   if (chipClass === "Upper Midrange") return { badge: "bg-emerald-100 text-emerald-800 border-emerald-200", stripe: "from-emerald-500 to-teal-500" };
   if (chipClass === "Midrange") return { badge: "bg-amber-100 text-amber-800 border-amber-200", stripe: "from-amber-500 to-orange-500" };
@@ -40,28 +39,28 @@ function CompareCard({ item }: { item: PairItem }) {
   return (
     <Link
       href={item.href}
-      className="group rounded-2xl border border-slate-200 bg-white p-3 shadow-sm transition hover:-translate-y-0.5 hover:border-blue-300 hover:shadow-md max-[360px]:p-2 max-[320px]:p-1.5"
+      className="group max-w-full overflow-hidden rounded-2xl border border-slate-200 bg-white p-2.5 shadow-sm transition hover:-translate-y-0.5 hover:border-blue-300 hover:shadow-md max-[420px]:p-2 max-[360px]:p-1.5 max-[320px]:p-1.5"
     >
-      <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 max-[320px]:gap-1">
-        <div className="flex flex-col items-center text-center">
-          <ProcessorChipVisual name={item.leftRawName} vendor={item.leftVendor} className="h-[74px] w-[74px] max-[360px]:h-[68px] max-[360px]:w-[68px] max-[320px]:h-[62px] max-[320px]:w-[62px] sm:h-[92px] sm:w-[92px]" />
+      <div className="grid max-w-full grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-1.5 max-[420px]:gap-1 max-[320px]:gap-0.5">
+        <div className="flex min-w-0 flex-col items-center text-center">
+          <ProcessorChipVisual name={item.leftRawName} vendor={item.leftVendor} className="h-[66px] w-[66px] max-[420px]:h-[60px] max-[420px]:w-[60px] max-[360px]:h-[56px] max-[360px]:w-[56px] max-[320px]:h-[50px] max-[320px]:w-[50px] sm:h-[92px] sm:w-[92px]" />
           <ProcessorNameLabel
             name={item.leftRawName}
             vendor={item.leftVendor}
             allowSingleLine={false}
-            className="mt-1.5 min-h-[2.3rem] text-slate-900 group-hover:text-blue-700 max-[360px]:mt-1 max-[320px]:min-h-[2rem]"
-            lineClassName="text-xs font-extrabold leading-tight max-[360px]:text-[11px] max-[320px]:text-[10px] max-[320px]:leading-3.5"
+            className="mt-1 min-h-[2rem] w-full min-w-0 text-slate-900 group-hover:text-blue-700 max-[420px]:min-h-[1.8rem] max-[320px]:min-h-[1.6rem]"
+            lineClassName="text-[11px] font-extrabold leading-tight max-[420px]:text-[10px] max-[320px]:text-[9px] max-[320px]:leading-3.5"
           />
         </div>
-        <span className="rounded-full bg-slate-900 px-2 py-0.5 text-[10px] font-black text-white max-[360px]:px-1.5 max-[360px]:text-[9px] max-[320px]:px-1 max-[320px]:text-[8px]">VS</span>
-        <div className="flex flex-col items-center text-center">
-          <ProcessorChipVisual name={item.rightRawName} vendor={item.rightVendor} className="h-[74px] w-[74px] max-[360px]:h-[68px] max-[360px]:w-[68px] max-[320px]:h-[62px] max-[320px]:w-[62px] sm:h-[92px] sm:w-[92px]" />
+        <span className="rounded-full bg-slate-900 px-1.5 py-0.5 text-[9px] font-black text-white max-[420px]:px-1 max-[420px]:text-[8px] max-[320px]:px-0.5 max-[320px]:text-[7px]">VS</span>
+        <div className="flex min-w-0 flex-col items-center text-center">
+          <ProcessorChipVisual name={item.rightRawName} vendor={item.rightVendor} className="h-[66px] w-[66px] max-[420px]:h-[60px] max-[420px]:w-[60px] max-[360px]:h-[56px] max-[360px]:w-[56px] max-[320px]:h-[50px] max-[320px]:w-[50px] sm:h-[92px] sm:w-[92px]" />
           <ProcessorNameLabel
             name={item.rightRawName}
             vendor={item.rightVendor}
             allowSingleLine={false}
-            className="mt-1.5 min-h-[2.3rem] text-slate-900 group-hover:text-blue-700 max-[360px]:mt-1 max-[320px]:min-h-[2rem]"
-            lineClassName="text-xs font-extrabold leading-tight max-[360px]:text-[11px] max-[320px]:text-[10px] max-[320px]:leading-3.5"
+            className="mt-1 min-h-[2rem] w-full min-w-0 text-slate-900 group-hover:text-blue-700 max-[420px]:min-h-[1.8rem] max-[320px]:min-h-[1.6rem]"
+            lineClassName="text-[11px] font-extrabold leading-tight max-[420px]:text-[10px] max-[320px]:text-[9px] max-[320px]:leading-3.5"
           />
         </div>
       </div>

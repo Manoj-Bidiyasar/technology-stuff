@@ -209,6 +209,8 @@ export function scoreArchitectureEfficiency(input: Pick<EfficiencyScoreInput, "i
     if (instructionSet.includes("armv9.3")) return 100;
     if (instructionSet.includes("armv9.2")) return 97;
     if (instructionSet.includes("armv9")) return 92;
+    if (instructionSet.includes("armv8.5")) return 85;
+    if (instructionSet.includes("armv8.4")) return 84;
     if (instructionSet.includes("armv8.6")) return 85;
     if (instructionSet.includes("armv8.2")) return 78;
     if (instructionSet.includes("armv8")) return 70;
@@ -320,6 +322,8 @@ function scoreCpuArchitecturePerformance(input: Pick<PerformanceScoreInput, "ins
   if (instructionSet.includes("armv9.3")) base = Math.max(base, 98);
   else if (instructionSet.includes("armv9.2")) base = Math.max(base, 95);
   else if (instructionSet.includes("armv9")) base = Math.max(base, 91);
+  else if (instructionSet.includes("armv8.5")) base = Math.max(base, 84);
+  else if (instructionSet.includes("armv8.4")) base = Math.max(base, 83);
   else if (instructionSet.includes("armv8.6")) base = Math.max(base, 84);
   else if (instructionSet.includes("armv8.2")) base = Math.max(base, 78);
 
@@ -426,6 +430,13 @@ function calculateDynamicReference(values: number[], baseline: number): number {
   const filtered = values.filter((value) => Number.isFinite(value) && value > 0);
   if (filtered.length === 0) return baseline;
   return calculateDynamicFrequencyReference(filtered, baseline);
+}
+
+function calculateNearTopReference(values: number[], baseline: number): number {
+  const filtered = values.filter((value) => Number.isFinite(value) && value > 0);
+  if (filtered.length === 0) return baseline;
+  const max = Math.max(...filtered);
+  return max * 1.05;
 }
 
 export function scoreMemoryType(value?: string): number | undefined {
@@ -577,7 +588,7 @@ export function calculateAiScoreReferences(details: ProcessorDetail[]): AiScoreR
   });
 
   return {
-    aiBenchmarkReference: calculateDynamicReference(aiBenchmarks, 350000),
+    aiBenchmarkReference: calculateNearTopReference(aiBenchmarks, 350000),
     memoryFrequencyReference: calculateDynamicFrequencyReference(memoryFrequencies, 5333),
   };
 }

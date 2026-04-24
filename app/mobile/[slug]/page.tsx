@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { cookies } from "next/headers";
 import ImageGalleryModalButton from "@/components/ImageGalleryModalButton";
 import ProductImageGallery from "@/components/ProductImageGallery";
 import ProductCard from "@/components/ProductCard";
@@ -10,6 +11,7 @@ import ComparisonSuggestionImage from "@/components/ComparisonSuggestionImage";
 import UserFeedbackSection from "@/components/UserFeedbackSection";
 import PopularLinksSection from "@/components/PopularLinksSection";
 import {
+  getProductAdminById,
   getPublishedProductBySlug,
   listComparisonSuggestions,
   listRelatedProducts,
@@ -19,11 +21,15 @@ import { buildAutoProsCons } from "@/lib/utils/prosCons";
 import { calculateOverallScore100 } from "@/lib/utils/score";
 import { getScoreBadgeTone } from "@/lib/utils/scoreBadge";
 import { getLaunchState, parseLaunchDate } from "@/lib/utils/launchStatus";
+import { getAdminViewerFromSessionToken } from "@/lib/auth/admin";
+import { hasCapability } from "@/lib/admin/permissions";
+import { ADMIN_SESSION_COOKIE } from "@/lib/auth/constants";
 import type { ReactNode } from "react";
 import type { ProductNetwork, TimestampLike } from "@/lib/types/content";
 
 type MobileDetailProps = {
   params: Promise<{ slug: string }>;
+  searchParams?: Promise<{ [key: string]: string | string[] | undefined }>;
 };
 
 function cleanValue(value: unknown): string {
@@ -325,9 +331,26 @@ export async function generateMetadata({ params }: MobileDetailProps): Promise<M
   };
 }
 
-export default async function MobileDetailPage({ params }: MobileDetailProps) {
+export default async function MobileDetailPage({ params, searchParams }: MobileDetailProps) {
   const { slug } = await params;
-  const product = await getPublishedProductBySlug(slug);
+  const query = searchParams ? await searchParams : {};
+  const previewFlag = String(query?.preview || "").trim() === "1";
+  const previewId = String(query?.id || slug || "").trim();
+
+  let product = await getPublishedProductBySlug(slug);
+
+  if (previewFlag && previewId) {
+    const cookieStore = await cookies();
+    const token = cookieStore.get(ADMIN_SESSION_COOKIE)?.value || "";
+    const viewer = await getAdminViewerFromSessionToken(token);
+    const canPreview = Boolean(viewer && hasCapability(viewer.role, "products"));
+    if (canPreview) {
+      const draft = await getProductAdminById(previewId);
+      if (draft && draft.name && draft.deviceType === "smartphone") {
+        product = draft;
+      }
+    }
+  }
 
   if (!product) {
     return (

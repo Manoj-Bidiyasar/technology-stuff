@@ -32,7 +32,7 @@ type PrivateFieldSimpleDraft = { section: string; label: string; value: string }
 type BulkRow = { path: string; value: string; type?: string };
 
 const BRAND_OPTIONS = ["Samsung", "Qualcomm", "MediaTek", "Apple", "Google", "Unisoc", "Huawei", "Intel", "AMD"];
-const CLASS_OPTIONS = ["Ultra Flagship", "Flagship", "Upper Midrange", "Midrange", "Budget", "Entry"];
+const CLASS_OPTIONS = ["Flagship", "Upper Midrange", "Midrange", "Budget", "Entry"];
 const FABRICATED_BY_OPTIONS = ["TSMC", "Samsung"];
 const BRAND_TITLE_HINTS: Record<string, string[]> = {
   Samsung: ["Exynos"],
@@ -49,6 +49,7 @@ const INSTRUCTION_SET_OPTIONS = [
   "ARMv8-A",
   "ARMv8.2-A",
   "ARMv8.4-A",
+  "ARMv8.5-A",
   "ARMv8.6-A",
   "ARMv9-A",
   "ARMv9.2-A",
@@ -509,7 +510,7 @@ const DISPLAY_HDR_FEATURE_OPTIONS = VIDEO_HDR_FORMAT_OPTIONS;
 const STORAGE_CHANNEL_OPTIONS = ["X-Lane", "Single-channel", "Dual-channel", "Quad-channel", "Octa-channel"] as const;
 const GPU_API_GROUPS = [
   { key: "opengles", label: "OpenGL ES", options: ["OpenGL ES 3.2", "OpenGL ES 3.1", "OpenGL ES 3.0", "OpenGL ES 2.0"] as const },
-  { key: "opencl", label: "OpenCL", options: ["OpenCL 3.2", "OpenCL 3.0", "OpenCL 2.0", "OpenCL 1.2"] as const },
+  { key: "opencl", label: "OpenCL", options: ["OpenCL 3.2", "OpenCL 3.0", "OpenCL 2.2", "OpenCL 2.1", "OpenCL 2.0", "OpenCL 1.2"] as const },
   { key: "vulkan", label: "Vulkan", options: ["Vulkan 1.4", "Vulkan 1.3", "Vulkan 1.2", "Vulkan 1.1", "Vulkan 1.0"] as const },
   { key: "directx", label: "DirectX", options: ["DirectX 12.1", "DirectX 12", "DirectX 11.2", "DirectX 11.1", "DirectX 11.0"] as const },
 ] as const;
@@ -554,8 +555,10 @@ const GPU_API_ALIAS_MAP: Record<string, string> = {
   [normalizeLookupKey("OpenGL 3.1")]: "OpenGL ES 3.1",
   [normalizeLookupKey("OpenGL 3.0")]: "OpenGL ES 3.0",
   [normalizeLookupKey("OpenGL 2.0")]: "OpenGL ES 2.0",
-    [normalizeLookupKey("OpenCL 3.2")]: "OpenCL 3.2",
+  [normalizeLookupKey("OpenCL 3.2")]: "OpenCL 3.2",
   [normalizeLookupKey("OpenCL 3.0")]: "OpenCL 3.0",
+  [normalizeLookupKey("OpenCL 2.2")]: "OpenCL 2.2",
+  [normalizeLookupKey("OpenCL 2.1")]: "OpenCL 2.1",
   [normalizeLookupKey("OpenCL 2.0")]: "OpenCL 2.0",
   [normalizeLookupKey("OpenCL 1.2")]: "OpenCL 1.2",
   [normalizeLookupKey("Vulkan 1.4")]: "Vulkan 1.4",

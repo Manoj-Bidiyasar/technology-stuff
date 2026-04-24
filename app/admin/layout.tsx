@@ -13,9 +13,11 @@ type NavItem = {
 
 const items: NavItem[] = [
   { href: "/admin", label: "Dashboard", capability: "dashboard" },
-  { href: "/admin/products", label: "Products", capability: "products" },
+  { href: "/admin/products/smartphones", label: "Smartphones", capability: "products" },
+  { href: "/admin/products/tablets", label: "Tablets", capability: "products" },
   { href: "/admin/blogs", label: "Blogs", capability: "blogs" },
   { href: "/admin/processors", label: "Processors", capability: "processors" },
+  { href: "/admin/messages", label: "Messages", capability: "messages" },
   { href: "/admin/helper/processor-terms", label: "Helper", capability: "helper" },
 ];
 

@@ -16,6 +16,11 @@ function normalizeDeviceType(value?: string): "smartphone" | "tablet" {
   return value === "tablet" ? "tablet" : "smartphone";
 }
 
+function normalizeProductStatus(value?: string): Product["status"] {
+  if (value === "review" || value === "published" || value === "scheduled" || value === "recently_deleted") return value;
+  return "draft";
+}
+
 function parseRearCameraMp(product: Product): number | null {
   const sources = [String(product.specs?.rearCamera || ""), String(product.specs?.camera || "")];
   let max = 0;
@@ -343,7 +348,8 @@ function normalizeProduct(input: Partial<Product>): Product {
           updatedAt: input.priceLive.updatedAt,
         }
       : undefined,
-    status: input.status || "draft",
+    status: normalizeProductStatus(input.status),
+    scheduledAt: input.status === "scheduled" ? input.scheduledAt : undefined,
     shortDescription: input.shortDescription || "",
     images: Array.isArray(input.images) ? input.images.filter(Boolean) : [],
     specs: input.specs || {},
@@ -956,6 +962,18 @@ export async function listBrands(deviceType: "smartphone" | "tablet" = "smartpho
   return Array.from(brands).sort((a, b) => a.localeCompare(b));
 }
 
+export async function getProductAdminById(id: string): Promise<Product | null> {
+  if (!id) return null;
+  try {
+    const doc = await productsRef.doc(id).get();
+    if (!doc.exists) return null;
+    return hydrateProduct(doc.id, doc.data() as Partial<Product>);
+  } catch (error) {
+    if (isQuotaExceededError(error)) return null;
+    throw error;
+  }
+}
+
 export async function getPublishedProductBySlug(slug: string, deviceType: "smartphone" | "tablet" = "smartphone"): Promise<Product | null> {
   const docId = slugify(slug);
   if (docId) {
@@ -1106,13 +1124,12 @@ export async function createProduct(data: Product): Promise<string> {
 }
 
 export async function updateProduct(id: string, data: Partial<Product>): Promise<void> {
-  const payload = normalizeProduct(data);
-  const nextId = payload.slug || id;
   const oldRef = productsRef.doc(id);
-  const nextRef = productsRef.doc(nextId);
-
   const oldDoc = await oldRef.get();
   const oldData = oldDoc.exists ? (oldDoc.data() as Partial<Product>) : {};
+  const payload = normalizeProduct({ ...oldData, ...data });
+  const nextId = payload.slug || id;
+  const nextRef = productsRef.doc(nextId);
 
   if (nextId !== id) {
     await nextRef.set({

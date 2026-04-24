@@ -14,7 +14,15 @@ type MatchupItem = {
   rightName: string;
 };
 
-export default function ProcessorCompareMoreSection({ items }: { items: MatchupItem[] }) {
+export default function ProcessorCompareMoreSection({
+  items,
+  title,
+  description,
+}: {
+  items: MatchupItem[];
+  title: string;
+  description?: string;
+}) {
   const initial = 6;
   const visible = items.slice(0, initial);
   const canExpand = items.length > initial;
@@ -24,7 +32,8 @@ export default function ProcessorCompareMoreSection({ items }: { items: MatchupI
   return (
     <section className="mt-5 overflow-hidden rounded-xl border border-slate-200 bg-white">
       <div className="bg-slate-50 px-4 py-3">
-        <h2 className="text-xl font-bold text-slate-900">Head-to-Head Matchups</h2>
+        <h2 className="text-lg font-bold text-slate-900 sm:text-xl">{title}</h2>
+        {description ? <p className="mt-1 text-sm text-slate-600">{description}</p> : null}
       </div>
       <ol className="grid grid-cols-1 gap-3 px-4 pb-1 pt-4 md:grid-cols-2">
         {visible.map((item, idx) => (
@@ -33,7 +42,7 @@ export default function ProcessorCompareMoreSection({ items }: { items: MatchupI
               href={`/processors/compare/${item.slug}`}
               className="block rounded-xl border border-slate-200 bg-white px-3 pb-0.5 pt-3 hover:border-blue-300 max-[360px]:px-2 max-[360px]:pt-2"
             >
-              <div className="grid grid-cols-[minmax(0,1fr)_60px_minmax(0,1fr)] items-start gap-2">
+              <div className="grid grid-cols-[minmax(0,1fr)_60px_minmax(0,1fr)] items-center gap-2">
                 <div className="flex w-full min-w-0 flex-col items-center text-center">
                   <ProcessorChipVisual name={item.leftName} vendor={item.leftVendor} className="h-24 w-24 max-[360px]:h-20 max-[360px]:w-20" />
                   <ProcessorNameLabel
@@ -44,7 +53,7 @@ export default function ProcessorCompareMoreSection({ items }: { items: MatchupI
                     lineClassName="text-[9px] font-extrabold leading-tight max-[360px]:text-[9px] sm:text-sm"
                   />
                 </div>
-                <span className="mx-auto inline-flex h-9 w-9 items-center justify-center rounded-full border border-blue-200 bg-blue-50 text-sm font-black text-blue-700 max-[360px]:h-8 max-[360px]:w-8 max-[360px]:text-xs">VS</span>
+                <span className="mx-auto self-center inline-flex h-9 w-9 items-center justify-center rounded-full border border-blue-200 bg-blue-50 text-sm font-black text-blue-700 max-[360px]:h-8 max-[360px]:w-8 max-[360px]:text-xs">VS</span>
                 <div className="flex w-full min-w-0 flex-col items-center text-center">
                   <ProcessorChipVisual name={item.rightName} vendor={item.rightVendor} className="h-24 w-24 max-[360px]:h-20 max-[360px]:w-20" />
                   <ProcessorNameLabel

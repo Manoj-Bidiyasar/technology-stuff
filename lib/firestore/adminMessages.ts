@@ -9,19 +9,29 @@ export type AdminMessage = {
   email: string;
   subject: string;
   message: string;
-  status: "new" | "read" | "resolved";
+  reply?: string;
+  status: "new" | "read" | "replied" | "archived" | "resolved" | "deleted";
   source?: string;
   createdAt?: unknown;
   updatedAt?: unknown;
+  repliedAt?: unknown;
 };
 
 function normalize(input: Partial<AdminMessage>): AdminMessage {
-  const status = input.status === "read" || input.status === "resolved" ? input.status : "new";
+  const status =
+    input.status === "read" ||
+    input.status === "replied" ||
+    input.status === "archived" ||
+    input.status === "resolved" ||
+    input.status === "deleted"
+      ? input.status
+      : "new";
   return {
     name: String(input.name || "").trim(),
     email: String(input.email || "").trim(),
     subject: String(input.subject || "").trim(),
     message: String(input.message || "").trim(),
+    reply: String(input.reply || "").trim() || undefined,
     status,
     source: String(input.source || "").trim() || undefined,
   };
@@ -53,10 +63,9 @@ export async function createAdminMessage(input: AdminMessage): Promise<string> {
 }
 
 export async function updateAdminMessage(id: string, input: Partial<AdminMessage>): Promise<void> {
-  const payload = normalize(input);
   await messagesRef.doc(id).set(
     {
-      ...payload,
+      ...input,
       updatedAt: FieldValue.serverTimestamp(),
     },
     { merge: true }
@@ -66,4 +75,3 @@ export async function updateAdminMessage(id: string, input: Partial<AdminMessage
 export async function deleteAdminMessage(id: string): Promise<void> {
   await messagesRef.doc(id).delete();
 }
-

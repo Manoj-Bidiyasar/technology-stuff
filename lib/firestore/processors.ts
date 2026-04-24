@@ -42,9 +42,24 @@ export type ProcessorAdmin = {
   updatedAt?: unknown;
 };
 
-const CLASS_OPTIONS = ["Ultra Flagship", "Flagship", "Upper Midrange", "Midrange", "Budget", "Entry"] as const;
-const INSTRUCTION_SET_OPTIONS = ["ARMv8-A", "ARMv8.2-A", "ARMv8.6-A", "ARMv9-A", "ARMv9.2-A", "ARMv9.3-A", "x86-64"] as const;
+const CLASS_OPTIONS = ["Flagship", "Upper Midrange", "Midrange", "Budget", "Entry"] as const;
+const CLASS_ALIAS_MAP: Record<string, string> = {
+  ultraflagship: "Flagship",
+};
+const INSTRUCTION_SET_OPTIONS = ["ARMv8-A", "ARMv8.2-A", "ARMv8.4-A", "ARMv8.5-A", "ARMv8.6-A", "ARMv9-A", "ARMv9.2-A", "ARMv9.3-A", "x86-64"] as const;
 const INSTRUCTION_SET_ALIAS_MAP: Record<string, string> = {
+  armv84: "ARMv8.4-A",
+  armv84a: "ARMv8.4-A",
+  "84a": "ARMv8.4-A",
+  "84": "ARMv8.4-A",
+  armv85: "ARMv8.5-A",
+  armv85a: "ARMv8.5-A",
+  "85a": "ARMv8.5-A",
+  "85": "ARMv8.5-A",
+  armv86: "ARMv8.6-A",
+  armv86a: "ARMv8.6-A",
+  "86a": "ARMv8.6-A",
+  "86": "ARMv8.6-A",
   armv93: "ARMv9.3-A",
   armv93a: "ARMv9.3-A",
   "93a": "ARMv9.3-A",
@@ -208,7 +223,7 @@ function normalizeProcessorDetail(detail: ProcessorDetail | undefined): Processo
   const next: ProcessorDetail = { ...detail };
   next.seo = normalizeSeo(detail.seo);
   next.manufacturer = normalizeChoice(detail.manufacturer, MANUFACTURER_OPTIONS) || undefined;
-  next.className = normalizeChoice(detail.className, CLASS_OPTIONS) || undefined;
+  next.className = normalizeChoice(detail.className, CLASS_OPTIONS, CLASS_ALIAS_MAP) || undefined;
   next.model = normalizeWhitespace(detail.model) || undefined;
   next.announced = normalizeWhitespace(detail.announced) || undefined;
   next.coreConfiguration = normalizeWhitespace(detail.coreConfiguration) || undefined;
@@ -442,16 +457,29 @@ export async function listPublishedCustomProcessorProfiles(): Promise<ProcessorP
     .map((doc) => {
       const raw = (doc.data() || {}) as Partial<ProcessorAdmin> & Record<string, unknown>;
       const row = hydrate(doc.id, raw);
-      const detail = (raw.detail && typeof raw.detail === "object" && !Array.isArray(raw.detail))
+      const nestedDetail = (raw.detail && typeof raw.detail === "object" && !Array.isArray(raw.detail))
         ? (raw.detail as Record<string, unknown>)
         : {};
+      const topLevelDetail = Object.fromEntries(
+        Object.entries(raw).filter(([key]) => !RESERVED_PROCESSOR_KEYS.has(key))
+      );
+      const detail = {
+        ...topLevelDetail,
+        ...nestedDetail,
+      } as Record<string, unknown>;
       const processRaw = String(detail.process ?? raw.process ?? row.detail?.process ?? "").trim();
       const fabricationNm = row.fabricationNm ?? extractNm(processRaw);
+      const benchmarks =
+        detail.benchmarks && typeof detail.benchmarks === "object" && !Array.isArray(detail.benchmarks)
+          ? (detail.benchmarks as Record<string, unknown>)
+          : {};
+      const normalAntutu = Number(benchmarks.antutu || 0);
+      const fallbackAntutu = Number(row.antutu || 0);
       return {
         slug: slugify(String(row.id || row.name || "")),
         name: row.name,
         vendor: row.vendor,
-        antutu: Number(row.antutu || 0),
+        antutu: normalAntutu > 0 ? normalAntutu : fallbackAntutu,
         fabricationNm,
         process: processRaw || undefined,
         maxCpuGhz: row.maxCpuGhz,

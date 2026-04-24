@@ -4,35 +4,25 @@ import { useMemo, useRef, useState, type FormEvent } from "react";
 
 type CommentItem = {
   user: string;
-  at: string;
+  at?: string;
   text: string;
-  score: number;
+  score?: number;
+  status?: "visible" | "hidden";
 };
 
 type CommentThread = CommentItem & {
   id: string;
-  replies: CommentItem[];
+  replies: Array<CommentItem & { id?: string }>;
 };
 
 type Props = {
+  processorSlug: string;
   processorName: string;
-  initialComments: CommentItem[];
+  initialComments: CommentThread[];
 };
 
-function nowLabel(): string {
-  return new Date().toLocaleString("en-US", {
-    month: "long",
-    day: "2-digit",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
-
-export default function ProcessorComments({ processorName, initialComments }: Props) {
-  const [comments, setComments] = useState<CommentThread[]>(
-    initialComments.map((item, idx) => ({ ...item, id: `${idx + 1}`, replies: [] })),
-  );
+export default function ProcessorComments({ processorSlug, processorName, initialComments }: Props) {
+  const [comments, setComments] = useState<CommentThread[]>(() => initialComments);
   const [name, setName] = useState("");
   const [message, setMessage] = useState("");
   const [openReplyId, setOpenReplyId] = useState<string | null>(null);
@@ -40,6 +30,7 @@ export default function ProcessorComments({ processorName, initialComments }: Pr
   const [replyMessage, setReplyMessage] = useState("");
   const mainBoxRef = useRef<HTMLTextAreaElement | null>(null);
   const replyBoxRef = useRef<HTMLTextAreaElement | null>(null);
+
 
   const sorted = useMemo(() => comments, [comments]);
 
@@ -49,40 +40,40 @@ export default function ProcessorComments({ processorName, initialComments }: Pr
     el.style.height = `${el.scrollHeight}px`;
   }
 
-  function submitMain(e: FormEvent) {
+  async function submitMain(e: FormEvent) {
     e.preventDefault();
     if (!name.trim() || !message.trim()) return;
-    const newItem: CommentThread = {
-      id: `${Date.now()}`,
-      user: name.trim(),
-      at: nowLabel(),
-      text: message.trim(),
-      score: 0,
-      replies: [],
-    };
-    setComments((prev) => [newItem, ...prev]);
-    setName("");
-    setMessage("");
-    if (mainBoxRef.current) {
-      mainBoxRef.current.style.height = "auto";
+    const response = await fetch(`/api/processors/${encodeURIComponent(processorSlug)}/discussion`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ processorName, user: name.trim(), text: message.trim() }),
+    });
+    const json = (await response.json()) as { items?: CommentThread[] };
+    if (response.ok) {
+      setComments(json.items || []);
+      setName("");
+      setMessage("");
+      if (mainBoxRef.current) {
+        mainBoxRef.current.style.height = "auto";
+      }
     }
   }
 
-  function submitReply(e: FormEvent, id: string) {
+  async function submitReply(e: FormEvent, id: string) {
     e.preventDefault();
     if (!replyName.trim() || !replyMessage.trim()) return;
-    const entry: CommentItem = {
-      user: replyName.trim(),
-      at: nowLabel(),
-      text: replyMessage.trim(),
-      score: 0,
-    };
-    setComments((prev) =>
-      prev.map((item) => (item.id === id ? { ...item, replies: [...item.replies, entry] } : item)),
-    );
-    setReplyName("");
-    setReplyMessage("");
-    setOpenReplyId(null);
+    const response = await fetch(`/api/processors/${encodeURIComponent(processorSlug)}/discussion/replies`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ discussionId: id, user: replyName.trim(), text: replyMessage.trim() }),
+    });
+    const json = (await response.json()) as { items?: CommentThread[] };
+    if (response.ok) {
+      setComments(json.items || []);
+      setReplyName("");
+      setReplyMessage("");
+      setOpenReplyId(null);
+    }
   }
 
   return (
@@ -108,7 +99,7 @@ export default function ProcessorComments({ processorName, initialComments }: Pr
                 </div>
                 <p className="mt-1.5 hidden text-sm leading-6 text-slate-800 sm:block">{row.text}</p>
                 <div className="mt-2.5 hidden items-center gap-4 text-xs font-bold sm:flex">
-                  <span className="text-emerald-700">{row.score > 0 ? `+${row.score}` : row.score}</span>
+                  <span className="text-emerald-700">{Number(row.score || 0) > 0 ? `+${row.score}` : Number(row.score || 0)}</span>
                   <button
                     type="button"
                     onClick={() => setOpenReplyId((prev) => (prev === row.id ? null : row.id))}
@@ -167,7 +158,7 @@ export default function ProcessorComments({ processorName, initialComments }: Pr
             </div>
             <p className="mt-1.5 text-sm leading-6 text-slate-800 sm:hidden">{row.text}</p>
             <div className="mt-2 flex items-center gap-4 text-xs font-bold sm:hidden">
-              <span className="text-emerald-700">{row.score > 0 ? `+${row.score}` : row.score}</span>
+              <span className="text-emerald-700">{Number(row.score || 0) > 0 ? `+${row.score}` : Number(row.score || 0)}</span>
               <button
                 type="button"
                 onClick={() => setOpenReplyId((prev) => (prev === row.id ? null : row.id))}

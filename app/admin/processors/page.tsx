@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ProcessorAdmin } from "@/lib/firestore/processors";
+import type { ProcessorAdminNoteGroup } from "@/lib/firestore/processorAdminNotes";
 import type { ProcessorDetail } from "@/lib/processors/details";
 import { calculateAiScore, calculateAiScoreReferences, calculateEfficiencyScore, calculateGamingScore, calculateGamingScoreReferences, calculateMemoryStorageScore, calculatePerformanceScore, calculatePerformanceScoreReferences, calculateTotalScore } from "@/lib/processors/scoring";
 import { slugify } from "@/utils/slugify";
@@ -35,19 +36,25 @@ type BenchmarkDraft = {
 type BenchmarkTableView = "antutu-geekbench" | "ai-3dmark";
 type AntutuGeekbenchGroup = "antutu-normal" | "antutu-ranking" | "geekbench";
 type Ai3dMarkGroup = "ai-score" | "three-dmark";
-type AdminSectionView = "processors" | "scores" | "benchmarks";
-type BenchmarkVendorFilter = "all" | "qualcomm" | "mediatek-dimensity" | "mediatek-helio" | "samsung-exynos" | "apple" | "unisoc" | "xiaomi";
+type AdminSectionView = "processors" | "scores" | "benchmarks" | "notes";
+type BenchmarkVendorFilter = "all" | "qualcomm" | "mediatek-dimensity" | "mediatek-helio" | "samsung-exynos" | "google" | "apple" | "unisoc" | "xiaomi";
 type ScoreSortKey = "total" | "performance" | "gpu" | "efficiency" | "ai" | "memoryStorage";
 type ScoreSortDirection = "desc" | "asc";
+type ProcessorNoteForm = {
+  processorNames: string;
+  rawPoints: string;
+};
+const NOTE_BULLET = "\u2022";
 const BRAND_OPTIONS = ["Samsung", "Qualcomm", "MediaTek", "Apple", "Google", "Unisoc", "Huawei", "Intel", "AMD"];
-const CLASS_FILTER_ORDER = ["Ultra Flagship", "Flagship", "Upper Midrange", "Midrange", "Budget", "Entry"] as const;
-const BENCHMARK_VENDOR_ORDER: BenchmarkVendorFilter[] = ["qualcomm", "mediatek-dimensity", "mediatek-helio", "samsung-exynos", "apple", "unisoc", "xiaomi"];
+const CLASS_FILTER_ORDER = ["Flagship", "Upper Midrange", "Midrange", "Budget", "Entry"] as const;
+const BENCHMARK_VENDOR_ORDER: BenchmarkVendorFilter[] = ["qualcomm", "mediatek-dimensity", "mediatek-helio", "samsung-exynos", "google", "apple", "unisoc", "xiaomi"];
 const BENCHMARK_VENDOR_LABELS: Record<BenchmarkVendorFilter, string> = {
   all: "All",
   qualcomm: "Qualcomm",
   "mediatek-dimensity": "MediaTek Dimensity",
   "mediatek-helio": "MediaTek Helio",
   "samsung-exynos": "Samsung Exynos",
+  google: "Google Tensor",
   apple: "Apple",
   unisoc: "Unisoc",
   xiaomi: "Xiaomi",
@@ -101,25 +108,110 @@ function parseSnapdragonName(label: string): { bucket: number; series: number; v
   return { bucket: snapdragonSeriesBucket(series, hasElite), series, variant, gen, extra };
 }
 
-function parseBenchmarkNameParts(name: string): { family: string; num: number; suffix: string; label: string } {
+function parseBenchmarkNameParts(name: string): { family: string; prefix: string; num: number; suffix: string; label: string } {
   const label = normalizeBenchmarkProcessorName(name);
   const snapdragon = parseSnapdragonName(label);
   if (snapdragon) {
     return {
       family: "snapdragon",
+      prefix: "",
       num: snapdragon.series * 100 + snapdragon.gen,
       suffix: `${snapdragon.variant}:${snapdragon.extra}`,
       label,
     };
   }
-  const match = label.match(/^([A-Za-z]+(?:\s+[A-Za-z]+)*)\s+(\d+)(.*)$/);
-  if (!match) return { family: label.toLowerCase(), num: -1, suffix: "", label };
+  const match = label.match(/^([A-Za-z]+(?:\s+[A-Za-z]+)*)\s+([A-Za-z]*)(\d+)(.*)$/);
+  if (!match) return { family: label.toLowerCase(), prefix: "", num: -1, suffix: "", label };
   return {
     family: match[1].trim().toLowerCase(),
-    num: Number(match[2] || 0),
-    suffix: (match[3] || "").trim(),
+    prefix: String(match[2] || "").trim().toLowerCase(),
+    num: Number(match[3] || 0),
+    suffix: (match[4] || "").trim(),
     label,
   };
+}
+
+function compareProcessorNames(leftName: string, rightName: string): number {
+  const left = parseBenchmarkNameParts(leftName);
+  const right = parseBenchmarkNameParts(rightName);
+  if (left.family !== right.family) return left.family.localeCompare(right.family);
+  const leftSnapdragon = parseSnapdragonName(left.label);
+  const rightSnapdragon = parseSnapdragonName(right.label);
+  if (leftSnapdragon && rightSnapdragon) {
+    if (leftSnapdragon.bucket !== rightSnapdragon.bucket) return rightSnapdragon.bucket - leftSnapdragon.bucket;
+    if (leftSnapdragon.series !== rightSnapdragon.series) return rightSnapdragon.series - leftSnapdragon.series;
+    if (leftSnapdragon.gen !== rightSnapdragon.gen) return rightSnapdragon.gen - leftSnapdragon.gen;
+    if (leftSnapdragon.variant !== rightSnapdragon.variant) return rightSnapdragon.variant - leftSnapdragon.variant;
+    return left.label.localeCompare(right.label);
+  }
+  if (left.prefix !== right.prefix) return left.prefix.localeCompare(right.prefix);
+  if (left.num !== right.num) return right.num - left.num;
+  const suffixGap = benchmarkSuffixRank(right.suffix) - benchmarkSuffixRank(left.suffix);
+  if (suffixGap !== 0) return suffixGap;
+  return left.label.localeCompare(right.label);
+}
+
+function normalizeNoteLine(value: string): string {
+  return String(value || "").replace(/^\s*[-*•]\s*/, "").replace(/\s+/g, " ").trim();
+}
+
+function parseNoteLines(value: string): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  String(value || "")
+    .split(/\r?\n/)
+    .map((line) => normalizeNoteLine(line))
+    .filter(Boolean)
+    .forEach((line) => {
+      const key = line.toLowerCase();
+      if (seen.has(key)) return;
+      seen.add(key);
+      out.push(line);
+    });
+  return out;
+}
+
+function formatNoteEditorValue(items: string[]): string {
+  return items
+    .map((item) => normalizeNoteLine(item))
+    .map((item) => `${NOTE_BULLET} ${item}`)
+    .join("\n");
+}
+
+function normalizeProcessorText(value: string): string {
+  return String(value || "").replace(/\s+/g, " ").trim();
+}
+
+function parseProcessorNameList(value: string): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  String(value || "")
+    .split(/\r?\n|,/)
+    .map((item) => normalizeProcessorText(item))
+    .filter(Boolean)
+    .forEach((item) => {
+      const key = item.toLowerCase();
+      if (seen.has(key)) return;
+      seen.add(key);
+      out.push(item);
+    });
+  return out;
+}
+
+function inferVendorFromProcessorName(name: string): string {
+  const text = normalizeProcessorText(name).toLowerCase();
+  if (!text) return "Other";
+  if (text.includes("snapdragon") || text.includes("qualcomm")) return "Qualcomm";
+  if (text.includes("dimensity") || text.includes("helio") || text.includes("mediatek")) return "MediaTek";
+  if (text.includes("exynos") || text.includes("samsung")) return "Samsung";
+  if (text.includes("tensor") || text.includes("google")) return "Google";
+  if (/^a\d{2}\b/.test(text) || text.includes("apple ")) return "Apple";
+  if (text.includes("unisoc") || text.includes("tiger")) return "Unisoc";
+  if (text.includes("xring") || text.includes("xiaomi")) return "Xiaomi";
+  if (text.includes("kirin") || text.includes("huawei")) return "Huawei";
+  if (text.includes("intel") || text.includes("core ") || text.includes("atom")) return "Intel";
+  if (text.includes("amd") || text.includes("ryzen")) return "AMD";
+  return "Other";
 }
 const BRAND_TITLE_HINTS: Record<string, string[]> = {
   Samsung: ["Exynos"],
@@ -159,11 +251,35 @@ export default function AdminProcessorsPage() {
   const [antutuGeekbenchGroups, setAntutuGeekbenchGroups] = useState<AntutuGeekbenchGroup[]>(["antutu-normal", "antutu-ranking", "geekbench"]);
   const [ai3dMarkGroups, setAi3dMarkGroups] = useState<Ai3dMarkGroup[]>(["ai-score", "three-dmark"]);
   const [adminSectionView, setAdminSectionView] = useState<AdminSectionView>("processors");
+  const [adminSectionReady, setAdminSectionReady] = useState(false);
   const [scoreQuery, setScoreQuery] = useState("");
   const [scoreVendorFilter, setScoreVendorFilter] = useState<string>("all");
   const [scoreSortKey, setScoreSortKey] = useState<ScoreSortKey>("total");
   const [scoreSortDirection, setScoreSortDirection] = useState<ScoreSortDirection>("desc");
+  const [noteGroups, setNoteGroups] = useState<ProcessorAdminNoteGroup[]>([]);
+  const [savedNoteSignatures, setSavedNoteSignatures] = useState<Record<string, string>>({});
+  const [noteEditorDrafts, setNoteEditorDrafts] = useState<Record<string, string>>({});
+  const [noteQuery, setNoteQuery] = useState("");
+  const [noteVendorFilter, setNoteVendorFilter] = useState<string>("all");
+  const [noteForm, setNoteForm] = useState<ProcessorNoteForm>({ processorNames: "", rawPoints: "" });
+  const [savingNoteGroupIds, setSavingNoteGroupIds] = useState<string[]>([]);
+  const [deletingNoteGroupIds, setDeletingNoteGroupIds] = useState<string[]>([]);
+  const [savingQuickNote, setSavingQuickNote] = useState(false);
   const createTitleInputRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const savedSection = window.localStorage.getItem("admin-processors-section");
+    if (savedSection === "processors" || savedSection === "benchmarks" || savedSection === "scores" || savedSection === "notes") {
+      setAdminSectionView(savedSection);
+    }
+    setAdminSectionReady(true);
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !adminSectionReady) return;
+    window.localStorage.setItem("admin-processors-section", adminSectionView);
+  }, [adminSectionReady, adminSectionView]);
 
   const suggestedSlug = useMemo(() => slugify(createTitle || ""), [createTitle]);
   const createSlug = useMemo(
@@ -188,6 +304,34 @@ export default function AdminProcessorsPage() {
     const response = await fetch("/api/processors?admin=1", { cache: "no-store", credentials: "include" });
     const json = await response.json();
     setRows((json.items || []) as ProcessorAdmin[]);
+  }
+
+  async function refreshNoteGroups() {
+    const response = await fetch("/api/processors/admin-notes", { cache: "no-store", credentials: "include" });
+    const json = await response.json();
+    const items = (json.items || []) as ProcessorAdminNoteGroup[];
+    setNoteGroups(items);
+    setNoteEditorDrafts(
+      Object.fromEntries(
+        items
+          .filter((item) => item.id)
+          .map((item) => [item.id as string, formatNoteEditorValue(item.items || [])])
+      )
+    );
+    setSavedNoteSignatures(
+      Object.fromEntries(
+        items
+          .filter((item) => item.id)
+          .map((item) => [
+            item.id as string,
+            JSON.stringify({
+              processorName: normalizeProcessorText(item.processorName),
+              vendor: String(item.vendor || "").trim(),
+              items: item.items || [],
+            }),
+          ])
+      )
+    );
   }
 
   function toDraft(row: ProcessorAdmin): BenchmarkDraft {
@@ -329,7 +473,7 @@ export default function AdminProcessorsPage() {
   }
 
   useEffect(() => {
-    refresh().catch((err) => setError(err instanceof Error ? err.message : "Failed to load processors."));
+    Promise.all([refresh(), refreshNoteGroups()]).catch((err) => setError(err instanceof Error ? err.message : "Failed to load processors."));
   }, []);
 
   function getBenchmarkVendorKey(row: ProcessorAdmin): BenchmarkVendorFilter | null {
@@ -341,6 +485,7 @@ export default function AdminProcessorsPage() {
       return "mediatek-dimensity";
     }
     if (vendor === "samsung" || name.includes("exynos")) return "samsung-exynos";
+    if (vendor === "google" || name.includes("tensor")) return "google";
     if (vendor === "apple") return "apple";
     if (vendor === "unisoc") return "unisoc";
     if (vendor === "xiaomi") return "xiaomi";
@@ -460,17 +605,19 @@ export default function AdminProcessorsPage() {
 
   const filteredRows = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return rows.filter((row) => {
-      const rowStatus = row.status || "published";
-      if (statusFilter === "all" && rowStatus === "recently_deleted") return false;
-      if (statusFilter !== "all" && rowStatus !== statusFilter) return false;
-      if (vendorFilter.length > 0 && !vendorFilter.some((item) => item.toLowerCase() === String(row.vendor || "").toLowerCase())) return false;
-      const rowClass = String(row.detail?.className || "").trim().toLowerCase();
-      if (classFilter.length > 0 && !classFilter.some((item) => item.toLowerCase() === rowClass)) return false;
-      if (!q) return true;
-      const hay = [row.name, row.vendor, row.id, row.gpu, row.status].map((v) => String(v || "").toLowerCase()).join(" ");
-      return hay.includes(q);
-    });
+    return rows
+      .filter((row) => {
+        const rowStatus = row.status || "published";
+        if (statusFilter === "all" && rowStatus === "recently_deleted") return false;
+        if (statusFilter !== "all" && rowStatus !== statusFilter) return false;
+        if (vendorFilter.length > 0 && !vendorFilter.some((item) => item.toLowerCase() === String(row.vendor || "").toLowerCase())) return false;
+        const rowClass = String(row.detail?.className || "").trim().toLowerCase();
+        if (classFilter.length > 0 && !classFilter.some((item) => item.toLowerCase() === rowClass)) return false;
+        if (!q) return true;
+        const hay = [row.name, row.vendor, row.id, row.gpu, row.status].map((v) => String(v || "").toLowerCase()).join(" ");
+        return hay.includes(q);
+      })
+      .sort((a, b) => compareProcessorNames(a.name || "", b.name || ""));
   }, [classFilter, query, rows, statusFilter, vendorFilter]);
 
   const vendorOptions = useMemo(
@@ -557,6 +704,8 @@ export default function AdminProcessorsPage() {
         if (clockGap !== 0) return scoreSortDirection === "desc" ? -clockGap : clockGap;
         const gpuGap = (left.gpu || 0) - (right.gpu || 0);
         if (gpuGap !== 0) return scoreSortDirection === "desc" ? -gpuGap : gpuGap;
+        const nameGap = compareProcessorNames(String(a.name || ""), String(b.name || ""));
+        if (nameGap !== 0) return nameGap;
         return String(a.name || "").localeCompare(String(b.name || ""));
       });
   }, [processorScores, rows, scoreQuery, scoreSortDirection, scoreSortKey, scoreVendorFilter]);
@@ -570,24 +719,7 @@ export default function AdminProcessorsPage() {
       if (!q) return true;
       const hay = [row.name, row.id, row.vendor, row.detail?.model].map((value) => String(value || "").toLowerCase()).join(" ");
       return hay.includes(q);
-    }).sort((a, b) => {
-      const left = parseBenchmarkNameParts(a.name || "");
-      const right = parseBenchmarkNameParts(b.name || "");
-      if (left.family !== right.family) return left.family.localeCompare(right.family);
-      const leftSnapdragon = parseSnapdragonName(left.label);
-      const rightSnapdragon = parseSnapdragonName(right.label);
-      if (leftSnapdragon && rightSnapdragon) {
-        if (leftSnapdragon.bucket !== rightSnapdragon.bucket) return rightSnapdragon.bucket - leftSnapdragon.bucket;
-        if (leftSnapdragon.series !== rightSnapdragon.series) return rightSnapdragon.series - leftSnapdragon.series;
-        if (leftSnapdragon.gen !== rightSnapdragon.gen) return rightSnapdragon.gen - leftSnapdragon.gen;
-        if (leftSnapdragon.variant !== rightSnapdragon.variant) return rightSnapdragon.variant - leftSnapdragon.variant;
-        return left.label.localeCompare(right.label);
-      }
-      if (left.num !== right.num) return right.num - left.num;
-      const suffixGap = benchmarkSuffixRank(right.suffix) - benchmarkSuffixRank(left.suffix);
-      if (suffixGap !== 0) return suffixGap;
-      return left.label.localeCompare(right.label);
-    });
+    }).sort((a, b) => compareProcessorNames(a.name || "", b.name || ""));
   }, [benchmarkQuery, benchmarkVendorFilter, rows]);
   const changedBenchmarkRows = useMemo(
     () => benchmarkRows.filter((row) => row.id && benchmarkDrafts[row.id]),
@@ -597,6 +729,225 @@ export default function AdminProcessorsPage() {
     () => rows.filter((row) => row.id && benchmarkSavedDrafts[row.id]),
     [rows, benchmarkSavedDrafts]
   );
+  const noteVendorCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    noteGroups.forEach((group) => {
+      const vendor = String(group.vendor || "").trim() || "Other";
+      counts.set(vendor, (counts.get(vendor) || 0) + 1);
+    });
+    return counts;
+  }, [noteGroups]);
+  const noteSuggestions = useMemo(
+    () => Array.from(new Set([
+      ...rows.map((row) => normalizeProcessorText(row.name || "")).filter(Boolean),
+      ...noteGroups.map((group) => normalizeProcessorText(group.processorName || "")).filter(Boolean),
+    ])).sort(compareProcessorNames),
+    [noteGroups, rows]
+  );
+  const visibleNoteGroups = useMemo(() => {
+    const q = noteQuery.trim().toLowerCase();
+    return [...noteGroups]
+      .filter((group) => {
+        const vendor = String(group.vendor || "").trim() || "Other";
+        if (noteVendorFilter !== "all" && vendor.toLowerCase() !== noteVendorFilter.toLowerCase()) return false;
+        if (!q) return true;
+        const hay = [group.processorName, group.vendor, ...(group.items || [])]
+          .map((value) => String(value || "").toLowerCase())
+          .join(" ");
+        return hay.includes(q);
+      })
+      .sort((a, b) => compareProcessorNames(a.processorName || "", b.processorName || ""));
+  }, [noteGroups, noteQuery, noteVendorFilter]);
+
+  function resolveNoteVendor(name: string): string {
+    const normalized = normalizeProcessorText(name).toLowerCase();
+    const matchedRow = rows.find((row) => normalizeProcessorText(row.name || "").toLowerCase() === normalized);
+    return String(matchedRow?.vendor || "").trim() || inferVendorFromProcessorName(name);
+  }
+
+  function noteGroupSignature(group: ProcessorAdminNoteGroup): string {
+    return JSON.stringify({
+      processorName: normalizeProcessorText(group.processorName),
+      vendor: String(group.vendor || "").trim(),
+      items: (group.items || []).map((item) => normalizeNoteLine(item)).filter(Boolean),
+    });
+  }
+
+  function getNoteEditorValue(group: ProcessorAdminNoteGroup): string {
+    const key = String(group.id || slugify(group.processorName || ""));
+    return noteEditorDrafts[key] ?? formatNoteEditorValue(group.items || []);
+  }
+
+  function noteEditorSignature(group: ProcessorAdminNoteGroup): string {
+    return JSON.stringify({
+      processorName: normalizeProcessorText(group.processorName),
+      vendor: String(group.vendor || "").trim(),
+      items: parseNoteLines(getNoteEditorValue(group)),
+    });
+  }
+
+  function isNoteGroupDirty(group: ProcessorAdminNoteGroup): boolean {
+    if (!group.id) return true;
+    return savedNoteSignatures[group.id] !== noteEditorSignature(group);
+  }
+
+  function updateNoteGroupLocally(id: string, updater: (group: ProcessorAdminNoteGroup) => ProcessorAdminNoteGroup) {
+    setNoteGroups((prev) => prev.map((group) => (group.id === id ? updater(group) : group)));
+  }
+
+  function setNoteEditorValue(id: string, value: string) {
+    setNoteEditorDrafts((prev) => ({ ...prev, [id]: value }));
+  }
+
+  function handleNoteEditorKeyDown(
+    event: React.KeyboardEvent<HTMLTextAreaElement>,
+    id: string,
+    group: ProcessorAdminNoteGroup
+  ) {
+    if (event.key !== "Enter" || event.shiftKey || event.nativeEvent.isComposing) return;
+    event.preventDefault();
+    const textarea = event.currentTarget;
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const value = getNoteEditorValue(group);
+    const insert = `\n${NOTE_BULLET} `;
+    const nextValue = `${value.slice(0, start)}${insert}${value.slice(end)}`;
+    setNoteEditorValue(id, nextValue);
+    window.requestAnimationFrame(() => {
+      textarea.selectionStart = textarea.selectionEnd = start + insert.length;
+    });
+  }
+
+  async function persistNoteGroup(group: ProcessorAdminNoteGroup) {
+    const processorName = normalizeProcessorText(group.processorName);
+    const editorKey = String(group.id || slugify(group.processorName || ""));
+    const items = parseNoteLines(noteEditorDrafts[editorKey] ?? formatNoteEditorValue(group.items || []));
+    if (!processorName) throw new Error("Processor name is required.");
+    if (!items.length) throw new Error("Add at least one point before saving.");
+
+    const savingId = group.id || slugify(processorName);
+    setSavingNoteGroupIds((prev) => (prev.includes(savingId) ? prev : [...prev, savingId]));
+    try {
+      const payload: ProcessorAdminNoteGroup = {
+        id: group.id,
+        processorName,
+        vendor: resolveNoteVendor(processorName),
+        items,
+      };
+      const response = await fetch("/api/processors/admin-notes", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify(payload),
+      });
+      const json = await response.json();
+      if (!response.ok) throw new Error(json.error || "Failed to save notes.");
+      const nextId = String(json.id || payload.id || savingId);
+      const normalizedGroup = { ...payload, id: nextId };
+      setNoteGroups((prev) => {
+        const existingIndex = prev.findIndex((item) => item.id === nextId);
+        if (existingIndex >= 0) return prev.map((item, index) => (index === existingIndex ? normalizedGroup : item));
+        return [...prev, normalizedGroup];
+      });
+      setNoteEditorDrafts((prev) => ({ ...prev, [nextId]: formatNoteEditorValue(normalizedGroup.items) }));
+      setSavedNoteSignatures((prev) => ({ ...prev, [nextId]: noteGroupSignature(normalizedGroup) }));
+      setMessage(`Saved admin notes for ${processorName}.`);
+    } finally {
+      setSavingNoteGroupIds((prev) => prev.filter((item) => item !== savingId));
+    }
+  }
+
+  async function handleQuickNoteSave() {
+    const processorNames = parseProcessorNameList(noteForm.processorNames);
+    const newItems = parseNoteLines(noteForm.rawPoints);
+    if (!processorNames.length) {
+      setError("Choose or write at least one processor name before saving notes.");
+      return;
+    }
+    if (!newItems.length) {
+      setError("Write at least one point in the notes box.");
+      return;
+    }
+
+    setSavingQuickNote(true);
+    setError("");
+    setMessage("");
+    try {
+      for (const processorName of processorNames) {
+        const existing = noteGroups.find((group) => normalizeProcessorText(group.processorName).toLowerCase() === processorName.toLowerCase());
+        const mergedMap = new Map<string, string>();
+        [...(existing?.items || []), ...newItems].forEach((item) => {
+          const normalized = normalizeNoteLine(item);
+          if (!normalized) return;
+          const key = normalized.toLowerCase();
+          if (!mergedMap.has(key)) mergedMap.set(key, normalized);
+        });
+        await persistNoteGroup({
+          id: existing?.id,
+          processorName,
+          vendor: resolveNoteVendor(processorName),
+          items: Array.from(mergedMap.values()),
+        });
+      }
+      setNoteForm({ processorNames: "", rawPoints: "" });
+      setMessage(
+        processorNames.length === 1
+          ? `Saved notes for ${processorNames[0]}.`
+          : `Saved the same notes for ${processorNames.length} processors.`
+      );
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to save processor notes.");
+    } finally {
+      setSavingQuickNote(false);
+    }
+  }
+
+  async function deleteNoteGroup(id: string, label: string) {
+    if (!window.confirm(`Delete all admin notes for ${label}? This cannot be undone.`)) return;
+    setDeletingNoteGroupIds((prev) => (prev.includes(id) ? prev : [...prev, id]));
+    setError("");
+    setMessage("");
+    try {
+      const response = await fetch(`/api/processors/admin-notes/${encodeURIComponent(id)}`, {
+        method: "DELETE",
+        credentials: "include",
+      });
+      const json = await response.json();
+      if (!response.ok) throw new Error(json.error || "Failed to delete processor notes.");
+      setNoteGroups((prev) => prev.filter((group) => group.id !== id));
+      setSavedNoteSignatures((prev) => {
+        const next = { ...prev };
+        delete next[id];
+        return next;
+      });
+      setNoteEditorDrafts((prev) => {
+        const next = { ...prev };
+        delete next[id];
+        return next;
+      });
+      setMessage(`Deleted admin notes for ${label}.`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to delete processor notes.");
+    } finally {
+      setDeletingNoteGroupIds((prev) => prev.filter((item) => item !== id));
+    }
+  }
+
+  async function removeNoteItem(group: ProcessorAdminNoteGroup, index: number) {
+    const current = normalizeNoteLine(group.items[index] || "");
+    if (!current) return;
+    if (!window.confirm(`Delete this point from ${group.processorName}?\n\n${current}`)) return;
+    const nextItems = group.items.filter((_, itemIndex) => itemIndex !== index);
+    if (nextItems.length === 0) {
+      if (group.id) await deleteNoteGroup(group.id, group.processorName);
+      return;
+    }
+    try {
+      await persistNoteGroup({ ...group, items: nextItems });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to delete note point.");
+    }
+  }
 
   async function changeStatus(id: string, status: ProcessorAdmin["status"]) {
     const response = await fetch(`/api/processors/${id}`, {
@@ -946,7 +1297,7 @@ export default function AdminProcessorsPage() {
         </div>
       </section>
 
-      {adminSectionView === "processors" ? (
+      {adminSectionReady && adminSectionView === "processors" ? (
       <section className="panel p-4 sm:p-5">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
@@ -971,6 +1322,13 @@ export default function AdminProcessorsPage() {
                 className="rounded-t-lg border border-slate-200 bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-200"
               >
                 Score Table
+              </button>
+              <button
+                type="button"
+                onClick={() => setAdminSectionView("notes")}
+                className="rounded-t-lg border border-slate-200 bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-200"
+              >
+                Admin Notes
               </button>
             </div>
             <p className="mt-2 text-sm text-slate-600">Open the list when you want to search, filter, edit, or manage processor status.</p>
@@ -1190,7 +1548,7 @@ export default function AdminProcessorsPage() {
       </section>
       ) : null}
 
-      {adminSectionView === "scores" ? (
+      {adminSectionReady && adminSectionView === "scores" ? (
       <section className="panel p-4 sm:p-5">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
@@ -1215,6 +1573,13 @@ export default function AdminProcessorsPage() {
                 className="rounded-t-lg border border-blue-700 bg-blue-700 px-4 py-2 text-sm font-semibold text-white shadow-sm"
               >
                 Score Table
+              </button>
+              <button
+                type="button"
+                onClick={() => setAdminSectionView("notes")}
+                className="rounded-t-lg border border-slate-200 bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-200"
+              >
+                Admin Notes
               </button>
             </div>
             <p className="mt-2 text-sm text-slate-600">Compare processors directly by score field and spot which chip leads in each category.</p>
@@ -1309,7 +1674,7 @@ export default function AdminProcessorsPage() {
       </section>
       ) : null}
 
-      {adminSectionView === "benchmarks" ? (
+      {adminSectionReady && adminSectionView === "benchmarks" ? (
       <section className="panel p-4 sm:p-5">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
@@ -1334,6 +1699,13 @@ export default function AdminProcessorsPage() {
                 className="rounded-t-lg border border-slate-200 bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-200"
               >
                 Score Table
+              </button>
+              <button
+                type="button"
+                onClick={() => setAdminSectionView("notes")}
+                className="rounded-t-lg border border-slate-200 bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-200"
+              >
+                Admin Notes
               </button>
             </div>
             <p className="mt-2 text-sm text-slate-600">Open only when needed, edit existing scores directly, then collapse it again.</p>
@@ -1756,6 +2128,194 @@ export default function AdminProcessorsPage() {
             </div>
             )}
         </>
+      </section>
+      ) : null}
+
+      {adminSectionReady && adminSectionView === "notes" ? (
+      <section className="panel p-4 sm:p-5">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => setAdminSectionView("processors")}
+                className="rounded-t-lg border border-slate-200 bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-200"
+              >
+                Processor List
+              </button>
+              <button
+                type="button"
+                onClick={() => setAdminSectionView("benchmarks")}
+                className="rounded-t-lg border border-slate-200 bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-200"
+              >
+                Benchmark Table
+              </button>
+              <button
+                type="button"
+                onClick={() => setAdminSectionView("scores")}
+                className="rounded-t-lg border border-slate-200 bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-200"
+              >
+                Score Table
+              </button>
+              <button
+                type="button"
+                onClick={() => setAdminSectionView("notes")}
+                className="rounded-t-lg border border-blue-700 bg-blue-700 px-4 py-2 text-sm font-semibold text-white shadow-sm"
+              >
+                Admin Notes
+              </button>
+            </div>
+            <p className="mt-2 text-sm text-slate-600">Keep admin-only guessed data, leaks, missing points, and reminders grouped under each processor so you can update them later when the real specs arrive.</p>
+          </div>
+          <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+            <p>Total processors with notes: <span className="font-semibold text-slate-900">{noteGroups.length}</span></p>
+            <p>Visible after filters: <span className="font-semibold text-slate-900">{visibleNoteGroups.length}</span></p>
+          </div>
+        </div>
+
+        <div className="mt-4 rounded-2xl border border-slate-200 bg-gradient-to-br from-slate-50 to-white p-4">
+          <div className="grid gap-3 lg:grid-cols-[minmax(260px,340px)_1fr_auto] lg:items-start">
+            <div className="grid gap-2">
+              <label className="text-xs font-semibold uppercase tracking-wide text-slate-500">Processor Name</label>
+              <textarea
+                value={noteForm.processorNames}
+                onChange={(e) => setNoteForm((prev) => ({ ...prev, processorNames: e.target.value }))}
+                rows={4}
+                placeholder={"Write one processor per line or separate by commas.\nExample:\nMediaTek Dimensity 9500\nMediaTek Dimensity 9400\nSamsung Exynos 2500"}
+                className="rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm"
+              />
+              <p className="text-xs text-slate-500">You can add the same point set to many processors at once. Existing processor headings will be reused automatically.</p>
+            </div>
+            <div className="grid gap-2">
+              <label className="text-xs font-semibold uppercase tracking-wide text-slate-500">Data Points</label>
+              <textarea
+                value={noteForm.rawPoints}
+                onChange={(e) => setNoteForm((prev) => ({ ...prev, rawPoints: e.target.value }))}
+                placeholder={"Write one point per line.\nExample:\nGuessed Cortex-A78 based on leaked cluster\nLaunch expected in September\nGeekbench score still missing official source"}
+                className="min-h-[124px] rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm"
+              />
+              <p className="text-xs text-slate-500">Paste one line or many lines at once. Duplicate points for the same processor are ignored.</p>
+            </div>
+            <div className="flex gap-2 lg:flex-col">
+              <button
+                type="button"
+                onClick={() => void handleQuickNoteSave()}
+                disabled={savingQuickNote}
+                className={`rounded-xl px-4 py-3 text-sm font-semibold ${savingQuickNote ? "cursor-not-allowed border border-slate-200 bg-slate-100 text-slate-400" : "bg-slate-900 text-white"}`}
+              >
+                {savingQuickNote ? "Saving..." : "Save Notes"}
+              </button>
+              <button
+                type="button"
+                onClick={() => setNoteForm({ processorNames: "", rawPoints: "" })}
+                className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700"
+              >
+                Clear
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-4 grid gap-3">
+          <input
+            value={noteQuery}
+            onChange={(e) => setNoteQuery(e.target.value)}
+            placeholder="Search processor name, vendor, or any saved point..."
+            className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+          />
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => setNoteVendorFilter("all")}
+              className={`rounded-full border px-3 py-1.5 text-xs font-medium leading-none transition ${noteVendorFilter === "all" ? "border-slate-900 bg-slate-900 text-white" : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"}`}
+            >
+              All ({Array.from(noteVendorCounts.values()).reduce((sum, count) => sum + count, 0)})
+            </button>
+            {Array.from(noteVendorCounts.entries())
+              .sort((a, b) => a[0].localeCompare(b[0]))
+              .map(([vendor, count]) => (
+                <button
+                  key={`note-vendor-${vendor}`}
+                  type="button"
+                  onClick={() => setNoteVendorFilter(vendor)}
+                  className={`rounded-full border px-3 py-1.5 text-xs font-medium leading-none transition ${noteVendorFilter.toLowerCase() === vendor.toLowerCase() ? "border-blue-700 bg-blue-700 text-white" : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"}`}
+                >
+                  {vendor} ({count})
+                </button>
+              ))}
+          </div>
+        </div>
+
+        <div className="mt-5 grid gap-4">
+          {visibleNoteGroups.map((group) => {
+            const safeId = String(group.id || slugify(group.processorName || ""));
+            const isSaving = savingNoteGroupIds.includes(safeId);
+            const isDeleting = deletingNoteGroupIds.includes(safeId);
+            const dirty = isNoteGroupDirty(group);
+            return (
+              <article key={`processor-note-${safeId}`} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h3 className="text-lg font-semibold text-slate-900">{group.processorName}</h3>
+                      <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-700">{group.vendor || "Other"}</span>
+                      <span className="rounded-full bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-700">{group.items.length} point{group.items.length === 1 ? "" : "s"}</span>
+                    </div>
+                    <p className="mt-1 text-sm text-slate-500">Admin-only scratchpad for guessed values, leaks, and missing-source reminders.</p>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                    onClick={() => {
+                      const current = getNoteEditorValue(group);
+                      const nextValue = current.trim() ? `${current}\n${NOTE_BULLET} ` : `${NOTE_BULLET} `;
+                      setNoteEditorValue(safeId, nextValue);
+                    }}
+                      className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700"
+                    >
+                      Add Point
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void persistNoteGroup(group).catch((err) => setError(err instanceof Error ? err.message : "Failed to save processor notes."))}
+                      disabled={isSaving || !dirty}
+                      className={`rounded-lg px-3 py-2 text-xs font-semibold ${isSaving || !dirty ? "cursor-not-allowed border border-slate-200 bg-slate-100 text-slate-400" : "bg-slate-900 text-white"}`}
+                    >
+                      {isSaving ? "Saving..." : dirty ? "Save Changes" : "Saved"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void deleteNoteGroup(safeId, group.processorName)}
+                      disabled={isDeleting}
+                      className={`rounded-lg px-3 py-2 text-xs font-semibold ${isDeleting ? "cursor-not-allowed border border-rose-100 bg-rose-50 text-rose-300" : "border border-rose-200 bg-rose-50 text-rose-700"}`}
+                    >
+                      {isDeleting ? "Deleting..." : "Delete Processor"}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-3">
+                  <textarea
+                    value={getNoteEditorValue(group)}
+                    onChange={(e) => setNoteEditorValue(safeId, e.target.value)}
+                    onKeyDown={(e) => handleNoteEditorKeyDown(e, safeId, group)}
+                    rows={Math.max(3, parseNoteLines(getNoteEditorValue(group)).length + 1)}
+                    placeholder={"• CPU benchmark is guessed from early leak\n• Launch window likely September\n• Official Geekbench source still missing"}
+                    className="w-full rounded-lg border border-slate-200 bg-white px-3 py-3 text-sm"
+                  />
+                  <p className="mt-2 text-xs text-slate-500">Write one point per line. Remove any point naturally with backspace or by deleting the line, like a normal note editor.</p>
+                </div>
+              </article>
+            );
+          })}
+
+          {visibleNoteGroups.length === 0 ? (
+            <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-6 py-10 text-center">
+              <p className="text-sm font-semibold text-slate-700">No admin notes found for the current filters.</p>
+              <p className="mt-1 text-sm text-slate-500">Use the form above to save guessed data, leaks, or pending verification points for any processor.</p>
+            </div>
+          ) : null}
+        </div>
       </section>
       ) : null}
     </main>
