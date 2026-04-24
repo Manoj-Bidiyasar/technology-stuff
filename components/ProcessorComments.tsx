@@ -7,7 +7,7 @@ type CommentItem = {
   at?: string;
   text: string;
   score?: number;
-  status?: "visible" | "hidden";
+  status?: "visible" | "hidden" | "deleted";
 };
 
 type CommentThread = CommentItem & {
