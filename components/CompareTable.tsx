@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { Product, ProductDisplayPanel } from "@/lib/types/content";
 import { formatPrice } from "@/lib/utils/format";
+import { formatMemoryCapacity } from "@/lib/utils/display";
 import { calculateOverallScore100 } from "@/lib/utils/score";
 import { fallbackPerformanceFromProduct } from "@/lib/utils/performanceScore";
 
@@ -30,6 +31,31 @@ type SectionDef = {
 function asText(value: unknown): string {
   const text = String(value ?? "").trim();
   return text ? text : "N/A";
+}
+
+function cleanMemoryValue(value: unknown): string {
+  const text = String(value ?? "").trim();
+  return text && text.toLowerCase() !== "null" && text.toLowerCase() !== "undefined" ? text : "";
+}
+
+function formatExpandableStorageMax(value: unknown): string {
+  const raw = cleanMemoryValue(value);
+  if (!raw) return "";
+  const normalized = raw.replace(/\s+/g, "").toUpperCase();
+  const numericMatch = raw.replace(/,/g, "").match(/\d+(\.\d+)?/);
+  const numeric = numericMatch ? Number(numericMatch[0]) : 0;
+
+  if (normalized.endsWith("TB")) return raw.toUpperCase();
+  if (normalized.endsWith("GB") && numeric >= 1024) {
+    const tb = numeric / 1024;
+    return `${Number.isInteger(tb) ? tb.toFixed(0) : tb.toFixed(1).replace(/\.0$/, "")}TB`;
+  }
+  if (/^\d+(\.\d+)?$/.test(normalized) && numeric >= 1024) {
+    const tb = numeric / 1024;
+    return `${Number.isInteger(tb) ? tb.toFixed(0) : tb.toFixed(1).replace(/\.0$/, "")}TB`;
+  }
+  if (/^\d+(\.\d+)?$/.test(normalized) && numeric > 0) return `${numeric}GB`;
+  return raw.toUpperCase();
 }
 
 function formatDate(value: unknown): string {
@@ -436,7 +462,7 @@ export default function CompareTable({
         rows: [
           { label: "Launch Date", values: padToThree(products.map((p) => formatDate(p.general?.launchDate))) },
           { label: "Model Number", values: padToThree(products.map((p) => asText(p.general?.modelNumber))) },
-          { label: "Variants", values: padToThree(products.map((p) => asText((p.general?.variants || []).map((v) => `${v.ram || ""} + ${v.storage || ""}`.trim()).filter(Boolean).join(" | ")))) },
+          { label: "Variants", values: padToThree(products.map((p) => asText((p.general?.variants || []).map((v) => `${formatMemoryCapacity(v.ram)} + ${formatMemoryCapacity(v.storage)}`.trim()).filter(Boolean).join(" | ")))) },
           { label: "Package Contents", values: padToThree(products.map((p) => joinList(p.general?.packageContents))) },
           { label: "Multimedia", values: padToThree(products.map((p) => joinList(p.general?.multimedia))) },
         ],
@@ -521,13 +547,13 @@ export default function CompareTable({
           { label: "RAM & Storage", values: padToThree(products.map((p) => asText((p.variants || []).map((v) => `${v.ram || ""} + ${v.storage || ""}`.trim()).filter(Boolean).join(" | ") || p.specs?.storage))) },
           { label: "RAM Type", values: padToThree(products.map((p) => joinList(p.memoryStorage?.ramType))) },
           { label: "Storage Type", values: padToThree(products.map((p) => joinList(p.memoryStorage?.storageType))) },
-          { label: "Virtual RAM", values: padToThree(products.map((p) => joinList(p.memoryStorage?.virtualRam))) },
+          { label: "Virtual RAM", values: padToThree(products.map((p) => cleanMemoryValue(p.memoryStorage?.virtualRamMax) || joinList(p.memoryStorage?.virtualRam))) },
           {
             label: "Expandable Storage",
             values: padToThree(
               products.map((p) =>
                 p.memoryStorage?.expandableStorage?.supported
-                  ? `Yes${p.memoryStorage?.expandableStorage?.max ? ` (up to ${p.memoryStorage.expandableStorage.max})` : ""}`
+                  ? `Yes${p.memoryStorage?.expandableStorage?.max ? ` (up to ${formatExpandableStorageMax(p.memoryStorage.expandableStorage.max)})` : ""}`
                   : p.memoryStorage?.expandableStorage?.supported === false
                     ? "No"
                     : "N/A"
@@ -598,7 +624,11 @@ export default function CompareTable({
             label: "Battery Capacity & Type",
             values: padToThree(
               products.map((p) => {
-                const capacity = asText(p.battery?.capacity || p.specs?.battery);
+                const typical = asText(p.battery?.capacityTypical);
+                const rated = asText(p.battery?.capacityRated);
+                const capacity = typical !== "N/A"
+                  ? (rated !== "N/A" ? `${typical} (Typical), ${rated} (Rated)` : typical)
+                  : asText(p.battery?.capacity || p.specs?.battery);
                 const type = asText(p.battery?.type);
                 if (capacity === "N/A" && type === "N/A") return "N/A";
                 if (capacity !== "N/A" && type !== "N/A") return `${capacity}, ${type}`;
@@ -610,19 +640,25 @@ export default function CompareTable({
             label: "Wired Charging",
             values: padToThree(
               products.map((p) => {
-                const maxWired = cleanWiredCharging(p.battery?.maxChargingSupport);
-                if (maxWired !== "N/A") return maxWired;
+                if (p.battery?.wired?.supported) {
+                  const power = asText(p.battery?.wired?.maxPower);
+                  const protocol = asText(p.battery?.wired?.protocol);
+                  const powerText = power !== "N/A" ? cleanWiredCharging(power) : "Yes";
+                  if (protocol !== "N/A") return `${powerText}, ${protocol}`;
+                  return powerText;
+                }
+                if (p.battery?.wired?.supported === false) return "No";
                 return cleanWiredCharging(p.specs?.charging);
               })
             ),
           },
           {
-            label: "Charging Speed",
+            label: "Wired Speed",
             values: padToThree(
               products.map((p) => {
-                const speed = p.battery?.chargingSpeed || {};
+                const speed = p.battery?.wired?.speed || {};
                 const entries = Object.entries(speed)
-                  .map(([k, v]) => `${k}%: ${v}`)
+                  .map(([k, v]) => `${k}: ${v}`)
                   .filter((x) => !x.includes("undefined"));
                 return entries.length ? entries.join(" | ") : "N/A";
               })
@@ -633,11 +669,26 @@ export default function CompareTable({
             values: padToThree(
               products.map((p) =>
                 p.battery?.chargerInBox?.available
-                  ? `Yes${p.battery?.chargerInBox?.power ? ` (${p.battery.chargerInBox.power}W)` : ""}`
+                  ? [
+                    p.battery?.chargerInBox?.power ? `${p.battery.chargerInBox.power}W` : "Yes",
+                    p.battery?.chargerInBox?.protocol ? String(p.battery.chargerInBox.protocol) : "",
+                  ].filter(Boolean).join(", ")
                   : p.battery?.chargerInBox?.available === false
                     ? "No"
                     : "N/A"
               )
+            ),
+          },
+          {
+            label: "In-Box Speed",
+            values: padToThree(
+              products.map((p) => {
+                const speed = p.battery?.chargerInBox?.speed || {};
+                const entries = Object.entries(speed)
+                  .map(([k, v]) => `${k}: ${v}`)
+                  .filter((x) => !x.includes("undefined"));
+                return entries.length ? entries.join(" | ") : "N/A";
+              })
             ),
           },
           {
@@ -658,13 +709,36 @@ export default function CompareTable({
               products.map((p) => {
                 const speed = p.battery?.wireless?.speed || {};
                 const entries = Object.entries(speed)
-                  .map(([k, v]) => `${k}%: ${v}`)
+                  .map(([k, v]) => `${k}: ${v}`)
                   .filter((x) => !x.includes("undefined"));
                 return entries.length ? entries.join(" | ") : "N/A";
               })
             ),
           },
-          { label: "Battery Features", values: padToThree(products.map((p) => joinList(p.battery?.features))) },
+          {
+            label: "Reverse Wireless Charging",
+            values: padToThree(
+              products.map((p) =>
+                p.battery?.reverseWireless?.supported
+                  ? `Yes${p.battery?.reverseWireless?.maxPower ? ` (${p.battery.reverseWireless.maxPower}W)` : ""}`
+                  : p.battery?.reverseWireless?.supported === false
+                    ? "No"
+                    : "N/A"
+              )
+            ),
+          },
+          {
+            label: "Reverse Wired Charging",
+            values: padToThree(
+              products.map((p) =>
+                p.battery?.reverseWired?.supported
+                  ? `Yes${p.battery?.reverseWired?.maxPower ? ` (${p.battery.reverseWired.maxPower}W)` : ""}`
+                  : p.battery?.reverseWired?.supported === false
+                    ? "No"
+                    : "N/A"
+              )
+            ),
+          },
         ],
       },
       {

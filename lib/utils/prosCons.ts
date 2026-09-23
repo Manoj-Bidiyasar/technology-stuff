@@ -26,10 +26,11 @@ export function buildAutoProsCons(product: Product): ProsCons {
   const software = byKey.software || 0;
 
   const batteryCapacity =
+    toNumber(product?.battery?.capacityTypical) ||
     toNumber(product?.battery?.capacity) ||
     toNumber(product?.specs?.battery);
   const chargingWatt =
-    toNumber(product?.battery?.maxChargingSupport) ||
+    toNumber(product?.battery?.wired?.maxPower) ||
     toNumber(product?.specs?.charging);
   const hasChargerInBox = Boolean(product?.battery?.chargerInBox?.available);
   const price = Number(product?.price || 0);
@@ -59,4 +60,3 @@ export function buildAutoProsCons(product: Product): ProsCons {
 
   return { pros: finalPros, cons: finalCons };
 }
-

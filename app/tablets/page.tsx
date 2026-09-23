@@ -536,7 +536,7 @@ export default async function MobilePage({ searchParams }: MobilePageProps) {
     return acc;
   }, {});
   const chargingWattCounts = facetBaseResult.items.reduce<Record<string, number>>((acc, item) => {
-    const raw = `${String(item.battery?.maxChargingSupport || "")} ${String(item.specs?.charging || "")}`.toLowerCase();
+    const raw = `${String(item.battery?.wired?.maxPower || "")} ${String(item.specs?.charging || "")}`.toLowerCase();
     const matches = raw.match(/(\d+)\s*w/gi) || [];
     let max = 0;
     matches.forEach((m) => {
@@ -550,7 +550,7 @@ export default async function MobilePage({ searchParams }: MobilePageProps) {
     return acc;
   }, {});
   const quickChargingCount = facetBaseResult.items.filter((item) => {
-    const text = `${String(item.battery?.maxChargingSupport || "")} ${String(item.specs?.charging || "")}`.toLowerCase();
+    const text = `${String(item.battery?.wired?.maxPower || "")} ${String(item.specs?.charging || "")}`.toLowerCase();
     return text.includes("quick") || text.includes("fast") || /(\d+)\s*w/i.test(text);
   }).length;
   const wirelessChargingCount = facetBaseResult.items.filter((item) => item.battery?.wireless?.supported === true).length;

@@ -14,16 +14,27 @@ function normalizeSensorName(value: string): string {
   const cleaned = cleanValue(value).replace(/[_-]+/g, " ").replace(/\s+/g, " ").trim();
   if (!cleaned) return "";
   const lowered = cleaned.toLowerCase();
-  if (lowered === "ambient light") return "Ambient Light";
-  if (lowered === "accelerometer") return "Accelerometer";
-  if (lowered === "gyroscope") return "Gyroscope";
-  if (lowered === "proximity") return "Proximity";
-  if (lowered === "compass") return "Compass";
-  if (lowered === "barometer") return "Barometer";
-  return cleaned
+  const isECompass = lowered === "e-compass" || lowered === "e compass" || lowered === "ecompass";
+  const isVirtual = !isECompass && (lowered.includes("virtual") || lowered.includes("software") || lowered.includes("electronic"));
+  const base = cleaned
+    .replace(/\(.*?(virtual|software|electronic).*?\)/gi, "")
+    .replace(/\b(virtual|software|electronic)\b/gi, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  const baseLowered = base.toLowerCase();
+  let normalizedBase = base;
+  if (baseLowered === "ambient light") normalizedBase = "Ambient Light";
+  else if (baseLowered === "accelerometer") normalizedBase = "Accelerometer";
+  else if (baseLowered === "gyroscope") normalizedBase = "Gyroscope";
+  else if (baseLowered === "proximity") normalizedBase = "Proximity";
+  else if (baseLowered === "compass") normalizedBase = "Compass";
+  else if (baseLowered === "e compass" || baseLowered === "ecompass") normalizedBase = "E-Compass";
+  else if (baseLowered === "barometer") normalizedBase = "Barometer";
+  else normalizedBase = base
     .split(" ")
     .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
     .join(" ");
+  return isVirtual ? `Virtual ${normalizedBase}` : normalizedBase;
 }
 
 function safeArrayJoin(list: string[] | undefined, separator: string): string {
@@ -35,31 +46,18 @@ function formatFingerprint(security?: ProductSecurity): string {
   const available = Boolean(security?.fingerprint?.available);
   if (!available) return "No";
 
-  const locations = safeArrayJoin(security?.fingerprint?.locations, ", ");
-  return locations ? `Yes (${locations})` : "Yes";
+  const location = cleanValue(security?.fingerprint?.locations?.[0]);
+  const technology = cleanValue(security?.fingerprint?.type?.[0]);
+  const isInDisplay = /in[\s-]?display/i.test(location);
+  if (isInDisplay) return technology ? `${technology} In-Display Fingerprint Sensor` : "In-Display Fingerprint Sensor";
+  return location ? `${location} Fingerprint Sensor` : "Fingerprint Sensor";
 }
 
-function formatFingerprintType(security?: ProductSecurity): string {
-  if (!security?.fingerprint?.available) return "";
-  const joined = safeArrayJoin(security?.fingerprint?.type, ", ");
-  return joined || "-";
-}
-
-function formatFaceUnlock(type?: string): string {
-  const raw = cleanValue(type);
-  const key = raw.toLowerCase();
-  if (!key || key === "none" || key === "no") return "No";
-  if (key === "infrared" || key === "3d" || key.includes("infrared") || key.includes("3d")) return "Infrared Secure Face Unlock";
-  if (key === "2d" || key.includes("2d")) return "Basic Face Unlock";
-  if (key.includes("secure")) return "Secure Face Unlock";
-  if (key.includes("face")) {
-    return raw
-      .split(/[\s_-]+/)
-      .filter(Boolean)
-      .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
-      .join(" ");
-  }
-  return "Basic Face Unlock";
+function formatFaceUnlock(security?: ProductSecurity): string {
+  if (security?.faceUnlock?.available === false) return "No";
+  const technology = cleanValue(security?.faceUnlock?.type);
+  if (technology) return technology;
+  return security?.faceUnlock?.available === true ? "Yes" : "No";
 }
 
 function formatSensors(list?: string[]): string {
@@ -83,17 +81,15 @@ function row(label: string, value: string) {
 }
 
 export default function SecurityAndSensorsSection({ security, sensors }: SecurityAndSensorsSectionProps) {
-  const fingerprintAvailable = Boolean(security?.fingerprint?.available);
   const fingerprint = formatFingerprint(security);
-  const fingerprintType = formatFingerprintType(security);
-  const faceUnlock = formatFaceUnlock(security?.faceUnlock?.type);
+  const faceUnlock = formatFaceUnlock(security);
   const sensorsLine = formatSensors(sensors);
 
   return (
     <div className="rounded-xl border border-slate-200 bg-white">
       {row("Fingerprint Sensor", fingerprint)}
-      {row("Fingerprint Type", fingerprintAvailable ? (fingerprintType || "-") : "-")}
       {row("Face Unlock", faceUnlock)}
+      {security?.irisScanner === true ? row("Other Biometric Unlock", "Iris Scanner") : null}
       {row("Sensors", sensorsLine || "-")}
     </div>
   );

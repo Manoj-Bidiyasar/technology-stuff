@@ -1,5 +1,7 @@
 ﻿import type { ProductGeneral, ProductSpecs } from "@/lib/types/content";
 
+import { formatMemoryCapacity } from "@/lib/utils/display";
+
 type GeneralSectionProps = {
   general?: ProductGeneral;
   specs?: ProductSpecs;
@@ -29,12 +31,27 @@ function formatPrice(value?: number): string {
   return new Intl.NumberFormat("en-IN", { maximumFractionDigits: 0 }).format(value);
 }
 
+function variantAmount(value: unknown): number {
+  const text = String(value ?? "").trim();
+  const parsed = Number(text.replace(/[^0-9.]/g, ""));
+  if (!Number.isFinite(parsed)) return Number.MAX_SAFE_INTEGER;
+  return /\btb\b/i.test(text) ? parsed * 1024 : parsed;
+}
+
 function formatVariants(general?: ProductGeneral, specs?: ProductSpecs): string {
   if (Array.isArray(general?.variants) && general.variants.length > 0) {
     const items = general.variants
+      .map((variant, index) => ({ variant, index }))
+      .sort((left, right) => {
+        const ramDifference = variantAmount(left.variant.ram) - variantAmount(right.variant.ram);
+        if (ramDifference !== 0) return ramDifference;
+        const storageDifference = variantAmount(left.variant.storage) - variantAmount(right.variant.storage);
+        return storageDifference !== 0 ? storageDifference : left.index - right.index;
+      })
+      .map(({ variant }) => variant)
       .map((variant) => {
-        const ram = cleanValue(variant.ram);
-        const storage = cleanValue(variant.storage);
+        const ram = formatMemoryCapacity(cleanValue(variant.ram));
+        const storage = formatMemoryCapacity(cleanValue(variant.storage));
         const base = [ram, storage].filter(Boolean).join(" + ");
         const launch = formatPrice(variant.launchPrice);
         if (base && launch) return `${base} - ${launch}`;
@@ -44,7 +61,7 @@ function formatVariants(general?: ProductGeneral, specs?: ProductSpecs): string 
     return items.length > 0 ? items.join(" | ") : "-";
   }
 
-  const fallback = [cleanValue(specs?.ram), cleanValue(specs?.storage)].filter(Boolean).join(" + ");
+  const fallback = [formatMemoryCapacity(cleanValue(specs?.ram)), formatMemoryCapacity(cleanValue(specs?.storage))].filter(Boolean).join(" + ");
   return fallback || "-";
 }
 
@@ -61,6 +78,7 @@ function row(label: string, value: string) {
 
 export default function GeneralSection({ general, specs }: GeneralSectionProps) {
   const launchDate = formatDate(general?.launchDate);
+  const announceDate = formatDate(general?.announceDate);
   const modelNumber = cleanValue(general?.modelNumber) || "-";
   const packageContents = formatList(general?.packageContents, ", ");
   const variants = formatVariants(general, specs);
@@ -69,6 +87,7 @@ export default function GeneralSection({ general, specs }: GeneralSectionProps) 
   return (
     <div className="rounded-xl border border-slate-200 bg-white">
       {row("Launch Date", launchDate)}
+      {row("Announce Date", announceDate)}
       {row("Model Number", modelNumber)}
       {row("Package Contents", packageContents)}
       {row("Variants", variants)}

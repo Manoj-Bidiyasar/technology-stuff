@@ -79,8 +79,8 @@ export function scoreBatteryWireless(supported?: boolean, maxPower?: string | nu
 export function calculateBatteryScore(battery?: ProductBattery): BatteryScoreResult {
   const source = battery || {};
 
-  const capacity = scoreBatteryCapacity(source.capacity);
-  const charging = scoreBatteryCharging(source.maxChargingSupport);
+  const capacity = scoreBatteryCapacity(source.capacityTypical || source.capacity);
+  const charging = scoreBatteryCharging(source.wired?.maxPower);
   const charger = scoreBatteryChargerInBox(source.chargerInBox?.available);
   const wireless = scoreBatteryWireless(source.wireless?.supported, source.wireless?.maxPower);
 
@@ -103,32 +103,59 @@ export function fallbackBatteryFromProduct(product: Pick<Product, "specs" | "bat
   const battery = product.battery;
   const hasBatteryData =
     Boolean(String(battery?.capacity || "").trim()) ||
+    Boolean(String(battery?.capacityTypical || "").trim()) ||
+    Boolean(String(battery?.capacityRated || "").trim()) ||
     Boolean(String(battery?.type || "").trim()) ||
-    Boolean(String(battery?.maxChargingSupport || "").trim()) ||
-    (battery?.chargingSpeed ? Object.keys(battery.chargingSpeed).length > 0 : false) ||
+    Boolean(String(battery?.wired?.maxPower || "").trim()) ||
+    Boolean(String(battery?.wired?.protocol || "").trim()) ||
+    (battery?.wired?.speed ? Object.keys(battery.wired.speed).length > 0 : false) ||
     Boolean(battery?.chargerInBox?.available) ||
     Boolean(String(battery?.chargerInBox?.power || "").trim()) ||
+    Boolean(String(battery?.chargerInBox?.protocol || "").trim()) ||
+    (battery?.chargerInBox?.speed ? Object.keys(battery.chargerInBox.speed).length > 0 : false) ||
     Boolean(battery?.wireless?.supported) ||
     Boolean(String(battery?.wireless?.maxPower || "").trim()) ||
     (battery?.wireless?.speed ? Object.keys(battery.wireless.speed).length > 0 : false) ||
-    ((battery?.features || []).length > 0);
+    Boolean(battery?.reverseWireless?.supported) ||
+    Boolean(String(battery?.reverseWireless?.maxPower || "").trim()) ||
+    (battery?.reverseWireless?.speed ? Object.keys(battery.reverseWireless.speed).length > 0 : false) ||
+    Boolean(battery?.reverseWired?.supported) ||
+    Boolean(String(battery?.reverseWired?.maxPower || "").trim()) ||
+    (battery?.reverseWired?.speed ? Object.keys(battery.reverseWired.speed).length > 0 : false);
 
   if (hasBatteryData) return product.battery || {};
 
   return {
     capacity: product.specs?.battery || "",
+    capacityTypical: product.specs?.battery || "",
+    capacityRated: "",
     type: "",
-    maxChargingSupport: product.specs?.charging || "",
-    chargingSpeed: {},
+    wired: {
+      supported: Boolean(String(product.specs?.charging || "").trim()),
+      maxPower: product.specs?.charging || "",
+      protocol: "",
+      speed: {},
+    },
     chargerInBox: {
       available: false,
       power: "",
+      protocol: "",
+      speed: {},
     },
     wireless: {
       supported: false,
       maxPower: "",
       speed: {},
     },
-    features: [],
+    reverseWireless: {
+      supported: false,
+      maxPower: "",
+      speed: {},
+    },
+    reverseWired: {
+      supported: false,
+      maxPower: "",
+      speed: {},
+    },
   };
 }

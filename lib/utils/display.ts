@@ -43,6 +43,23 @@ export function formatBoolean(value?: boolean): string {
   return value ? "Yes" : "No";
 }
 
+/** Formats RAM or storage for display, treating a bare number as GB. */
+export function formatMemoryCapacity(value?: string | number): string {
+  const raw = String(value ?? "").trim();
+  if (!raw) return "";
+  const normalized = raw.replace(/\s+/g, "");
+  const match = normalized.match(/^(\d+(?:\.\d+)?)GB$/i);
+  if (match) {
+    const gb = Number(match[1]);
+    if (Number.isFinite(gb) && gb >= 1024) {
+      const tb = gb / 1024;
+      return `${Number.isInteger(tb) ? tb : Number(tb.toFixed(1))}TB`;
+    }
+    return `${match[1]}GB`;
+  }
+  return /^\d+(?:\.\d+)?$/.test(raw) ? `${raw}GB` : raw;
+}
+
 function normalizePanel(panel?: ProductDisplayPanel): ProductDisplayPanel {
   return {
     type: panel?.type,

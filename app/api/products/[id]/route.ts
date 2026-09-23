@@ -14,8 +14,8 @@ export async function PUT(request: NextRequest, { params }: ProductRouteProps) {
 
     const { id } = await params;
     const body = (await request.json()) as Partial<Product>;
-    await updateProduct(id, body);
-    return NextResponse.json({ ok: true });
+    const updatedId = await updateProduct(id, body);
+    return NextResponse.json({ ok: true, id: updatedId });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to update product.";
     return NextResponse.json({ error: message }, { status: 500 });

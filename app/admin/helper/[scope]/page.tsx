@@ -58,9 +58,65 @@ const PROCESSOR_FIELD_SUGGESTIONS: Record<string, string[]> = {
   Other: ["seo.metaTitle", "seo.metaDescription", "seo.canonicalUrl", "seo.summary", "seo.focusKeyword", "seo.tags", "seo.ogImage", "seo.noIndex"],
 };
 
-function getFieldSuggestions(scope: HelperScope, section: string): string[] {
-  if (scope !== "processor") return [];
-  return PROCESSOR_FIELD_SUGGESTIONS[section] || [];
+const SMARTPHONE_FIELD_SUGGESTIONS: Record<string, string[]> = {
+  "Basic Details": ["name", "brand", "model", "slug", "status", "shortDescription", "price", "tags"],
+  "Quick Specs": ["specs.processor", "specs.ram", "specs.storage", "specs.display", "specs.battery", "specs.camera"],
+  General: ["All Selected Package Contents (Public Order)"],
+  "Storage & Variants": ["SD Card Type", "Other Memory Features"],
+  "Design & Build": ["Design Style", "Back Material", "Back Protection", "Frame", "IP Rating", "Other Design Features", "Posture Note"],
+  Display: ["type", "size", "resolution", "refreshRate", "brightness", "protection", "features"],
+  Performance: ["AI Engine/NPU", "Other AI Feature", "Cooling System", "Other Performance Feature", "Additional Chip", "Additional Chip Other Feature"],
+  "Rear Camera": ["main", "ultrawide", "telephoto", "macro", "videoRecording", "features"],
+  "Front Camera": ["main", "videoRecording", "features"],
+  "Battery & Charging": ["Battery Type", "Life Cycle", "Charging Protocol", "Charging Speed", "Battery Certification", "Charging Certification", "Other Battery Features", "Other Charging Features"],
+  Multimedia: ["Other Multimedia"],
+  "Security & Sensors": ["Fingerprint Position", "Fingerprint Technology", "Face Unlock Technology", "Additional Sensors"],
+  "Network & Connectivity": ["Other Network", "5G Band", "4G Band", "USB Type"],
+  Software: ["Custom UI"],
+};
+
+const TABLET_FIELD_SUGGESTIONS: Record<string, string[]> = {
+  ...SMARTPHONE_FIELD_SUGGESTIONS,
+  "Benchmark Scores": ["antutu", "geekbenchSingle", "geekbenchMulti", "threeDMark", "pcMark"],
+};
+
+const BLOG_FIELD_SUGGESTIONS: Record<string, string[]> = {
+  Basic: ["title", "slug", "excerpt", "featuredImage", "tags", "categories", "status"],
+  Content: ["content"],
+  SEO: ["metaTitle", "metaDescription", "focusKeyword", "canonicalUrl", "noIndex"],
+  Publishing: ["author", "publishedAt", "updatedAt", "status"],
+};
+
+const FIELD_SUGGESTIONS_BY_SCOPE: Record<HelperScope, Record<string, string[]>> = {
+  processor: PROCESSOR_FIELD_SUGGESTIONS,
+  smartphone: SMARTPHONE_FIELD_SUGGESTIONS,
+  tablet: TABLET_FIELD_SUGGESTIONS,
+  blog: BLOG_FIELD_SUGGESTIONS,
+};
+
+const SECTION_SUGGESTIONS_BY_SCOPE: Record<HelperScope, string[]> = {
+  processor: SECTION_SUGGESTIONS,
+  smartphone: Object.keys(SMARTPHONE_FIELD_SUGGESTIONS),
+  tablet: Object.keys(TABLET_FIELD_SUGGESTIONS),
+  blog: Object.keys(BLOG_FIELD_SUGGESTIONS),
+};
+
+function getFieldSuggestions(scope: HelperScope, section: string, items: HelperTerm[] = []): string[] {
+  const normalizedSection = section.trim().toLowerCase();
+  const suggestedFields = Object.entries(FIELD_SUGGESTIONS_BY_SCOPE[scope]).find(
+    ([suggestedSection]) => suggestedSection.toLowerCase() === normalizedSection,
+  )?.[1] || [];
+  const savedFields = items
+    .filter((item) => item.section.trim().toLowerCase() === normalizedSection)
+    .map((item) => item.field?.trim() || "")
+    .filter(Boolean);
+  const allowedSavedFields = scope === "smartphone" && normalizedSection === "network & connectivity"
+    ? savedFields.filter((field) => !["bluetooth", "navigation", "network", "nfc", "sim", "usb", "wifi"].includes(field.toLowerCase()))
+    : savedFields;
+  const known = new Set(suggestedFields.map((field) => field.toLowerCase()));
+  const customFields = Array.from(new Set(allowedSavedFields.filter((field) => !known.has(field.toLowerCase()))))
+    .sort((left, right) => left.localeCompare(right));
+  return [...suggestedFields, ...customFields];
 }
 
 
@@ -103,11 +159,13 @@ export default function AdminHelperPage() {
     return map;
   }, [lastSavedItems]);
   const sectionOptions = useMemo(() => {
-    const fromItems = items.map((item) => item.section).filter(Boolean);
-    const merged = new Set([...SECTION_SUGGESTIONS, ...fromItems]);
-    return Array.from(merged);
-  }, [items]);
-  const fieldOptions = useMemo(() => getFieldSuggestions(scope, draft.section.trim()), [scope, draft.section]);
+    const suggested = SECTION_SUGGESTIONS_BY_SCOPE[scope];
+    const known = new Set(suggested.map((section) => section.toLowerCase()));
+    const custom = Array.from(new Set(items.map((item) => item.section).filter(Boolean).filter((section) => !known.has(section.toLowerCase()))))
+      .sort((left, right) => left.localeCompare(right));
+    return [...suggested, ...custom];
+  }, [items, scope]);
+  const fieldOptions = useMemo(() => getFieldSuggestions(scope, draft.section, items), [scope, draft.section, items]);
   const groupedItems = useMemo(() => {
     const term = searchTerm.trim().toLowerCase();
     const rows = items
@@ -139,6 +197,7 @@ export default function AdminHelperPage() {
         if (!active) return;
         const normalized = (json.items || []).map((item) => ({
           ...item,
+          section: scope === "smartphone" && item.section.trim().toLowerCase() === "battery" ? "Battery & Charging" : item.section,
           status: item.status || "approved",
         }));
         setItems(normalized);
@@ -295,39 +354,35 @@ export default function AdminHelperPage() {
                 <div className="grid gap-2 lg:grid-cols-[1fr_1fr_1.6fr_auto]">
                   <label className="grid gap-1">
                     <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">Section</span>
-                    <input
-                      list="helper-section-options"
+                    <select
                       value={draft.section}
                       onChange={(e) => {
-                        setDraft((prev) => ({ ...prev, section: e.target.value }));
+                        setDraft((prev) => ({ ...prev, section: e.target.value, field: "" }));
                         setError("");
                       }}
                       className="h-9 rounded-lg border border-slate-200 px-3 text-sm"
-                      placeholder="Select section"
-                    />
-                    <datalist id="helper-section-options">
+                    >
+                      <option value="">Select section</option>
                       {sectionOptions.map((item) => (
-                        <option key={item} value={item} />
+                        <option key={item} value={item}>{item}</option>
                       ))}
-                    </datalist>
+                    </select>
                   </label>
                   <label className="grid gap-1">
                     <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">Field Name</span>
-                    <input
-                      list="helper-field-options"
+                    <select
                       value={draft.field}
                       onChange={(e) => {
                         setDraft((prev) => ({ ...prev, field: e.target.value }));
                         setError("");
                       }}
                       className="h-9 rounded-lg border border-slate-200 px-3 text-sm"
-                      placeholder="Optional field key"
-                    />
-                    <datalist id="helper-field-options">
+                    >
+                      <option value="">Select field</option>
                       {fieldOptions.map((item) => (
-                        <option key={item} value={item} />
+                        <option key={item} value={item}>{item}</option>
                       ))}
-                    </datalist>
+                    </select>
                   </label>
                   <label className="grid gap-1">
                     <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">Name</span>
@@ -384,7 +439,7 @@ export default function AdminHelperPage() {
                     <div className="grid min-w-[920px] gap-2 lg:grid-cols-2">
                     {rows.map(({ item, index }) => {
                       const isSaved = savedKeyMap.has(`${String(item.section || "").trim().toLowerCase()}::${String(item.field || "").trim().toLowerCase()}::${String(item.name || "").trim().toLowerCase()}`);
-                      const rowFieldOptions = getFieldSuggestions(scope, item.section || section);
+                      const rowFieldOptions = getFieldSuggestions(scope, item.section || section, items);
                       return (
                       <div
                         key={`term-${item.section}-${item.field || "none"}-${item.name}-${index}`}

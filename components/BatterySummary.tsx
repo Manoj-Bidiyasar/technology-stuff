@@ -12,12 +12,21 @@ function withUnit(value: string | number | undefined, unit: string): string {
 
 export default function BatterySummary({ battery }: BatterySummaryProps) {
   const source = battery || {};
+  const capacityTypical = withUnit(source.capacityTypical, "mAh");
+  const capacityRated = withUnit(source.capacityRated, "mAh");
+  const capacity = capacityTypical || withUnit(source.capacity, "mAh");
+  const capacityLine = capacityTypical && capacityRated
+    ? `${capacityTypical} (Typical), ${capacityRated} (Rated)`
+    : capacity || capacityRated;
+  const wiredText = source.wired?.supported
+    ? `${withUnit(source.wired?.maxPower, "W") || "Wired"}${source.wired?.protocol ? ` ${source.wired.protocol}` : ""} charging`
+    : "Wired charging info pending";
 
   const items = [
-    { icon: "??", text: source.capacity ? `${withUnit(source.capacity, "mAh")} battery` : "Battery info pending" },
-    { icon: "?", text: source.maxChargingSupport ? `${withUnit(source.maxChargingSupport, "W")} fast charging` : "Charging info pending" },
+    { icon: "??", text: capacityLine ? `${capacityLine} battery` : "Battery info pending" },
+    { icon: "?", text: wiredText },
     source.chargerInBox?.available
-      ? { icon: "??", text: `${withUnit(source.chargerInBox?.power, "W") || "Charger"} charger in box` }
+      ? { icon: "??", text: `${withUnit(source.chargerInBox?.power, "W") || "Charger"} ${source.chargerInBox?.protocol ? `${source.chargerInBox.protocol} ` : ""}charger in box` }
       : null,
     source.wireless?.supported
       ? { icon: "??", text: `${withUnit(source.wireless?.maxPower, "W") || "Wireless"} wireless charging` }

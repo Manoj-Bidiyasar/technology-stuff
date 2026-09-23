@@ -1,7 +1,6 @@
 ﻿"use client";
 
 import { useState } from "react";
-import Tag from "@/components/Tag";
 import type { ProductBattery } from "@/lib/types/content";
 
 type BatteryDetailsCollapseProps = {
@@ -24,6 +23,12 @@ export default function BatteryDetailsCollapse({ battery }: BatteryDetailsCollap
     : "Not Supported";
 
   const wirelessSpeed = mapRows(source.wireless?.speed);
+  const reverseWirelessRow = source.reverseWireless?.supported
+    ? `Supported${source.reverseWireless?.maxPower ? ` (${source.reverseWireless.maxPower}W)` : ""}`
+    : "Not Supported";
+  const reverseWiredRow = source.reverseWired?.supported
+    ? `Supported${source.reverseWired?.maxPower ? ` (${source.reverseWired.maxPower}W)` : ""}`
+    : "Not Supported";
 
   return (
     <section className="rounded-xl border border-slate-200 bg-white">
@@ -52,12 +57,16 @@ export default function BatteryDetailsCollapse({ battery }: BatteryDetailsCollap
               </div>
             </div>
 
-            <div className="grid grid-cols-[160px_16px_minmax(0,1fr)] items-center gap-3 px-3 py-2.5">
-              <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Other Features</p>
+            <div className="grid grid-cols-[160px_16px_minmax(0,1fr)] items-center gap-3 border-b border-slate-100 px-3 py-2.5">
+              <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Reverse Wireless</p>
               <p className="text-sm font-semibold text-slate-500">-</p>
-              <div className="flex flex-wrap gap-2">
-                {(source.features || []).length > 0 ? (source.features || []).map((item) => <Tag key={item}>{item}</Tag>) : <Tag>-</Tag>}
-              </div>
+              <p className="text-sm font-semibold text-slate-900">{reverseWirelessRow}</p>
+            </div>
+
+            <div className="grid grid-cols-[160px_16px_minmax(0,1fr)] items-center gap-3 px-3 py-2.5">
+              <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Reverse Wired</p>
+              <p className="text-sm font-semibold text-slate-500">-</p>
+              <p className="text-sm font-semibold text-slate-900">{reverseWiredRow}</p>
             </div>
           </div>
         </div>

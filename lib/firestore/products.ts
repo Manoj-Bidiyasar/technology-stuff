@@ -181,7 +181,7 @@ function getResolutionBucket(product: Product): string | null {
 }
 
 function parseChargingWatt(product: Product): number | null {
-  const raw = `${String(product.battery?.maxChargingSupport || "")} ${String(product.specs?.charging || "")}`.toLowerCase();
+  const raw = `${String(product.battery?.wired?.maxPower || "")} ${String(product.specs?.charging || "")}`.toLowerCase();
   const matches = raw.match(/(\d+)\s*w/gi) || [];
   let max = 0;
   for (const m of matches) {
@@ -282,6 +282,8 @@ function hasVolte(product: Product): boolean {
 }
 
 function hasFaceUnlock(product: Product): boolean {
+  if (product.security?.faceUnlock?.available === true) return true;
+  if (product.security?.faceUnlock?.available === false) return false;
   const type = String(product.security?.faceUnlock?.type || "").trim().toLowerCase();
   return Boolean(type) && type !== "none";
 }
@@ -333,6 +335,20 @@ function toDocId(input: Partial<Product>): string {
   return fromSlug || "untitled-product";
 }
 
+function stripUndefinedDeep(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value.map((item) => stripUndefinedDeep(item)).filter((item) => item !== undefined);
+  }
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>)
+        .map(([key, entry]) => [key, stripUndefinedDeep(entry)] as const)
+        .filter(([, entry]) => entry !== undefined),
+    );
+  }
+  return value;
+}
+
 function normalizeProduct(input: Partial<Product>): Product {
   const normalizedSlug = toDocId(input);
   return {
@@ -349,7 +365,7 @@ function normalizeProduct(input: Partial<Product>): Product {
         }
       : undefined,
     status: normalizeProductStatus(input.status),
-    scheduledAt: input.status === "scheduled" ? input.scheduledAt : undefined,
+    ...(input.status === "scheduled" && input.scheduledAt ? { scheduledAt: input.scheduledAt } : {}),
     shortDescription: input.shortDescription || "",
     images: Array.isArray(input.images) ? input.images.filter(Boolean) : [],
     specs: input.specs || {},
@@ -1116,38 +1132,43 @@ export async function createProduct(data: Product): Promise<string> {
   const payload = normalizeProduct(data);
   const id = payload.slug;
   await productsRef.doc(id).set({
-    ...payload,
+    ...(stripUndefinedDeep(payload) as Record<string, unknown>),
     createdAt: FieldValue.serverTimestamp(),
     updatedAt: FieldValue.serverTimestamp(),
   }, { merge: true });
   return id;
 }
 
-export async function updateProduct(id: string, data: Partial<Product>): Promise<void> {
+export async function updateProduct(id: string, data: Partial<Product>): Promise<string> {
   const oldRef = productsRef.doc(id);
   const oldDoc = await oldRef.get();
   const oldData = oldDoc.exists ? (oldDoc.data() as Partial<Product>) : {};
   const payload = normalizeProduct({ ...oldData, ...data });
   const nextId = payload.slug || id;
   const nextRef = productsRef.doc(nextId);
+  const writePayload = {
+    ...(stripUndefinedDeep(payload) as Record<string, unknown>),
+    ...(payload.status === "scheduled" ? {} : { scheduledAt: FieldValue.delete() }),
+  };
 
   if (nextId !== id) {
     await nextRef.set({
       ...oldData,
-      ...payload,
+      ...writePayload,
       updatedAt: FieldValue.serverTimestamp(),
     }, { merge: true });
     if (oldDoc.exists) {
       await oldRef.delete();
     }
-    return;
+    return nextId;
   }
 
   await nextRef.set({
     ...oldData,
-    ...payload,
+    ...writePayload,
     updatedAt: FieldValue.serverTimestamp(),
   }, { merge: true });
+  return nextId;
 }
 
 export async function deleteProduct(id: string): Promise<void> {

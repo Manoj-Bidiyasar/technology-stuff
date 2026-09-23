@@ -1,6 +1,14 @@
 {
   "processor": [
     {
+      "section": "Basic",
+      "field": "announced",
+      "name": "dff",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-07-28T17:56:11.852Z"
+    },
+    {
       "section": "AI",
       "field": "aiEngine",
       "name": "Apple Neural Engine",
@@ -493,7 +501,1016 @@
       "createdAt": "2026-03-17T12:50:00.000Z"
     }
   ],
-  "smartphone": [],
+  "smartphone": [
+    {
+      "section": "Performance",
+      "field": "Other AI Feature",
+      "name": "x3",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-09-22T20:16:40.704Z"
+    },
+    {
+      "section": "Performance",
+      "field": "Other AI Feature",
+      "name": "x4",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-09-22T20:16:40.704Z"
+    },
+    {
+      "section": "Performance",
+      "field": "Other AI Feature",
+      "name": "x2",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-09-22T20:16:20.521Z"
+    },
+    {
+      "section": "Performance",
+      "field": "Other AI Feature",
+      "name": "x1",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-09-22T20:16:10.761Z"
+    },
+    {
+      "section": "Performance",
+      "field": "Additional Chip Other Feature",
+      "name": "m1, m2",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-09-22T20:05:38.106Z"
+    },
+    {
+      "section": "Performance",
+      "field": "Additional Chip Other Feature",
+      "name": "m2",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-09-22T20:05:24.507Z"
+    },
+    {
+      "section": "Performance",
+      "field": "Additional Chip Other Feature",
+      "name": "m1",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-09-22T20:05:15.186Z"
+    },
+    {
+      "section": "Performance",
+      "field": "Additional Chip",
+      "name": "l1, ll2",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-09-22T20:05:05.273Z"
+    },
+    {
+      "section": "Performance",
+      "field": "Additional Chip",
+      "name": "l2",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-09-22T20:04:50.322Z"
+    },
+    {
+      "section": "Performance",
+      "field": "Additional Chip",
+      "name": "l1",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-09-22T20:04:41.029Z"
+    },
+    {
+      "section": "Performance",
+      "field": "Other Performance Feature",
+      "name": "k1, k2",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-09-22T20:04:30.068Z"
+    },
+    {
+      "section": "Performance",
+      "field": "Other Performance Feature",
+      "name": "k2",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-09-22T20:04:19.735Z"
+    },
+    {
+      "section": "Performance",
+      "field": "Other Performance Feature",
+      "name": "k1",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-09-22T20:04:09.794Z"
+    },
+    {
+      "section": "Performance",
+      "field": "Cooling System",
+      "name": "j1, j2",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-09-22T20:04:01.050Z"
+    },
+    {
+      "section": "Performance",
+      "field": "Cooling System",
+      "name": "j2",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-09-22T20:03:47.257Z"
+    },
+    {
+      "section": "Performance",
+      "field": "Cooling System",
+      "name": "j1",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-09-22T20:03:37.623Z"
+    },
+    {
+      "section": "Performance",
+      "field": "Other AI Feature",
+      "name": "i1, i2",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-09-22T20:03:27.242Z"
+    },
+    {
+      "section": "Performance",
+      "field": "Other AI Feature",
+      "name": "i2",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-09-22T20:03:10.470Z"
+    },
+    {
+      "section": "Performance",
+      "field": "Other AI Feature",
+      "name": "i1",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-09-22T20:03:01.648Z"
+    },
+    {
+      "section": "Performance",
+      "field": "AI Engine/NPU",
+      "name": "h1, h2",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-09-22T20:02:49.219Z"
+    },
+    {
+      "section": "Performance",
+      "field": "AI Engine/NPU",
+      "name": "h2",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-09-22T20:02:39.049Z"
+    },
+    {
+      "section": "Performance",
+      "field": "AI Engine/NPU",
+      "name": "H1",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-09-22T20:02:30.304Z"
+    },
+    {
+      "section": "Storage & Variants",
+      "field": "SD Card Type",
+      "name": "hghjgj, vhgfhg",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-09-22T20:00:40.550Z"
+    },
+    {
+      "section": "Storage & Variants",
+      "field": "SD Card Type",
+      "name": "hhghjg",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-09-22T20:00:29.363Z"
+    },
+    {
+      "section": "Storage & Variants",
+      "field": "SD Card Type",
+      "name": "fff",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-09-22T20:00:20.626Z"
+    },
+    {
+      "section": "Battery & Charging",
+      "field": "Charging Protocol",
+      "name": "rev wireless 10, rev wireless 11",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-09-22T19:02:41.282Z"
+    },
+    {
+      "section": "Battery & Charging",
+      "field": "Charging Protocol",
+      "name": "rev wireless 2",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-09-22T19:02:29.036Z"
+    },
+    {
+      "section": "Battery & Charging",
+      "field": "Charging Protocol",
+      "name": "rev wireless 1",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-09-22T19:02:17.264Z"
+    },
+    {
+      "section": "Battery & Charging",
+      "field": "Charging Protocol",
+      "name": "wireless 10, wireless 12",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-09-22T19:02:03.657Z"
+    },
+    {
+      "section": "Battery & Charging",
+      "field": "Charging Protocol",
+      "name": "wireless 2",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-09-22T19:01:45.446Z"
+    },
+    {
+      "section": "Battery & Charging",
+      "field": "Charging Protocol",
+      "name": "wireless 1",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-09-22T19:01:34.591Z"
+    },
+    {
+      "section": "Battery & Charging",
+      "field": "Charging Protocol",
+      "name": "Rev Wired 10, Rev Wired 11",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-09-22T19:01:15.930Z"
+    },
+    {
+      "section": "Battery & Charging",
+      "field": "Charging Protocol",
+      "name": "Rev Wired 2",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-09-22T19:00:59.697Z"
+    },
+    {
+      "section": "Battery & Charging",
+      "field": "Charging Protocol",
+      "name": "Rev Wired 1",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-09-22T19:00:50.588Z"
+    },
+    {
+      "section": "Battery & Charging",
+      "field": "Charging Protocol",
+      "name": "Max Wired 10, Max Wired 11",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-09-22T19:00:33.918Z"
+    },
+    {
+      "section": "Battery & Charging",
+      "field": "Charging Protocol",
+      "name": "Max Wired 2",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-09-22T19:00:16.291Z"
+    },
+    {
+      "section": "Battery & Charging",
+      "field": "Charging Protocol",
+      "name": "Max Wired 1",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-09-22T19:00:02.626Z"
+    },
+    {
+      "section": "Battery & Charging",
+      "field": "Charging Protocol",
+      "name": "Wired 10, Wired 11",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-09-22T18:59:48.850Z"
+    },
+    {
+      "section": "Battery & Charging",
+      "field": "Charging Protocol",
+      "name": "Wired 2",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-09-22T18:59:29.313Z"
+    },
+    {
+      "section": "Battery & Charging",
+      "field": "Charging Protocol",
+      "name": "Wired 1",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-09-22T18:59:17.142Z"
+    },
+    {
+      "section": "Battery & Charging",
+      "field": "Life Cycle",
+      "name": "1600 Cycle (80%), 1800 Cycle (60%)",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-09-22T18:35:22.907Z"
+    },
+    {
+      "section": "Battery & Charging",
+      "field": "Life Cycle",
+      "name": "1800 Cycle (80%)",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-09-22T18:35:07.607Z"
+    },
+    {
+      "section": "Battery & Charging",
+      "field": "Life Cycle",
+      "name": "1600 Cycle (80%)",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-09-22T18:34:53.071Z"
+    },
+    {
+      "section": "Battery & Charging",
+      "field": "Charging Speed",
+      "name": "40%: 10 min, 50%: 9 min",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-09-22T18:28:05.990Z"
+    },
+    {
+      "section": "Battery & Charging",
+      "field": "Charging Speed",
+      "name": "50%: 8 min",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-09-22T18:27:44.298Z"
+    },
+    {
+      "section": "Battery & Charging",
+      "field": "Charging Speed",
+      "name": "40%: 10 min",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-09-22T18:27:29.778Z"
+    },
+    {
+      "section": "Battery & Charging",
+      "field": "Charging Speed",
+      "name": "40%: 10 min",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-09-22T18:27:18.909Z"
+    },
+    {
+      "section": "Battery & Charging",
+      "field": "Other Charging Features",
+      "name": "J1, J2",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-09-22T18:26:51.721Z"
+    },
+    {
+      "section": "Battery & Charging",
+      "field": "Other Charging Features",
+      "name": "J2",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-09-22T18:26:41.444Z"
+    },
+    {
+      "section": "Battery & Charging",
+      "field": "Other Charging Features",
+      "name": "J1",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-09-22T18:26:32.986Z"
+    },
+    {
+      "section": "Battery & Charging",
+      "field": "Other Battery Features",
+      "name": "I1, I2",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-09-22T18:26:21.919Z"
+    },
+    {
+      "section": "Battery & Charging",
+      "field": "Other Battery Features",
+      "name": "I3",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-09-22T18:26:10.053Z"
+    },
+    {
+      "section": "Battery & Charging",
+      "field": "Other Battery Features",
+      "name": "I2",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-09-22T18:26:00.571Z"
+    },
+    {
+      "section": "Battery & Charging",
+      "field": "Other Battery Features",
+      "name": "I1",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-09-22T18:25:51.827Z"
+    },
+    {
+      "section": "Battery & Charging",
+      "field": "Charging Certification",
+      "name": "H1, H2",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-09-22T18:25:40.354Z"
+    },
+    {
+      "section": "Battery & Charging",
+      "field": "Charging Certification",
+      "name": "H2",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-09-22T18:25:29.427Z"
+    },
+    {
+      "section": "Battery & Charging",
+      "field": "Charging Certification",
+      "name": "H1",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-09-22T18:25:19.437Z"
+    },
+    {
+      "section": "Battery & Charging",
+      "field": "Battery Certification",
+      "name": "G1, G2",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-09-22T18:25:06.854Z"
+    },
+    {
+      "section": "Battery & Charging",
+      "field": "Battery Certification",
+      "name": "g2",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-09-22T18:24:55.060Z"
+    },
+    {
+      "section": "Battery & Charging",
+      "field": "Battery Certification",
+      "name": "g1",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-09-22T18:24:46.742Z"
+    },
+    {
+      "section": "Battery & Charging",
+      "field": "Battery Type",
+      "name": "dffd, kdfjk",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-09-22T18:20:06.558Z"
+    },
+    {
+      "section": "Battery & Charging",
+      "field": "Battery Type",
+      "name": "Graphene-enhanced Li-ion",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-09-22T18:19:54.759Z"
+    },
+    {
+      "section": "Battery & Charging",
+      "field": "Battery Type",
+      "name": "Silicon-Carbon",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-09-22T18:18:50.618Z"
+    },
+    {
+      "section": "Battery & Charging",
+      "field": "Battery Type",
+      "name": "Li-Po",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-09-22T18:18:37.551Z"
+    },
+    {
+      "section": "Battery & Charging",
+      "field": "Battery Type",
+      "name": "Li-ion",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-09-22T18:18:26.516Z"
+    },
+    {
+      "section": "Battery & Charging",
+      "field": "Battery Type",
+      "name": "Graphene-enhanced Li-ion",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-09-22T18:18:10.756Z"
+    },
+    {
+      "section": "Battery & Charging",
+      "field": "Battery Type",
+      "name": "Dual-cell Silicon-Carbon",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-09-22T18:17:41.148Z"
+    },
+    {
+      "section": "Battery & Charging",
+      "field": "Battery Type",
+      "name": "Dual-cell Li-Po",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-09-22T18:17:03.709Z"
+    },
+    {
+      "section": "Multimedia",
+      "field": "Other Multimedia",
+      "name": "1w",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-09-22T18:16:30.321Z"
+    },
+    {
+      "section": "Multimedia",
+      "field": "Other Multimedia",
+      "name": "a1",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-09-22T18:16:21.396Z"
+    },
+    {
+      "section": "Multimedia",
+      "field": "Other Multimedia",
+      "name": "a2, A2, A100&$%",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-09-22T18:16:13.443Z"
+    },
+    {
+      "section": "Network & Connectivity",
+      "field": "5G Band",
+      "name": "n6",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-09-22T17:14:44.525Z"
+    },
+    {
+      "section": "Network & Connectivity",
+      "field": "5G Band",
+      "name": "n1",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-09-22T17:14:36.055Z"
+    },
+    {
+      "section": "Network & Connectivity",
+      "field": "5G Band",
+      "name": "n1, n2",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-09-22T17:14:24.024Z"
+    },
+    {
+      "section": "Network & Connectivity",
+      "field": "4G Band",
+      "name": "860",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-09-22T17:14:13.592Z"
+    },
+    {
+      "section": "Network & Connectivity",
+      "field": "4G Band",
+      "name": "840",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-09-22T17:14:00.095Z"
+    },
+    {
+      "section": "Network & Connectivity",
+      "field": "4G Band",
+      "name": "840, 850",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-09-22T17:13:51.296Z"
+    },
+    {
+      "section": "Network & Connectivity",
+      "field": "USB Type",
+      "name": "Micro-USB",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-09-22T17:06:52.930Z"
+    },
+    {
+      "section": "Network & Connectivity",
+      "field": "USB Type",
+      "name": "Lightning",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-09-22T15:11:20.169Z"
+    },
+    {
+      "section": "Network & Connectivity",
+      "field": "USB Type",
+      "name": "Micro USB",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-09-22T15:10:25.933Z"
+    },
+    {
+      "section": "Network & Connectivity",
+      "field": "USB Type",
+      "name": "USB Type-C",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-09-22T15:10:07.137Z"
+    },
+    {
+      "section": "Security & Sensors",
+      "field": "Additional Sensors",
+      "name": "ADD1,  Add 2",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-09-22T14:54:36.257Z"
+    },
+    {
+      "section": "Security & Sensors",
+      "field": "Additional Sensors",
+      "name": "Add 2",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-09-22T14:54:24.200Z"
+    },
+    {
+      "section": "Security & Sensors",
+      "field": "Additional Sensors",
+      "name": "ADD 1",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-09-22T14:54:13.678Z"
+    },
+    {
+      "section": "Network & Connectivity",
+      "field": "bluetooth",
+      "name": "8",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-09-22T14:40:43.009Z"
+    },
+    {
+      "section": "Network & Connectivity",
+      "field": "Other Network",
+      "name": "VoLTE, VoNR",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-09-22T14:39:47.574Z"
+    },
+    {
+      "section": "Network & Connectivity",
+      "field": "Other Network",
+      "name": "VoNR",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-09-22T14:39:33.496Z"
+    },
+    {
+      "section": "Network & Connectivity",
+      "field": "Other Network",
+      "name": "VoLTE",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-09-22T14:39:22.210Z"
+    },
+    {
+      "section": "Security & Sensors",
+      "field": "Face Unlock Technology",
+      "name": "Dual-Camera Depth",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-09-21T19:54:16.075Z"
+    },
+    {
+      "section": "Security & Sensors",
+      "field": "Face Unlock Technology",
+      "name": "3D Stereo",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-09-21T19:53:59.954Z"
+    },
+    {
+      "section": "Security & Sensors",
+      "field": "Face Unlock Technology",
+      "name": "3D ToF",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-09-21T19:53:43.284Z"
+    },
+    {
+      "section": "Security & Sensors",
+      "field": "Face Unlock Technology",
+      "name": "3D Structured Light",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-09-21T19:53:27.553Z"
+    },
+    {
+      "section": "Security & Sensors",
+      "field": "Face Unlock Technology",
+      "name": "Basic Face Unlock",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-09-21T19:53:05.659Z"
+    },
+    {
+      "section": "Security & Sensors",
+      "field": "Face Unlock Technology",
+      "name": "2D Face Unlock",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-09-21T19:52:48.092Z"
+    },
+    {
+      "section": "Security & Sensors",
+      "field": "Fingerprint Technology",
+      "name": "Capacitive",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-09-21T19:52:21.010Z"
+    },
+    {
+      "section": "Security & Sensors",
+      "field": "Fingerprint Technology",
+      "name": "Ultrasonic",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-09-21T19:52:04.048Z"
+    },
+    {
+      "section": "Security & Sensors",
+      "field": "Fingerprint Technology",
+      "name": "Optical",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-09-21T19:51:46.393Z"
+    },
+    {
+      "section": "Security & Sensors",
+      "field": "Fingerprint Position",
+      "name": "In-Display",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-09-21T19:51:12.258Z"
+    },
+    {
+      "section": "Security & Sensors",
+      "field": "Fingerprint Position",
+      "name": "Front Mounted",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-09-21T19:50:51.163Z"
+    },
+    {
+      "section": "Security & Sensors",
+      "field": "Fingerprint Position",
+      "name": "Top Mounted",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-09-21T19:50:37.753Z"
+    },
+    {
+      "section": "Security & Sensors",
+      "field": "Fingerprint Position",
+      "name": "Side Mounted",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-09-21T19:50:26.373Z"
+    },
+    {
+      "section": "Security & Sensors",
+      "field": "Fingerprint Position",
+      "name": "Rear Mounted",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-09-21T19:50:14.472Z"
+    },
+    {
+      "section": "Software",
+      "field": "Custom UI",
+      "name": "ddd",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-09-21T19:48:12.106Z"
+    },
+    {
+      "section": "Software",
+      "field": "Custom UI",
+      "name": "hello",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-09-21T19:47:50.582Z"
+    },
+    {
+      "section": "Storage & Variants",
+      "field": "Other Memory Features",
+      "name": "dhkjhkjds, jhdjskhkds",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-09-21T17:30:26.476Z"
+    },
+    {
+      "section": "Storage & Variants",
+      "field": "Other Memory Features",
+      "name": "dkjhkjdsh",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-09-21T17:30:09.074Z"
+    },
+    {
+      "section": "Storage & Variants",
+      "field": "Other Memory Features",
+      "name": "igfkjhjkdfh",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-09-21T17:29:54.385Z"
+    },
+    {
+      "section": "Design & Build",
+      "field": "Posture Note",
+      "name": "hfkjdhjfhds, jhdjkhjfds",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-09-21T10:38:00.257Z"
+    },
+    {
+      "section": "Design & Build",
+      "field": "Posture Note",
+      "name": "hdfsjkhkjhds",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-09-21T10:37:49.222Z"
+    },
+    {
+      "section": "Design & Build",
+      "field": "Posture Note",
+      "name": "jjhfgdgjs",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-09-21T10:37:39.848Z"
+    },
+    {
+      "section": "Design & Build",
+      "field": "Other Design Features",
+      "name": "1, de, 2",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-09-20T19:31:49.968Z"
+    },
+    {
+      "section": "Design & Build",
+      "field": "Other Design Features",
+      "name": "stylus",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-09-20T19:31:33.280Z"
+    },
+    {
+      "section": "Design & Build",
+      "field": "Other Design Features",
+      "name": "s pen",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-09-20T19:31:21.290Z"
+    },
+    {
+      "section": "Design & Build",
+      "field": "IP Rating",
+      "name": "IP68, IP69",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-09-20T19:30:59.389Z"
+    },
+    {
+      "section": "Design & Build",
+      "field": "IP Rating",
+      "name": "IP69",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-09-20T19:30:44.388Z"
+    },
+    {
+      "section": "Design & Build",
+      "field": "IP Rating",
+      "name": "IP68",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-09-20T19:30:31.767Z"
+    },
+    {
+      "section": "Design & Build",
+      "field": "Frame",
+      "name": "aluminium, metal",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-09-20T19:30:20.737Z"
+    },
+    {
+      "section": "Design & Build",
+      "field": "Frame",
+      "name": "metal",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-09-20T19:29:55.580Z"
+    },
+    {
+      "section": "Design & Build",
+      "field": "Frame",
+      "name": "Aluminium",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-09-20T19:29:46.095Z"
+    },
+    {
+      "section": "Design & Build",
+      "field": "Design Style",
+      "name": "jvhsjhjvk, ghjdsghjgds67",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-09-20T19:29:31.197Z"
+    },
+    {
+      "section": "Design & Build",
+      "field": "Design Style",
+      "name": "fjgjgdjfdd",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-09-20T19:29:19.830Z"
+    },
+    {
+      "section": "Design & Build",
+      "field": "Back Protection",
+      "name": "gorilla glass",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-09-20T19:29:08.144Z"
+    },
+    {
+      "section": "Design & Build",
+      "field": "Back Protection",
+      "name": "Glass",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-09-20T19:28:53.535Z"
+    },
+    {
+      "section": "Design & Build",
+      "field": "Back Material",
+      "name": "metal",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-09-20T19:28:42.495Z"
+    },
+    {
+      "section": "Design & Build",
+      "field": "Back Material",
+      "name": "Plastic",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-09-20T19:28:32.384Z"
+    },
+    {
+      "section": "General",
+      "field": "All Selected Package Contents (Public Order)",
+      "name": "hello",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-09-20T19:26:52.056Z"
+    }
+  ],
   "tablet": [],
   "blog": []
 }

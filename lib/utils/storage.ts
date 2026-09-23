@@ -7,10 +7,12 @@ export function toMemoryStorageObject(memoryStorage?: MemoryStorage): MemoryStor
     internalStorage: Array.isArray(memoryStorage?.internalStorage) ? memoryStorage?.internalStorage : [],
     storageType: Array.isArray(memoryStorage?.storageType) ? memoryStorage?.storageType : [],
     virtualRam: Array.isArray(memoryStorage?.virtualRam) ? memoryStorage?.virtualRam : [],
+    virtualRamMax: memoryStorage?.virtualRamMax ?? null,
     features: Array.isArray(memoryStorage?.features) ? memoryStorage?.features : [],
     expandableStorage: {
       supported: Boolean(memoryStorage?.expandableStorage?.supported),
       max: memoryStorage?.expandableStorage?.max ?? null,
+      slotType: memoryStorage?.expandableStorage?.slotType || "",
       types: Array.isArray(memoryStorage?.expandableStorage?.types) ? memoryStorage?.expandableStorage?.types : [],
     },
   };
@@ -20,6 +22,7 @@ export function toMemoryVariants(variants?: MemoryVariant[]): MemoryVariant[] {
   if (!Array.isArray(variants)) return [];
   return variants
     .map((variant) => ({
+      model: variant?.model || "",
       ram: variant?.ram || "",
       ramType: variant?.ramType || "",
       storage: variant?.storage || "",
@@ -28,7 +31,8 @@ export function toMemoryVariants(variants?: MemoryVariant[]): MemoryVariant[] {
     }))
     .filter((variant) =>
       Boolean(
-        String(variant.ram || "").trim() ||
+        String(variant.model || "").trim() ||
+          String(variant.ram || "").trim() ||
           String(variant.ramType || "").trim() ||
           String(variant.storage || "").trim() ||
           String(variant.storageType || "").trim() ||
@@ -48,9 +52,11 @@ export function fallbackMemoryFromProduct(
     (memoryStorage.internalStorage || []).length > 0 ||
     (memoryStorage.storageType || []).length > 0 ||
     (memoryStorage.virtualRam || []).length > 0 ||
+    Boolean(String(memoryStorage.virtualRamMax || "").trim()) ||
     (memoryStorage.features || []).length > 0 ||
     Boolean(memoryStorage.expandableStorage?.supported) ||
     Boolean(String(memoryStorage.expandableStorage?.max || "").trim()) ||
+    Boolean(String(memoryStorage.expandableStorage?.slotType || "").trim()) ||
     (memoryStorage.expandableStorage?.types || []).length > 0;
 
   if (variants.length > 0 || hasMemoryStorageData) {
@@ -58,6 +64,7 @@ export function fallbackMemoryFromProduct(
   }
 
   const fallbackVariant: MemoryVariant = {
+    model: "",
     ram: product.specs?.ram || "",
     storage: product.specs?.storage || "",
     ramType: "",
@@ -72,10 +79,12 @@ export function fallbackMemoryFromProduct(
       internalStorage: fallbackVariant.storage ? [fallbackVariant.storage] : [],
       storageType: [],
       virtualRam: [],
+      virtualRamMax: null,
       features: [],
       expandableStorage: {
         supported: false,
         max: null,
+        slotType: "",
         types: [],
       },
     },

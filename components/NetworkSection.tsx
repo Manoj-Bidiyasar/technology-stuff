@@ -20,39 +20,44 @@ function formatList(list?: string[], separator = ", "): string {
   return list.map((item) => cleanValue(item)).filter(Boolean).join(separator);
 }
 
+const BLUETOOTH_FEATURE_ORDER = ["LE", "LE+Dual Audio", "A2DP", "aptX", "aptX HD", "aptX Adaptive", "LDAC", "LHDC", "AAC", "SBC", "Dual Audio"];
+
+function formatBluetoothFeatures(list?: string[]): string {
+  if (!Array.isArray(list) || list.length === 0) return "";
+  const values = list.map((item) => cleanValue(item)).filter(Boolean);
+  const position = (value: string) => {
+    const index = BLUETOOTH_FEATURE_ORDER.findIndex((item) => item.toLowerCase() === value.toLowerCase());
+    return index < 0 ? BLUETOOTH_FEATURE_ORDER.length : index;
+  };
+  return values.sort((left, right) => position(left) - position(right) || left.localeCompare(right)).join(", ");
+}
+
+function selectLatestVersion(value: unknown, orderedVersions: string[]): string {
+  const values = cleanValue(value).split(",").map((item) => item.trim()).filter(Boolean);
+  const normalized = values.map((item) => item.replace(/^wi-?fi\s*/i, "").toUpperCase());
+  const matched = orderedVersions.find((version) => normalized.includes(version.toUpperCase()));
+  return matched || values[0] || "";
+}
+
 function formatNetworkType(supported?: string[]): string {
   if (!Array.isArray(supported) || supported.length === 0) return "-";
   const normalized = supported.map((item) => cleanValue(item).toUpperCase()).filter(Boolean);
-  const has5G = normalized.includes("5G");
-  if (has5G) return "5G, 4G";
-  if (normalized.includes("4G")) return "4G";
-  if (normalized.includes("3G")) return "3G";
-  return formatList(normalized, ", ") || "-";
-}
-
-function formatBands(bands: ProductNetwork["bands"], has5G: boolean): { label: string; value: string }[] {
-  if (!bands) return [];
-  if (has5G) {
-    const fdd = formatList(bands["5G"]?.fdd);
-    const tdd = formatList(bands["5G"]?.tdd);
-    return [
-      ...(fdd ? [{ label: "FDD", value: fdd }] : []),
-      ...(tdd ? [{ label: "TDD", value: tdd }] : []),
-    ];
-  }
-
-  const fdd = formatList(bands["4G"]?.fdd);
-  const tdd = formatList(bands["4G"]?.tdd);
-  return [
-    ...(fdd ? [{ label: "FDD-LTE", value: fdd }] : []),
-    ...(tdd ? [{ label: "TD-LTE", value: tdd }] : []),
-  ];
+  const order = ["5G", "4G", "3G", "2G"];
+  return order.filter((network) => normalized.includes(network)).join(", ") || formatList(normalized, ", ") || "-";
 }
 
 function formatWifi(wifi?: ProductNetwork["wifi"]): string {
   if (!wifi) return "-";
-  const version = cleanValue(wifi.version);
-  const standards = Array.isArray(wifi.standards) ? wifi.standards.map((item) => cleanValue(item)).filter(Boolean) : [];
+  const version = selectLatestVersion(wifi.version, ["7", "6E", "6", "5", "4"]);
+  const savedStandards = Array.isArray(wifi.standards) ? wifi.standards.map((item) => cleanValue(item)).filter(Boolean) : [];
+  const standardsByVersion: Record<string, string[]> = {
+    "7": ["a", "b", "g", "n", "ac", "ax", "be"],
+    "6E": ["a", "b", "g", "n", "ac", "ax"],
+    "6": ["a", "b", "g", "n", "ac", "ax"],
+    "5": ["a", "b", "g", "n", "ac"],
+    "4": ["a", "b", "g", "n"],
+  };
+  const standards = savedStandards.length > 0 ? savedStandards : (standardsByVersion[version] || []);
   const standardsText = standards.length > 0 ? `802.11 ${standards.join("/")}` : "";
   const dualBand = wifi.dualBand ? "Dual Band" : "";
   const suffix = [standardsText, dualBand].filter(Boolean).join(", ");
@@ -66,9 +71,20 @@ function formatWifi(wifi?: ProductNetwork["wifi"]): string {
 function formatSim(sim?: ProductNetwork["sim"]): string {
   if (!sim) return "-";
   const type = cleanValue(sim.type);
-  const config = cleanValue(sim.config);
+  const slot1 = cleanValue(sim.slot1Type);
+  const slot2 = cleanValue(sim.slot2Type);
+  const config = cleanValue(sim.config) || (slot1 && slot2 ? `${slot1} + ${slot2}` : slot1);
   if (type && config) return `${type} (${config})`;
   return type || config || "-";
+}
+
+function formatUsbVersion(usb?: ProductNetwork["usb"]): string {
+  if (!usb) return "";
+  const type = cleanValue(usb.type);
+  const rawVersion = selectLatestVersion((usb.version || []).join(", "), ["4.0", "4", "3.2", "3.1", "3.0", "2.0"]);
+  const version = rawVersion === "4" ? "4.0" : rawVersion;
+  if (type && version) return `${type} ${version}`;
+  return type || (version ? `USB ${version}` : "");
 }
 
 function row(label: string, value: ReactNode) {
@@ -85,30 +101,30 @@ function row(label: string, value: ReactNode) {
 export default function NetworkSection({ network }: NetworkSectionProps) {
   const supported = network?.supported || [];
   const has5G = supported.map((item) => cleanValue(item).toUpperCase()).includes("5G");
-  const bandRows = formatBands(network?.bands, has5G);
+  const fiveGBands = formatList(network?.bands?.["5G"]?.all);
+  const fourGBands = formatList(network?.bands?.["4G"]?.all);
   const wifi = formatWifi(network?.wifi);
   const sim = formatSim(network?.sim);
-  const bluetooth = cleanValue(network?.bluetooth) || "-";
+  const bluetooth = selectLatestVersion(network?.bluetooth, ["6.0", "5.4", "5.3", "5.2", "5.1", "5.0", "4.2"]) || "-";
+  const bluetoothFeatures = formatBluetoothFeatures(network?.bluetoothFeatures);
+  const wifiFeatures = formatList(network?.wifi?.features);
+  const otherNetwork = formatList(network?.otherFeatures);
   const gps = formatList(network?.gps) || "-";
+  const usbVersion = formatUsbVersion(network?.usb);
+  const usbFeatures = formatList(network?.usb?.features);
   return (
     <div className="rounded-xl border border-slate-200 bg-white">
-      {row("Network", formatNetworkType(supported))}
-      {row(
-        has5G ? "5G Bands" : "4G Bands",
-        bandRows.length > 0 ? (
-          <div className="space-y-1">
-            {bandRows.map((item) => (
-              <p key={item.label}>
-                <span className="font-bold">{item.label}</span>: {item.value}
-              </p>
-            ))}
-          </div>
-        ) : "-",
-      )}
+      {row("Supported Network", formatNetworkType(supported))}
+      {otherNetwork ? row("Other Network", otherNetwork) : null}
+      {has5G ? (fiveGBands ? row("5G Band", fiveGBands) : null) : (fourGBands ? row("4G Band", fourGBands) : null)}
       {row("SIM Type", sim)}
       {row("Wi-Fi", wifi)}
+      {wifiFeatures ? row("Wi-Fi Features", wifiFeatures) : null}
       {row("Bluetooth", bluetooth)}
+      {bluetoothFeatures ? row("Bluetooth Features", bluetoothFeatures) : null}
       {row("GPS", gps)}
+      {usbVersion ? row("USB Version", usbVersion) : null}
+      {usbFeatures ? row("USB Features", usbFeatures) : null}
       {row("NFC", formatBoolean(network?.nfc))}
       {row("Infrared (IR Blaster)", formatBoolean(network?.infrared))}
     </div>

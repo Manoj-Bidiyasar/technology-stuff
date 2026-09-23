@@ -11,13 +11,51 @@ function toNumber(value: string | undefined): number | null {
   return match ? Number(match[0]) : null;
 }
 
+function cleanValue(value: unknown): string {
+  const text = String(value ?? "").trim();
+  return text && text.toLowerCase() !== "null" && text.toLowerCase() !== "undefined" ? text : "";
+}
+
+function formatStorageLimit(value: unknown): string {
+  const raw = cleanValue(value);
+  if (!raw) return "";
+  const normalized = raw.replace(/\s+/g, "").toUpperCase();
+  const numeric = toNumber(raw);
+
+  if (normalized.endsWith("TB")) return raw.toUpperCase();
+  if (normalized.endsWith("GB") && numeric && numeric >= 1024) {
+    const tb = numeric / 1024;
+    return `${Number.isInteger(tb) ? tb.toFixed(0) : tb.toFixed(1).replace(/\.0$/, "")}TB`;
+  }
+  if (/^\d+(\.\d+)?$/.test(normalized) && numeric && numeric >= 1024) {
+    const tb = numeric / 1024;
+    return `${Number.isInteger(tb) ? tb.toFixed(0) : tb.toFixed(1).replace(/\.0$/, "")}TB`;
+  }
+  if (/^\d+(\.\d+)?$/.test(normalized) && numeric) return `${numeric}GB`;
+  return raw.toUpperCase();
+}
+
+function formatVirtualRamDisplay(value: unknown): string {
+  const raw = cleanValue(value);
+  if (!raw) return "";
+  if (/up to/i.test(raw)) return raw;
+  const normalized = raw.replace(/\s+/g, "").toUpperCase();
+  if (normalized.endsWith("GB")) return `Up to ${normalized}`;
+  const numeric = toNumber(raw);
+  return numeric ? `Up to ${numeric}GB` : raw;
+}
+
 function getVariantDisplay(variants: MemoryVariant[]): string {
   if (!variants || variants.length === 0) return "";
 
   const values = variants
     .map((variant) => {
       const ram = variant.ram || "";
-      const storage = variant.storage || "";
+      const rawStorage = variant.storage || "";
+      const storageAmount = toNumber(rawStorage);
+      const storage = storageAmount !== null && /gb\s*$/i.test(rawStorage) && storageAmount >= 1024
+        ? `${Number.isInteger(storageAmount / 1024) ? storageAmount / 1024 : Number((storageAmount / 1024).toFixed(1))}TB`
+        : rawStorage;
       if (!ram && !storage) return "";
       if (!ram) return storage;
       if (!storage) return ram;
@@ -63,7 +101,14 @@ function getMaxValue(values: string[]): number {
 }
 
 function normalizeVariants(memoryStorage: MemoryStorage, variants: MemoryVariant[]): MemoryVariant[] {
-  if (variants.length > 0) return variants;
+  if (variants.length > 0) {
+    return variants.map((variant) => ({
+      ...variant,
+      ramType: variant.ramType || memoryStorage.ramType?.[0] || "",
+      storageType: variant.storageType || memoryStorage.storageType?.[0] || "",
+      virtualRam: variant.virtualRam || memoryStorage.virtualRam?.[0] || "",
+    }));
+  }
 
   const ram = memoryStorage.ram || [];
   const ramType = memoryStorage.ramType || [];
@@ -93,14 +138,22 @@ export default function StorageSpecsTable({ memoryStorage, variants }: StorageSp
 
   const vramValues = safeVariants.map((variant) => variant.virtualRam || "").filter(Boolean);
   const maxVirtualRam = getMaxValue(vramValues);
-  const virtualRamDisplay = maxVirtualRam > 0 ? `Up to ${maxVirtualRam}GB` : "";
+  const virtualRamDisplay = cleanValue(safeMemory.virtualRamMax)
+    ? formatVirtualRamDisplay(safeMemory.virtualRamMax)
+    : maxVirtualRam > 0
+      ? `Up to ${maxVirtualRam}GB`
+      : "";
 
   const expandable = safeMemory.expandableStorage?.supported;
   const expandableStorage = expandable
-    ? `Yes${safeMemory.expandableStorage?.max ? ` (up to ${safeMemory.expandableStorage.max})` : ""}`
+    ? `Yes${safeMemory.expandableStorage?.max ? ` (up to ${formatStorageLimit(safeMemory.expandableStorage.max)})` : ""}`
     : "No";
 
-  const cardSlot = expandable ? (safeMemory.expandableStorage?.types || []).join(", ") : "";
+  const cardSlot = expandable
+    ? [cleanValue(safeMemory.expandableStorage?.slotType), ...(safeMemory.expandableStorage?.types || []).map((item) => cleanValue(item)).filter(Boolean)]
+        .filter(Boolean)
+        .join(", ")
+    : "";
 
   const rows: Array<[string, string]> = [
     ["RAM & Storage", ramAndStorage],
