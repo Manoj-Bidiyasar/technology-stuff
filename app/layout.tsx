@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Sora, Space_Mono } from "next/font/google";
-import Script from "next/script";
 import MainNav from "@/components/MainNav";
 import LayoutHeaderSearch from "@/components/LayoutHeaderSearch";
 import { listHeaderSuggestionsCached } from "@/lib/firestore/products";
@@ -34,15 +33,14 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
 
   return (
     <html lang="en">
+      <head>
+        <script
+          async
+          src={`https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=${adsenseClientId}`}
+          crossOrigin="anonymous"
+        />
+      </head>
       <body className={`${sora.variable} ${spaceMono.variable} antialiased`}>
-        {adsenseClientId ? (
-          <Script
-            async
-            crossOrigin="anonymous"
-            src={`https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=${adsenseClientId}`}
-            strategy="afterInteractive"
-          />
-        ) : null}
         <header className="sticky top-0 z-40 border-b border-white/70 bg-white/85 backdrop-blur">
           <div className="mobile-container py-3">
             <div className="flex flex-wrap items-center justify-between gap-3">
