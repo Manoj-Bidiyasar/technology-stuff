@@ -106,50 +106,6 @@ function maxRamAndStorage(product: Awaited<ReturnType<typeof getPublishedProduct
   return ramText || storageText || "";
 }
 
-function resolutionLabel(value?: string): string {
-  const raw = cleanValue(value);
-  if (!raw) return "";
-  const match = raw.replace(/\s+/g, "").match(/(\d{3,4})[x*](\d{3,4})/i);
-  if (!match) return raw;
-  const w = Number(match[1]);
-  const h = Number(match[2]);
-  const maxEdge = Math.max(w, h);
-  if (maxEdge >= 3000) return "QHD+";
-  if (maxEdge >= 2300) return "FHD+";
-  if (maxEdge >= 1700) return "HD+";
-  return "HD";
-}
-
-function normalizeDisplayType(type?: string): string {
-  const raw = cleanValue(type);
-  if (!raw) return "";
-  return raw
-    .replace(/^\d+(\.\d+)?\s*[- ]?inch\s*/i, "")
-    .replace(/\((cover|secondary|primary)\s*display\)/gi, "")
-    .replace(/\s{2,}/g, " ")
-    .trim();
-}
-
-function panelSummary(panel?: { size?: string | number; resolution?: string; type?: string }): string {
-  const size = cleanValue(panel?.size);
-  const resLabel = resolutionLabel(panel?.resolution);
-  const type = normalizeDisplayType(panel?.type);
-  const parts = [
-    size ? `${size}"` : "",
-    resLabel,
-    type,
-  ].filter(Boolean);
-  return parts.join(" ");
-}
-
-function displaySummary(product: Awaited<ReturnType<typeof getPublishedProductBySlug>>) {
-  const display = product?.display;
-  const primary = panelSummary(display?.primary || display);
-  const secondary = panelSummary(display?.secondary);
-  if (secondary) return `${primary} | ${secondary}`;
-  return primary || "";
-}
-
 function rearCameraSummary(product: Awaited<ReturnType<typeof getPublishedProductBySlug>>) {
   const fromStructured = Array.isArray(product?.rearCamera?.cameras) && product.rearCamera!.cameras!.length > 0
     ? product.rearCamera!.cameras!
@@ -257,17 +213,8 @@ function hasSummaryValue(value: ReactNode): boolean {
   return value !== null && value !== undefined && value !== false;
 }
 
-function SpecIcon({ kind }: { kind: "display" | "processor" | "memory" | "rear" | "front" | "connectivity" | "battery" }) {
+function SpecIcon({ kind }: { kind: "processor" | "memory" | "rear" | "front" | "connectivity" | "battery" }) {
   const iconClass = "h-4 w-4 text-blue-700";
-  if (kind === "display") {
-    return (
-      <svg viewBox="0 0 24 24" fill="none" className={iconClass} aria-hidden="true">
-        <rect x="7" y="2.5" width="10" height="19" rx="2.5" stroke="currentColor" strokeWidth="1.8" />
-        <path d="M10.5 5.5h3" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-        <circle cx="12" cy="18.5" r="0.9" fill="currentColor" />
-      </svg>
-    );
-  }
   if (kind === "processor") {
     return (
       <svg viewBox="0 0 24 24" fill="none" className={iconClass} aria-hidden="true">
@@ -382,8 +329,7 @@ export default async function MobileDetailPage({ params, searchParams }: MobileD
   const isNew = (product.tags || []).some((tag) => cleanValue(tag).toLowerCase() === "new");
   const launchState = getLaunchState(product.general, product.tags);
   const isUpcoming = launchState === "upcoming";
-  const quickSpecs: Array<{ key: string; value: ReactNode; kind: "display" | "processor" | "memory" | "rear" | "front" | "connectivity" | "battery" }> = [
-    { key: "display", value: displaySummary(product), kind: "display" as const },
+  const quickSpecs: Array<{ key: string; value: ReactNode; kind: "processor" | "memory" | "rear" | "front" | "connectivity" | "battery" }> = [
     { key: "processor", value: cleanValue(product.specs.processor), kind: "processor" as const },
     { key: "ram-storage", value: maxRamAndStorage(product), kind: "memory" as const },
     {
@@ -477,7 +423,7 @@ export default async function MobileDetailPage({ params, searchParams }: MobileD
             {product.shortDescription ? <p className="mt-3 text-sm text-slate-600">{product.shortDescription}</p> : null}
 
             <div className="mt-4 grid gap-3 sm:grid-cols-[0.9fr_1.1fr]">
-              <ProductImageGallery images={product.images} name={product.name} />
+              <ProductImageGallery images={product.images} allColorImages={product.allColorImages} imageVariants={product.imageVariants} imageItems={product.imageItems} colors={product.design?.colors} name={product.name} background={product.imageBackground} />
               <div className="space-y-2 p-1">
                 {quickSpecs.map((item) => (
                   <div key={item.key} className="flex items-center gap-2.5 border-b border-slate-200 pb-2.5 last:border-b-0 last:pb-0">
@@ -504,7 +450,7 @@ export default async function MobileDetailPage({ params, searchParams }: MobileD
                 Compare Now
               </Link>
             ) : null}
-            <ImageGalleryModalButton images={product.images} name={product.name} />
+            <ImageGalleryModalButton images={product.images} allColorImages={product.allColorImages} imageVariants={product.imageVariants} imageItems={product.imageItems} colors={product.design?.colors} name={product.name} background={product.imageBackground} />
             {!product.affiliateLinks.amazon && !product.affiliateLinks.flipkart ? (
               <div className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5">
                 <p className="text-sm font-semibold text-slate-700">Currently unavailable on Amazon and Flipkart.</p>

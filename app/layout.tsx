@@ -3,6 +3,7 @@ import Link from "next/link";
 import { Sora, Space_Mono } from "next/font/google";
 import MainNav from "@/components/MainNav";
 import LayoutHeaderSearch from "@/components/LayoutHeaderSearch";
+import FirebaseAnalytics from "@/components/FirebaseAnalytics";
 import { listHeaderSuggestionsCached } from "@/lib/firestore/products";
 import "./globals.css";
 
@@ -41,6 +42,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
         />
       </head>
       <body className={`${sora.variable} ${spaceMono.variable} antialiased`}>
+        <FirebaseAnalytics />
         <header className="sticky top-0 z-40 border-b border-white/70 bg-white/85 backdrop-blur">
           <div className="mobile-container py-3">
             <div className="flex flex-wrap items-center justify-between gap-3">

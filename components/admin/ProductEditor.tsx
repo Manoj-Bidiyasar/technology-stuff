@@ -3,13 +3,12 @@
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useMemo, useState } from "react";
-import ProductImageGallery from "@/components/ProductImageGallery";
-import { uploadImageToCloudinary } from "@/lib/cloudinary/upload";
+import { forwardRef, useCallback, useEffect, useMemo, useState } from "react";
 import type {
   FrontCameraUnit,
   MemoryVariant,
   Product,
+  ProductImageItem,
   ProductDisplayPanel,
   RearCameraUnit,
 } from "@/lib/types/content";
@@ -29,6 +28,7 @@ type ProductEditorProps = {
 };
 
 const DEFAULT_FLIPKART_AFFILIATE_ID = process.env.NEXT_PUBLIC_FLIPKART_AFFILIATE_ID || "";
+const CLOUDINARY_DELIVERY_URL_PREFIX = `https://res.cloudinary.com/${process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME || "dnk5tzvpv"}/image/upload/f_auto/q_auto/`;
 const PRODUCT_STATUS_FILTERS: Array<{ key: ProductStatusFilter; label: string }> = [
   { key: "all", label: "All" },
   { key: "draft", label: "Draft" },
@@ -252,6 +252,10 @@ function emptyProduct(deviceType: DeviceType): Product {
     scheduledAt: "",
     shortDescription: "",
     images: [],
+    imageItems: [],
+    allColorImages: [],
+    imageVariants: [],
+    imageBackground: "#ffffff",
     specs: {},
     performance: {},
     camera: {},
@@ -515,7 +519,6 @@ function syncMemoryProductData(product: Product): Product {
   };
 }
 
-
 function parseOptionalNumber(value: string): number | undefined {
   const trimmed = value.trim();
   if (!trimmed) return undefined;
@@ -547,6 +550,16 @@ function normalizeBandToken(value: string): string {
 function normalizeBandCsv(value: string): string {
   const tokens = splitAndCleanList(value).map(normalizeBandToken).filter(Boolean);
   return tokens.join(", ");
+}
+
+function normalizePhoneColors(value: string): string[] {
+  const seen = new Set<string>();
+  return value.split(",").map((color) => color.trim().replace(/\s+/g, " ")).filter((color) => {
+    const key = color.trim().toLocaleLowerCase();
+    if (!key || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }
 
 function sortBandTokens(values: Array<string | undefined>): string[] {
@@ -725,8 +738,163 @@ function Field({
   );
 }
 
-function TextInput(props: React.InputHTMLAttributes<HTMLInputElement>) {
-  return <input {...props} className={`rounded-lg border border-slate-200 px-3 py-2 ${props.className || ""}`.trim()} />;
+const TextInput = forwardRef<HTMLInputElement, React.InputHTMLAttributes<HTMLInputElement>>(function TextInput(props, ref) {
+  return <input {...props} ref={ref} className={`rounded-lg border border-slate-200 px-3 py-2 ${props.className || ""}`.trim()} />;
+});
+
+function isCloudinaryDeliveryUrl(value: string): boolean {
+  try {
+    const parsed = new URL(value);
+    return parsed.protocol === "https:" && (parsed.hostname === "cloudinary.com" || parsed.hostname.endsWith(".cloudinary.com"));
+  } catch {
+    return false;
+  }
+}
+
+const PRODUCT_IMAGE_PURPOSES = ["Main image", "All colors", "Front", "Back", "Front and back", "Left side", "Right side", "Left-right", "Top", "Bottom", "Top-bottom", "Side views", "Camera detail", "Other"];
+
+function getProductImageItems(product: Product): ProductImageItem[] {
+  const existing = Array.isArray(product.imageItems)
+    ? product.imageItems.filter((item) => item && typeof item.url === "string" && item.url.trim()).map((item) => ({
+      purpose: item.purpose || "Other",
+      color: item.color || "",
+      url: item.url.trim(),
+    }))
+    : [];
+  if (existing.length) return existing;
+
+  const migrated: ProductImageItem[] = [];
+  const seen = new Set<string>();
+  const add = (item: ProductImageItem) => {
+    if (!item.url || seen.has(item.url)) return;
+    seen.add(item.url);
+    migrated.push(item);
+  };
+  (product.allColorImages || []).forEach((url) => add({ purpose: "All colors", color: "All colors", url }));
+  (product.imageVariants || []).forEach((variant) => variant.images.forEach((url) => add({ purpose: "Other", color: variant.color, url })));
+  (product.images || []).forEach((url) => add({ purpose: "Main image", color: "", url }));
+  return migrated;
+}
+
+function OrderedImageUrlList({
+  images,
+  onChange,
+  label,
+  disabled = false,
+}: {
+  images: string[];
+  onChange: (images: string[]) => void;
+  label: string;
+  disabled?: boolean;
+}) {
+  const [draggingIndex, setDraggingIndex] = useState<number | null>(null);
+
+  function moveImage(from: number, to: number) {
+    if (to < 0 || to >= images.length || from === to) return;
+    const next = [...images];
+    const [image] = next.splice(from, 1);
+    next.splice(to, 0, image);
+    onChange(next);
+  }
+
+  return (
+    <div className="grid gap-2">
+      {images.map((url, index) => (
+        <div
+          key={`${url}-${index}`}
+          draggable={!disabled}
+          onDragStart={() => setDraggingIndex(index)}
+          onDragOver={(event) => { if (!disabled) event.preventDefault(); }}
+          onDrop={(event) => { event.preventDefault(); if (!disabled && draggingIndex !== null) moveImage(draggingIndex, index); setDraggingIndex(null); }}
+          onDragEnd={() => setDraggingIndex(null)}
+          className={`grid min-w-0 grid-cols-[20px_48px_minmax(0,1fr)_auto] items-center gap-2 rounded-lg border bg-white p-2 ${draggingIndex === index ? "border-blue-400 opacity-60" : "border-slate-200"}`}
+        >
+          <span className="cursor-grab select-none text-center text-lg text-slate-400" aria-label={`Drag to reorder ${label} ${index + 1}`} title="Drag to reorder">⋮⋮</span>
+          <div className="relative h-12 w-12 overflow-hidden rounded border border-slate-100 bg-slate-50">
+            <Image src={url} alt={`${label} ${index + 1}`} fill className="object-contain" unoptimized />
+          </div>
+          <TextInput value={url} disabled={disabled} onChange={(event) => onChange(images.map((item, itemIndex) => itemIndex === index ? event.target.value : item))} className="w-full min-w-0 text-xs" aria-label={`${label} URL ${index + 1}`} />
+          <div className="flex items-center gap-1">
+            <button type="button" onClick={() => moveImage(index, index - 1)} disabled={disabled || index === 0} aria-label={`Move ${label} ${index + 1} up`} className="h-8 w-8 rounded border border-slate-200 text-sm font-bold text-slate-700 disabled:opacity-40">↑</button>
+            <button type="button" onClick={() => moveImage(index, index + 1)} disabled={disabled || index === images.length - 1} aria-label={`Move ${label} ${index + 1} down`} className="h-8 w-8 rounded border border-slate-200 text-sm font-bold text-slate-700 disabled:opacity-40">↓</button>
+            <button type="button" onClick={() => onChange(images.filter((_, itemIndex) => itemIndex !== index))} disabled={disabled} aria-label={`Remove ${label} ${index + 1}`} className="h-8 rounded px-2 text-xs font-semibold text-rose-700 disabled:opacity-40">Remove</button>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function ProductImageItemsEditor({
+  items,
+  colorOptions,
+  imageBackground,
+  disabled,
+  onChange,
+}: {
+  items: ProductImageItem[];
+  colorOptions: string[];
+  imageBackground: string;
+  disabled: boolean;
+  onChange: (items: ProductImageItem[]) => void;
+}) {
+  const [draggingIndex, setDraggingIndex] = useState<number | null>(null);
+  function moveImage(from: number, to: number) {
+    if (to < 0 || to >= items.length || from === to) return;
+    const next = [...items];
+    const [item] = next.splice(from, 1);
+    next.splice(to, 0, item);
+    onChange(next);
+  }
+  function updateImage(index: number, update: Partial<ProductImageItem>) {
+    onChange(items.map((item, itemIndex) => {
+      if (itemIndex !== index) return item;
+      const next = { ...item, ...update };
+      if (next.purpose === "All colors") next.color = "All colors";
+      else if (next.color.toLocaleLowerCase() === "all colors" && update.color !== "All colors") next.color = "";
+      return next;
+    }));
+  }
+  return (
+    <div className="grid gap-2">
+      {items.map((item, index) => (
+        <div
+          key={`${item.url}-${index}`}
+          onDragOver={(event) => { if (!disabled) event.preventDefault(); }}
+          onDrop={(event) => { event.preventDefault(); if (!disabled && draggingIndex !== null) moveImage(draggingIndex, index); setDraggingIndex(null); }}
+          onDragEnd={() => setDraggingIndex(null)}
+          className={`grid min-w-0 grid-cols-[24px_120px_minmax(0,1fr)_auto] items-center gap-3 rounded-lg border bg-white p-3 ${draggingIndex === index ? "border-blue-400 opacity-60" : "border-slate-200"}`}
+        >
+          <span draggable={!disabled} onDragStart={(event) => { event.dataTransfer.effectAllowed = "move"; setDraggingIndex(index); }} className="cursor-grab select-none text-center text-lg text-slate-400 active:cursor-grabbing" title="Drag to reorder" aria-label={`Drag image ${index + 1} to reorder`}>⠿</span>
+          <div style={{ backgroundColor: imageBackground === "transparent" ? "transparent" : imageBackground || "#ffffff" }} className="relative h-[120px] w-[120px] overflow-hidden rounded border border-slate-100">
+            <Image src={item.url} alt={`Product image ${index + 1}`} fill className="object-contain" unoptimized />
+          </div>
+          <div className="grid min-w-0 gap-2">
+            <TextInput aria-label={`Image ${index + 1} Cloudinary URL`} value={item.url} readOnly disabled={disabled} draggable={false} onDragStart={(event) => event.preventDefault()} className="w-full min-w-0 select-text text-xs" />
+            <div className="flex flex-wrap gap-2">
+              <label className="grid gap-1">
+                <span className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Purpose</span>
+                <select aria-label={`Image ${index + 1} purpose`} value={item.purpose} disabled={disabled} onChange={(event) => updateImage(index, { purpose: event.target.value, ...(event.target.value === "All colors" ? { color: "All colors" } : item.color === "All colors" ? { color: "" } : {}) })} className="min-w-[170px] rounded-lg border border-slate-200 px-2 py-1.5 text-xs">
+              {[...new Set([...PRODUCT_IMAGE_PURPOSES, item.purpose])].map((purpose) => <option key={purpose} value={purpose}>{purpose}</option>)}
+                </select>
+              </label>
+              <label className="grid gap-1">
+                <span className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Color</span>
+                <select aria-label={`Image ${index + 1} color`} value={item.purpose === "All colors" ? "All colors" : item.color} disabled={disabled || item.purpose === "All colors"} onChange={(event) => updateImage(index, { color: event.target.value })} className="min-w-[150px] rounded-lg border border-slate-200 px-2 py-1.5 text-xs">
+                  <option value="">No color</option>
+                  <option value="All colors">All colors</option>
+                  {colorOptions.map((color) => <option key={color} value={color}>{color}</option>)}
+                </select>
+              </label>
+            </div>
+          </div>
+          <div className="flex items-center gap-1">
+            <button type="button" onClick={() => onChange(items.filter((_, itemIndex) => itemIndex !== index))} disabled={disabled} aria-label={`Remove image ${index + 1}`} className="h-8 rounded px-2 text-xs font-semibold text-rose-700 disabled:opacity-40">Remove</button>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
 }
 
 function normalizeWifiVersion(value: string): string {
@@ -746,12 +914,14 @@ function normalizeUsbVersion(values?: string[]): string {
 }
 
 function HelperTermInput({
-  suggestions, value, onChange, commaSeparated = false, ...props
+  suggestions, value, onChange, commaSeparated = true, ...props
 }: Omit<React.InputHTMLAttributes<HTMLInputElement>, "value" | "onChange"> & {
   suggestions: string[]; value: string; onChange: (value: string) => void; commaSeparated?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState(value);
+  const [menuStyle, setMenuStyle] = useState<React.CSSProperties>({});
+  const [inputElement, setInputElement] = useState<HTMLInputElement | null>(null);
   useEffect(() => {
     setDraft(value);
   }, [value]);
@@ -761,18 +931,47 @@ function HelperTermInput({
     ? new Set(draft.split(",").map((item) => item.trim().toLowerCase()).filter(Boolean))
     : new Set<string>();
   const matches = suggestions.filter((item) => (!query || item.toLowerCase().includes(query)) && !selectedValues.has(item.toLowerCase()));
+  useEffect(() => {
+    if (!open || !inputElement) return;
+    const updateMenuPosition = () => {
+      const rect = inputElement.getBoundingClientRect();
+      const menuHeight = Math.min(224, Math.max(40, matches.length * 40));
+      const spaceBelow = window.innerHeight - rect.bottom;
+      const openUp = spaceBelow < menuHeight + 12 && rect.top > spaceBelow;
+      setMenuStyle({
+        position: "fixed",
+        left: rect.left,
+        width: rect.width,
+        ...(openUp ? { bottom: window.innerHeight - rect.top + 4, maxHeight: Math.min(menuHeight, rect.top - 12) } : { top: rect.bottom + 4, maxHeight: Math.min(menuHeight, spaceBelow - 12) }),
+      });
+    };
+    updateMenuPosition();
+    window.addEventListener("resize", updateMenuPosition);
+    window.addEventListener("scroll", updateMenuPosition, true);
+    return () => {
+      window.removeEventListener("resize", updateMenuPosition);
+      window.removeEventListener("scroll", updateMenuPosition, true);
+    };
+  }, [inputElement, matches.length, open]);
   const selectSuggestion = (suggestion: string) => {
     if (!commaSeparated) return onChange(suggestion);
-    // Keep the picker open with a fresh comma slot so several values can be
-    // selected consecutively: x1, x2, x3, x4.
-    const parts = draft.split(",").map((item) => item.trim()).filter(Boolean);
-    if (parts.some((item) => item.toLowerCase() === suggestion.toLowerCase())) return;
-    const next = `${[...parts, suggestion].join(", ")}, `;
+    const rawParts = draft.split(",");
+    const activeText = (rawParts.at(-1) || "").trim();
+    const committed = rawParts.slice(0, -1).map((item) => item.trim()).filter(Boolean);
+    const alreadySelected = [...committed, activeText].some((item) => item.toLowerCase() === suggestion.toLowerCase());
+    if (alreadySelected) return;
+    // Replace the current partial query (for example "I") with India. When
+    // the last value is already complete, append the newly selected value.
+    const nextValues = activeText && activeText.toLowerCase() === query
+      ? [...committed, suggestion]
+      : [...committed, activeText, suggestion].filter(Boolean);
+    const next = nextValues.join(", ");
     setDraft(next);
-    setOpen(true);
+    onChange(next);
+    setOpen(false);
   };
   return <div className="relative w-full">
-    <TextInput {...props} className={`w-full ${props.className || ""}`.trim()} value={inputValue} autoComplete="off" onChange={(event) => {
+    <TextInput {...props} ref={setInputElement} className={`w-full ${props.className || ""}`.trim()} value={inputValue} autoComplete="off" onChange={(event) => {
       const next = event.target.value;
       if (commaSeparated) setDraft(next);
       else onChange(next);
@@ -781,7 +980,7 @@ function HelperTermInput({
       if (commaSeparated) onChange(draft);
       setTimeout(() => setOpen(false), 120);
     }} />
-    {open && matches.length > 0 ? <div className="absolute z-50 mt-1 max-h-56 w-full overflow-auto rounded-lg border border-slate-200 bg-white shadow-lg">
+    {open && matches.length > 0 && inputElement ? <div style={menuStyle} className="z-[1000] overflow-auto rounded-lg border border-slate-200 bg-white shadow-lg">
       {matches.map((item) => <button key={item} type="button" onMouseDown={(event) => { event.preventDefault(); selectSuggestion(item); }} className="block w-full px-3 py-2 text-left text-sm text-slate-700 hover:bg-blue-50">{item}</button>)}
     </div> : null}
   </div>;
@@ -1001,12 +1200,19 @@ export default function ProductEditor({ deviceType, pageTitle, pageDescription }
   const [statusFilter, setStatusFilter] = useState<ProductStatusFilter>("all");
   const [brandFilter, setBrandFilter] = useState<string[]>([]);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
-  
+
   const [rows, setRows] = useState<Product[]>([]);
   const [form, setForm] = useState<Product>(emptyProduct(deviceType));
   const [editingId, setEditingId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-  const [uploading, setUploading] = useState(false);
+  const [imageUrlDraft, setImageUrlDraft] = useState("");
+  const [imagePurposeDraft, setImagePurposeDraft] = useState("Main image");
+  const [imageColorDraft, setImageColorDraft] = useState("");
+  const [imageAdminView, setImageAdminView] = useState<"list" | "preview">("list");
+  const [imagePreviewIndex, setImagePreviewIndex] = useState(0);
+  const [smartphoneColorsDraft, setSmartphoneColorsDraft] = useState("");
+  const [imageColorErrors, setImageColorErrors] = useState<Array<{ index: number; color: string; message: string }>>([]);
+  const [dimensionColorErrors, setDimensionColorErrors] = useState<Array<{ path: string; label: string; color: string }>>([]);
   const [flipkartSourceUrl, setFlipkartSourceUrl] = useState("");
   const [flipkartAffiliateId, setFlipkartAffiliateId] = useState(DEFAULT_FLIPKART_AFFILIATE_ID);
   const [message, setMessage] = useState("");
@@ -1030,6 +1236,9 @@ export default function ProductEditor({ deviceType, pageTitle, pageDescription }
   const [fourGBandSuggestions, setFourGBandSuggestions] = useState<string[]>([]);
   const [memoryFeatureSuggestions, setMemoryFeatureSuggestions] = useState<string[]>([]);
   const [sdCardTypeSuggestions, setSdCardTypeSuggestions] = useState<string[]>([]);
+  const [originCountrySuggestions, setOriginCountrySuggestions] = useState<string[]>([]);
+  const [cameraTermSuggestions, setCameraTermSuggestions] = useState<Record<string, string[]>>({});
+  const [displayTermSuggestions, setDisplayTermSuggestions] = useState<Record<string, string[]>>({});
   const [performanceTermSuggestions, setPerformanceTermSuggestions] = useState<Record<string, string[]>>({});
   const [designTermSuggestions, setDesignTermSuggestions] = useState<Record<string, string[]>>({});
   const [securityTermSuggestions, setSecurityTermSuggestions] = useState<Record<string, string[]>>({});
@@ -1086,7 +1295,7 @@ export default function ProductEditor({ deviceType, pageTitle, pageDescription }
       .filter((brand) => !query || brand.toLowerCase().startsWith(query) || brand.toLowerCase().includes(query))
       .slice(0, 8);
   }, [createBrand, createBrandSuggestions]);
-  
+
   const statusCounts = useMemo(() => {
     const counts = new Map<ProductStatusFilter, number>(PRODUCT_STATUS_FILTERS.map((item) => [item.key, 0]));
     rows.forEach((row) => {
@@ -1096,7 +1305,7 @@ export default function ProductEditor({ deviceType, pageTitle, pageDescription }
     });
     return counts;
   }, [rows]);
-  
+
   const brandCounts = useMemo(() => {
     const counts = new Map<string, number>();
     rows.forEach((row) => {
@@ -1331,11 +1540,14 @@ export default function ProductEditor({ deviceType, pageTitle, pageDescription }
         const fourGBandSet = new Set<string>();
         const memoryFeatureSet = new Set<string>();
         const sdCardTypeSet = new Set<string>();
+        const originCountrySet = new Set<string>();
         const designTermSets: Record<string, Set<string>> = {};
         const securityTermSets: Record<string, Set<string>> = {};
         const batteryTermSets: Record<string, Set<string>> = {};
         const multimediaTermSets: Record<string, Set<string>> = {};
         const performanceTermSets: Record<string, Set<string>> = {};
+        const cameraTermSets: Record<string, Set<string>> = {};
+        const displayTermSets: Record<string, Set<string>> = {};
 
         (json.items || []).forEach((item) => {
           if (item.status && item.status !== "approved") return;
@@ -1345,6 +1557,7 @@ export default function ProductEditor({ deviceType, pageTitle, pageDescription }
           const sectionKey = normalizeLookupKey(item.section || "");
           const fieldKey = normalizeLookupKey(item.field || "");
           const isPackageTerm = sectionKey === "general" && (!fieldKey || fieldKey.includes("packagecontent"));
+          const isOriginCountryTerm = sectionKey === "general" && (fieldKey === "origincountry" || fieldKey === "origin" || fieldKey === "country");
           const isSoftwareTerm = sectionKey === "software";
           const isNetworkTerm = sectionKey === "network" || sectionKey === "networkconnectivity";
           const isBatteryTerm = sectionKey === "battery" || sectionKey === "batterycharging";
@@ -1353,7 +1566,10 @@ export default function ProductEditor({ deviceType, pageTitle, pageDescription }
           const isMemoryTerm = sectionKey === "memorystorage" || sectionKey === "storagevariants" || sectionKey === "storage";
           const isMultimediaTerm = sectionKey === "multimedia";
           const isPerformanceTerm = sectionKey === "performance";
+          const isCameraTerm = sectionKey === "camera";
+          const isDisplayTerm = sectionKey === "display";
           if (isPackageTerm) packageSuggestions.add(canonical);
+          if (isOriginCountryTerm) originCountrySet.add(canonical);
           if (isSoftwareTerm && (fieldKey === "uiname" || fieldKey === "customui" || fieldKey === "ui")) customUiSet.add(canonical);
           if (isSoftwareTerm && fieldKey === "osversion") osVersionSet.add(canonical);
           if (isSoftwareTerm && fieldKey === "osupdates") osUpdateSet.add(canonical);
@@ -1380,6 +1596,16 @@ export default function ProductEditor({ deviceType, pageTitle, pageDescription }
             const set = performanceTermSets[fieldKey] || new Set<string>();
             set.add(canonical);
             performanceTermSets[fieldKey] = set;
+          }
+          if (isCameraTerm && fieldKey) {
+            const set = cameraTermSets[fieldKey] || new Set<string>();
+            set.add(canonical);
+            cameraTermSets[fieldKey] = set;
+          }
+          if (isDisplayTerm && fieldKey) {
+            const set = displayTermSets[fieldKey] || new Set<string>();
+            set.add(canonical);
+            displayTermSets[fieldKey] = set;
           }
           if (isDesignTerm && fieldKey) {
             const set = designTermSets[fieldKey] || new Set<string>();
@@ -1414,7 +1640,10 @@ export default function ProductEditor({ deviceType, pageTitle, pageDescription }
         setFourGBandSuggestions(Array.from(fourGBandSet).sort((left, right) => left.localeCompare(right)));
         setMemoryFeatureSuggestions(Array.from(memoryFeatureSet).sort((left, right) => left.localeCompare(right)));
         setSdCardTypeSuggestions(Array.from(sdCardTypeSet).sort((left, right) => left.localeCompare(right)));
+        setOriginCountrySuggestions(Array.from(originCountrySet).sort((left, right) => left.localeCompare(right)));
         setPerformanceTermSuggestions(Object.fromEntries(Object.entries(performanceTermSets).map(([key, values]) => [key, Array.from(values).sort((left, right) => left.localeCompare(right))])));
+        setCameraTermSuggestions(Object.fromEntries(Object.entries(cameraTermSets).map(([key, values]) => [key, Array.from(values).sort((left, right) => left.localeCompare(right))])));
+        setDisplayTermSuggestions(Object.fromEntries(Object.entries(displayTermSets).map(([key, values]) => [key, Array.from(values).sort((left, right) => left.localeCompare(right))])));
         setDesignTermSuggestions(Object.fromEntries(Object.entries(designTermSets).map(([key, values]) => [key, Array.from(values).sort((left, right) => left.localeCompare(right))])));
         setSecurityTermSuggestions(Object.fromEntries(Object.entries(securityTermSets).map(([key, values]) => [key, Array.from(values).sort((left, right) => left.localeCompare(right))])));
       } catch {
@@ -1449,6 +1678,36 @@ export default function ProductEditor({ deviceType, pageTitle, pageDescription }
 
   function setField<K extends keyof Product>(key: K, value: Product[K]) {
     setForm((prev) => ({ ...prev, [key]: value }));
+  }
+
+  const canonicalizeColor = useCallback((value: string) => {
+    const colors = form.design?.colors || [];
+    return colors.find((color) => color.trim().toLocaleLowerCase() === value.trim().toLocaleLowerCase()) || value.trim();
+  }, [form.design?.colors]);
+
+  const canonicalizeColorList = useCallback((value: string) => normalizePhoneColors(value).map(canonicalizeColor).join(", "), [canonicalizeColor]);
+
+  function setDimensionColor(path: PathKey[], value: string) {
+    updatePath(path, canonicalizeColorList(value));
+    setDimensionColorErrors([]);
+  }
+
+  function updateSmartphoneColors(value: string) {
+    setSmartphoneColorsDraft(value);
+    const colors = normalizePhoneColors(value);
+    const colorMap = new Map(colors.map((color) => [color.toLocaleLowerCase(), color]));
+    updatePath(["design", "colors"], colors);
+    setForm((previous) => ({
+      ...previous,
+      imageItems: (previous.imageItems || []).map((item) => ({
+        ...item,
+        color: item.purpose === "All colors" || item.color.toLocaleLowerCase() === "all colors"
+          ? "All colors"
+          : colorMap.get(item.color.trim().toLocaleLowerCase()) || item.color,
+      })),
+    }));
+    setImageColorDraft((previous) => colorMap.get(previous.trim().toLocaleLowerCase()) || previous);
+    setImageColorErrors([]);
   }
 
   function updatePath(path: PathKey[], value: unknown) {
@@ -2102,6 +2361,7 @@ export default function ProductEditor({ deviceType, pageTitle, pageDescription }
   }
 
   function updateSamePostureVariantField(posture: string, key: "color" | "height" | "width" | "depth" | "weight", value: string | number | undefined) {
+    if (key === "color") setDimensionColorErrors([]);
     setForm((prev) => {
       const current = Array.isArray(prev.design?.postureDimensionVariants) ? [...prev.design.postureDimensionVariants] : [];
       const matchIndex = current.findIndex((item) => cleanText(item?.posture || "").toLowerCase() === cleanText(posture).toLowerCase());
@@ -2268,12 +2528,16 @@ export default function ProductEditor({ deviceType, pageTitle, pageDescription }
     setEditingId(row.id || null);
     setDateValidationErrors({ announceDate: "", launchDate: "" });
     setPendingVariantDeleteIndex(null);
+    setSmartphoneColorsDraft((row.design?.colors || []).join(", "));
     setForm({
       ...emptyProduct(deviceType),
       ...row,
       deviceType,
       slug: row.slug,
       images: row.images || [],
+      imageItems: getProductImageItems(row),
+      allColorImages: Array.isArray(row.allColorImages) ? row.allColorImages : [],
+      imageVariants: Array.isArray(row.imageVariants) ? row.imageVariants : [],
       specs: row.specs || {},
       performance: row.performance || {},
       camera: row.camera || {},
@@ -2357,6 +2621,7 @@ export default function ProductEditor({ deviceType, pageTitle, pageDescription }
     setDateValidationErrors({ announceDate: "", launchDate: "" });
     setPendingVariantDeleteIndex(null);
     setForm(emptyProduct(deviceType));
+    setSmartphoneColorsDraft("");
     setFlipkartSourceUrl("");
     setPackageContentsInput("");
     setMessage("");
@@ -2445,23 +2710,70 @@ export default function ProductEditor({ deviceType, pageTitle, pageDescription }
     setError("");
   }
 
-  async function uploadImage(file: File | null) {
-    if (!file) return;
-    setUploading(true);
+  function addCloudinaryImageUrl() {
+    const value = imageUrlDraft.trim();
+    if (!value) {
+      setError("Paste a secure Cloudinary delivery URL.");
+      return;
+    }
+    if (!isCloudinaryDeliveryUrl(value)) {
+      setError("Paste a secure Cloudinary delivery URL.");
+      return;
+    }
+    const color = imagePurposeDraft === "All colors" ? "All colors" : canonicalizeColor(imageColorDraft);
+    const item = { purpose: imagePurposeDraft, color, url: value };
+    setField("imageItems", [...(form.imageItems || []), item]);
+    setImageUrlDraft("");
+    setImageColorDraft(color === "All colors" ? "" : color);
     setError("");
-    setMessage("");
+    setMessage("Cloudinary image added. Save the product to keep the change.");
+  }
 
+  async function copyCloudinaryDeliveryUrlPrefix() {
     try {
-      const url = await uploadImageToCloudinary(file);
-      setForm((prev) => ({ ...prev, images: [...prev.images, url] }));
-      setMessage("Image uploaded.");
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to upload image.");
-    } finally {
-      setUploading(false);
+      await navigator.clipboard.writeText(CLOUDINARY_DELIVERY_URL_PREFIX);
+      setError("");
+      setMessage("Cloudinary delivery URL prefix copied.");
+    } catch {
+      setError("Could not copy automatically. Select and copy the URL prefix shown above.");
     }
   }
 
+  function addAutomaticImageOptimizations() {
+    const value = imageUrlDraft.trim();
+    if (!value) {
+      setError("Paste a Cloudinary delivery URL first.");
+      return;
+    }
+
+    try {
+      const parsed = new URL(value);
+      if (parsed.protocol !== "https:" || !(parsed.hostname === "cloudinary.com" || parsed.hostname.endsWith(".cloudinary.com"))) {
+        setError("Paste a secure Cloudinary delivery URL.");
+        return;
+      }
+
+      const uploadPath = /\/image\/upload\/(.*)$/;
+      const match = parsed.pathname.match(uploadPath);
+      if (!match) {
+        setError("This URL must include /image/upload/.");
+        return;
+      }
+
+      const pathParts = match[1].split("/");
+      const existingTransforms = new Set(pathParts.flatMap((part) => part.split(",")));
+      const missingTransforms = ["f_auto", "q_auto"].filter((transform) => !existingTransforms.has(transform));
+      if (missingTransforms.length > 0) {
+        parsed.pathname = parsed.pathname.replace(uploadPath, `/image/upload/${missingTransforms.join("/")}/$1`);
+      }
+
+      setImageUrlDraft(parsed.toString());
+      setError("");
+      setMessage(missingTransforms.length ? "Added automatic format and quality optimization to the URL." : "This URL already has f_auto and q_auto.");
+    } catch {
+      setError("Paste a valid Cloudinary delivery URL.");
+    }
+  }
   async function onSubmit(event: React.FormEvent) {
     event.preventDefault();
     if (dateValidationErrors.announceDate || dateValidationErrors.launchDate) {
@@ -2482,12 +2794,74 @@ export default function ProductEditor({ deviceType, pageTitle, pageDescription }
     setError("");
 
     const normalizedForm = normalizeSmartphoneHelperTerms(form) as Product;
+    const canonicalDimensionValue = (value?: string) => normalizePhoneColors(value || "").map((color) => canonicalizeColor(color)).join(", ");
+    const normalizedDesign = {
+      ...(normalizedForm.design || {}),
+      normalDimensionVariants: normalizedForm.design?.normalDimensionVariants?.map((item) => ({ ...item, color: canonicalDimensionValue(item.color) })),
+      postureDimensionVariants: normalizedForm.design?.postureDimensionVariants?.map((item) => ({ ...item, color: canonicalDimensionValue(item.color) })),
+    };
+    const normalizedForSave = { ...normalizedForm, design: normalizedDesign };
+    const imageItems = (normalizedForm.imageItems || []).filter((item) => item.url.trim()).map((item) => ({
+      purpose: item.purpose || "Other",
+      color: item.purpose === "All colors" || item.color.trim().toLocaleLowerCase() === "all colors" ? "All colors" : canonicalizeColor(item.color),
+      url: item.url.trim(),
+    }));
+    const definedColors = normalizedDesign.colors || [];
+    const dimensionColorFields: Array<{ path: string; label: string; color: string }> = [];
+    (normalizedForm.design?.normalDimensionVariants || []).forEach((item, index) => {
+      normalizePhoneColors(item.color || "").forEach((color) => dimensionColorFields.push({ path: `design.normalDimensionVariants.${index}.color`, label: `Body Size & Weight color ${index + 1}`, color }));
+    });
+    (normalizedForm.design?.postureDimensionVariants || []).forEach((item, index) => {
+      normalizePhoneColors(item.color || "").forEach((color) => dimensionColorFields.push({ path: `design.postureDimensionVariants.${index}.color`, label: `Body Size & Weight ${item.posture || "posture"} color ${index + 1}`, color }));
+    });
+    const invalidDimensionColors = dimensionColorFields.filter(({ color }) => !definedColors.some((defined) => defined.trim().toLocaleLowerCase() === color.trim().toLocaleLowerCase()));
+    if (invalidDimensionColors.length > 0) {
+      setDimensionColorErrors(invalidDimensionColors);
+      setError(`Fix ${invalidDimensionColors.length} Body Size & Weight color${invalidDimensionColors.length === 1 ? "" : "s"} before saving. Use a Smartphone Colors name.`);
+      setMessage("");
+      requestAnimationFrame(() => {
+        const field = document.querySelector(`[data-color-path="${invalidDimensionColors[0].path}"]`);
+        field?.scrollIntoView({ behavior: "smooth", block: "center" });
+        (field as HTMLElement | null)?.focus();
+      });
+      setSaving(false);
+      return;
+    }
+    setDimensionColorErrors([]);
+    const invalidImageColors = imageItems.flatMap((item, index) => {
+      if (!item.color || item.color === "All colors") return [];
+      const canonical = definedColors.find((color) => color.trim().toLocaleLowerCase() === item.color.toLocaleLowerCase());
+      return canonical ? [] : [{ index, color: item.color }];
+    });
+    if (invalidImageColors.length > 0) {
+      const errors = invalidImageColors.map(({ index, color }) => ({ index, color, message: `“${color}” is not in Smartphone Colors.` }));
+      setImageColorErrors(errors);
+      setError(`Fix ${errors.length} image color${errors.length === 1 ? "" : "s"} before saving. Add the color to Smartphone Colors or change the image row.`);
+      setMessage("");
+      const firstIndex = errors[0].index;
+      requestAnimationFrame(() => {
+        const field = document.querySelector(`[aria-label="Image ${firstIndex + 1} color"]`);
+        field?.scrollIntoView({ behavior: "smooth", block: "center" });
+        (field as HTMLElement | null)?.focus();
+      });
+      setSaving(false);
+      return;
+    }
+    setImageColorErrors([]);
+    const allColorImages = imageItems.filter((item) => item.purpose === "All colors" || item.color.toLowerCase() === "all colors").map((item) => item.url);
+    const variantMap = new Map<string, { color: string; images: string[] }>();
+    imageItems.filter((item) => item.color && item.color.toLowerCase() !== "all colors").forEach((item) => {
+      const key = item.color.trim().toLowerCase();
+      const existing = variantMap.get(key);
+      if (existing) existing.images.push(item.url);
+      else variantMap.set(key, { color: item.color.trim(), images: [item.url] });
+    });
     const normalizedName = normalizeTextToken(normalizedForm.name);
     const normalizedBrand = normalizeTextToken(normalizedForm.brand);
     const normalizedTags = normalizeCsvArray(normalizedForm.tags || []);
 
     const payload: Product = {
-      ...normalizedForm,
+      ...normalizedForSave,
       deviceType,
       name: normalizedName,
       brand: normalizedBrand,
@@ -2496,7 +2870,10 @@ export default function ProductEditor({ deviceType, pageTitle, pageDescription }
       pros: (normalizedForm.pros || []).filter(Boolean),
       cons: (normalizedForm.cons || []).filter(Boolean),
       compareSuggestions: (normalizedForm.compareSuggestions || []).map((item) => slugify(item)).filter(Boolean),
-      images: (normalizedForm.images || []).filter(Boolean),
+      imageItems,
+      images: imageItems.map((item) => item.url),
+      allColorImages,
+      imageVariants: Array.from(variantMap.values()),
       sensors: (normalizedForm.sensors || []).filter(Boolean),
       battery: {
         ...(normalizedForm.battery || {}),
@@ -3009,7 +3386,7 @@ export default function ProductEditor({ deviceType, pageTitle, pageDescription }
             </Field>
           ) : null}
 
-          <div className="grid gap-3 sm:grid-cols-3">
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-[minmax(0,0.75fr)_minmax(0,0.75fr)_minmax(0,1.5fr)_minmax(0,1.5fr)]">
             <Field label="Live Price Amount">
               <TextInput
                 type="number"
@@ -3278,6 +3655,19 @@ export default function ProductEditor({ deviceType, pageTitle, pageDescription }
             </Field>
             <Field label="Model Number">
               <TextInput value={form.general?.modelNumber || ""} onChange={(e) => updatePath(["general", "modelNumber"], e.target.value)} />
+            </Field>
+            <Field label="Origin / Country">
+              <HelperTermInput suggestions={originCountrySuggestions} value={formatCsv(form.general?.originCountry)} onChange={(value) => updatePath(["general", "originCountry"], splitCsv(value))} commaSeparated />
+            </Field>
+            <Field label="Smartphone Colors" className="sm:col-span-2">
+              <TextInput
+                value={smartphoneColorsDraft}
+                onChange={(event) => updateSmartphoneColors(event.target.value)}
+                placeholder="Dark Black, Ice Blue, Silver"
+                aria-describedby="smartphone-colors-help"
+                className="w-full"
+              />
+              <span id="smartphone-colors-help" className="text-xs text-slate-500">Enter one or more colors separated by commas. These names appear on the product page and are used by image rows.</span>
             </Field>
           </div>
           <div className="rounded-lg border border-slate-200 p-3">
@@ -3695,7 +4085,7 @@ export default function ProductEditor({ deviceType, pageTitle, pageDescription }
                 <div className="overflow-x-auto">
                   <div className="grid min-w-[980px] grid-cols-[20rem_1fr_1fr_1fr_1fr] gap-3">
                     <Field label="Color">
-                      <TextInput value={String(form.design?.normalDimensionVariants?.[0]?.color || "")} onChange={(e) => updatePath(["design", "normalDimensionVariants", 0, "color"], e.target.value)} placeholder="All Colors" />
+                      <HelperTermInput data-color-path="design.normalDimensionVariants.0.color" suggestions={form.design?.colors || []} value={String(form.design?.normalDimensionVariants?.[0]?.color || "")} onChange={(value) => setDimensionColor(["design", "normalDimensionVariants", 0, "color"], value)} placeholder="Dark Black, Ice Blue" />
                     </Field>
                     <Field label="Height">
                       <div className="relative">
@@ -3735,7 +4125,7 @@ export default function ProductEditor({ deviceType, pageTitle, pageDescription }
                             </button>
                           </div>
                           <Field label="Color">
-                            <TextInput value={item.color || ""} onChange={(e) => updatePath(["design", "normalDimensionVariants", index, "color"], e.target.value)} />
+                            <HelperTermInput data-color-path={`design.normalDimensionVariants.${index}.color`} suggestions={form.design?.colors || []} value={item.color || ""} onChange={(value) => setDimensionColor(["design", "normalDimensionVariants", index, "color"], value)} commaSeparated />
                           </Field>
                           <Field label="Height">
                             <div className="relative">
@@ -3831,9 +4221,16 @@ export default function ProductEditor({ deviceType, pageTitle, pageDescription }
                         <div className="overflow-x-auto">
                           <div className="grid min-w-[980px] grid-cols-[20rem_1fr_1fr_1fr_1fr] gap-3">
                             <Field label="Color">
-                              <TextInput
+                              <HelperTermInput
+                                data-color-path={`design.postureDimensionVariants.${getPostureVariantEntries(mode)[0]?.index ?? 0}.color`}
+                                suggestions={form.design?.colors || []}
                                 value={String(getPostureVariantEntries(mode)[0]?.item?.color || "")}
-                                onChange={(e) => updateSamePostureVariantField(mode, "color", e.target.value)}
+                                onChange={(value) => {
+                                  const canonical = canonicalizeColorList(value);
+                                  updateSamePostureVariantField(mode, "color", canonical);
+                                  setDimensionColorErrors([]);
+                                }}
+                                commaSeparated
                                 placeholder="Green, Yellow"
                               />
                             </Field>
@@ -3900,7 +4297,7 @@ export default function ProductEditor({ deviceType, pageTitle, pageDescription }
                                       <button type="button" onClick={() => insertPostureDimensionVariantAfterForPosture(mode, index >= 0 ? index : null)} className="h-10 w-10 rounded-lg border border-slate-200 bg-white text-lg font-bold leading-none text-slate-700" title="Insert new row below">+</button>
                                     </div>
                                     <Field label="Color">
-                                      <TextInput value={item.color || ""} onChange={(e) => index >= 0 ? updatePath(["design", "postureDimensionVariants", index, "color"], e.target.value) : updateSamePostureVariantField(mode, "color", e.target.value)} />
+                                      <HelperTermInput data-color-path={`design.postureDimensionVariants.${index}.color`} suggestions={form.design?.colors || []} value={item.color || ""} onChange={(value) => index >= 0 ? setDimensionColor(["design", "postureDimensionVariants", index, "color"], value) : updateSamePostureVariantField(mode, "color", canonicalizeColorList(value))} commaSeparated />
                                     </Field>
                                     <Field label="Height (mm)">
                                       <TextInput type="number" step="0.01" value={item.height ?? ""} onChange={(e) => index >= 0 ? updatePath(["design", "postureDimensionVariants", index, "height"], parseOptionalNumber(e.target.value)) : updateSamePostureVariantField(mode, "height", parseOptionalNumber(e.target.value))} />
@@ -3974,7 +4371,7 @@ export default function ProductEditor({ deviceType, pageTitle, pageDescription }
                   <p className="mb-3 text-sm font-extrabold text-slate-900">{panelGroup.title}</p>
                   <div className={`grid gap-3 sm:grid-cols-2 ${isWidePanel ? "xl:grid-cols-4" : ""}`}>
                     <Field label="Type">
-                      <TextInput value={panelValue.type || ""} onChange={(e) => updatePath([...basePath, "type"], e.target.value)} />
+                      <HelperTermInput suggestions={displayTermSuggestions.type || []} value={panelValue.type || ""} onChange={(value) => updatePath([...basePath, "type"], value)} commaSeparated />
                     </Field>
                     <Field label="Size">
                       <div className="flex w-fit gap-1.5">
@@ -4055,7 +4452,7 @@ export default function ProductEditor({ deviceType, pageTitle, pageDescription }
                     <div className={isWidePanel ? "sm:col-span-2 xl:col-span-4" : "sm:col-span-2"}>
                       <div className="grid gap-3 sm:grid-cols-3">
                         <Field label="Protection">
-                          <TextInput value={panelValue.protection || ""} onChange={(e) => updatePath([...basePath, "protection"], e.target.value)} placeholder="e.g. Gorilla Glass Victus 2" />
+                          <HelperTermInput suggestions={displayTermSuggestions.protection || []} value={panelValue.protection || ""} onChange={(value) => updatePath([...basePath, "protection"], value)} commaSeparated placeholder="e.g. Gorilla Glass Victus 2" />
                         </Field>
                         <Field label="Always-On Display">
                           <div className="flex flex-wrap items-center gap-2">
@@ -4079,10 +4476,10 @@ export default function ProductEditor({ deviceType, pageTitle, pageDescription }
                         <span className="text-xs font-bold uppercase tracking-wide text-slate-600">Dimming</span>
                         {DISPLAY_DIMMING_OPTIONS.map((feature) => <button key={`${panelGroup.title}-dimming-${feature}`} type="button" onClick={() => toggleTextOption([...basePath, "dimming"], feature)} className={`inline-flex h-5 items-center rounded-md border px-1.5 text-[10px] font-semibold ${(panelValue.dimming || []).includes(feature) ? "border-blue-700 bg-blue-700 text-white" : "border-slate-300 text-slate-700 hover:bg-slate-100"}`}>{feature === "DC dimming" ? "DC" : "PWM"}</button>)}
                       </div>
-                      <TextInput value={formatCsv(panelValue.dimming)} onChange={(e) => updatePath([...basePath, "dimming"], splitCsv(e.target.value))} placeholder="e.g. 2,760 Hz PWM dimming" />
+                      <HelperTermInput suggestions={displayTermSuggestions.dimming || []} value={formatCsv(panelValue.dimming)} onChange={(value) => updatePath([...basePath, "dimming"], splitCsv(value))} commaSeparated placeholder="e.g. 2,760 Hz PWM dimming" />
                     </div>
                     <Field label="Stylus / Pen">
-                      <TextInput value={panelValue.stylus?.name || ""} onChange={(e) => updatePath([...basePath, "stylus", "name"], e.target.value)} placeholder="No (leave blank), S Pen, Apple Pencil" />
+                      <HelperTermInput suggestions={displayTermSuggestions.styluspen || []} value={panelValue.stylus?.name || ""} onChange={(value) => updatePath([...basePath, "stylus", "name"], value)} commaSeparated placeholder="No (leave blank), S Pen, Apple Pencil" />
                     </Field>
                     {hasStylus ? <>
                       <Field label="Stylus Features">
@@ -4097,10 +4494,10 @@ export default function ProductEditor({ deviceType, pageTitle, pageDescription }
                     <div className={isWidePanel ? "sm:col-span-2 xl:col-span-4" : "sm:col-span-2"}>
                       <div className="grid gap-3 sm:grid-cols-2">
                         <Field label="Certifications">
-                          <TextInput value={formatCsv(panelValue.certifications)} onChange={(e) => updatePath([...basePath, "certifications"], splitCsv(e.target.value))} />
+                          <HelperTermInput suggestions={displayTermSuggestions.certification || []} value={formatCsv(panelValue.certifications)} onChange={(value) => updatePath([...basePath, "certifications"], splitCsv(value))} commaSeparated />
                         </Field>
                         <Field label="Other Features">
-                          <TextInput value={formatCsv(panelValue.others)} onChange={(e) => updatePath([...basePath, "others"], splitCsv(e.target.value))} />
+                          <HelperTermInput suggestions={displayTermSuggestions.otherfeatures || []} value={formatCsv(panelValue.others)} onChange={(value) => updatePath([...basePath, "others"], splitCsv(value))} commaSeparated />
                         </Field>
                       </div>
                     </div>
@@ -4865,15 +5262,15 @@ export default function ProductEditor({ deviceType, pageTitle, pageDescription }
                 </div>
               </div>
             </Field>
-            <Field label="Flash Name" className="lg:col-span-2"><TextInput value={form.rearCamera?.flash?.name || ""} onChange={(e) => updatePath(["rearCamera", "flash", "name"], e.target.value)} placeholder="LED, Laser AF" /></Field>
+            <Field label="Flash Name" className="lg:col-span-2"><HelperTermInput suggestions={cameraTermSuggestions.flashname || []} value={form.rearCamera?.flash?.name || ""} onChange={(value) => updatePath(["rearCamera", "flash", "name"], value)} placeholder="LED, Laser AF" /></Field>
             <Field label="OIS / EIS / AF" className="lg:col-span-1"><div className="inline-flex w-fit overflow-hidden rounded-md border border-slate-300 bg-white"><button type="button" onClick={() => updatePath(["rearCamera", "ois"], !form.rearCamera?.ois)} className={`h-10 px-3 text-xs font-semibold ${form.rearCamera?.ois ? "bg-blue-700 text-white" : "text-slate-700"}`}>OIS</button><button type="button" onClick={() => updatePath(["rearCamera", "eis"], !form.rearCamera?.eis)} className={`h-10 border-l border-slate-300 px-3 text-xs font-semibold ${form.rearCamera?.eis ? "bg-blue-700 text-white" : "text-slate-700"}`}>EIS</button><button type="button" onClick={() => updatePath(["rearCamera", "autofocus"], form.rearCamera?.autofocus ? "" : "AF")} className={`h-10 border-l border-slate-300 px-3 text-xs font-semibold ${form.rearCamera?.autofocus ? "bg-blue-700 text-white" : "text-slate-700"}`}>AF</button></div></Field>
-            <Field label="AF Detail" className="lg:col-span-2"><TextInput value={form.rearCamera?.autofocus === "AF" ? "" : form.rearCamera?.autofocus || ""} onChange={(e) => updatePath(["rearCamera", "autofocus"], e.target.value || (form.rearCamera?.autofocus ? "AF" : ""))} placeholder="Dual PDAF" /></Field>
+            <Field label="AF Detail" className="lg:col-span-2"><HelperTermInput suggestions={cameraTermSuggestions.afdetail || []} value={form.rearCamera?.autofocus === "AF" ? "" : form.rearCamera?.autofocus || ""} onChange={(value) => updatePath(["rearCamera", "autofocus"], value || (form.rearCamera?.autofocus ? "AF" : ""))} placeholder="Dual PDAF" /></Field>
             <div className="sm:col-span-2 lg:col-span-3 lg:grid lg:grid-cols-[auto_minmax(0,1fr)] lg:items-end lg:gap-3">
               <Field label="Image Resolution"><div className="flex w-fit items-center gap-1"><TextInput inputMode="numeric" value={String(form.rearCamera?.imageResolutionWidth ?? "")} onChange={(e) => updateCommonCameraImageResolution("rearCamera", "width", e.target.value.replace(/\D/g, ""))} placeholder="8140" className="w-16 px-2" /><span>×</span><TextInput inputMode="numeric" value={String(form.rearCamera?.imageResolutionHeight ?? "")} onChange={(e) => updateCommonCameraImageResolution("rearCamera", "height", e.target.value.replace(/\D/g, ""))} placeholder="7878" className="w-16 px-2" /><span className="text-sm text-slate-500">px</span></div></Field>
-              <Field label="Zoom"><div className="grid grid-cols-2 gap-2"><TextInput inputMode="decimal" value={form.rearCamera?.zoom?.optical || ""} onChange={(e) => updatePath(["rearCamera", "zoom", "optical"], sanitizeDecimal(e.target.value, 4))} placeholder="Optical" className="min-w-0 px-2" /><TextInput inputMode="decimal" value={form.rearCamera?.zoom?.digital || ""} onChange={(e) => updatePath(["rearCamera", "zoom", "digital"], sanitizeDecimal(e.target.value, 4))} placeholder="Digital" className="min-w-0 px-2" /></div></Field>
+              <Field label="Zoom"><div className="grid grid-cols-2 gap-2"><UnitInput inputMode="decimal" suffix="x" value={sanitizeDecimal(String(form.rearCamera?.zoom?.optical || ""), 4)} onChange={(e) => updatePath(["rearCamera", "zoom", "optical"], sanitizeDecimal(e.target.value, 4))} placeholder="Optical" /><UnitInput inputMode="decimal" suffix="x" value={sanitizeDecimal(String(form.rearCamera?.zoom?.digital || ""), 4)} onChange={(e) => updatePath(["rearCamera", "zoom", "digital"], sanitizeDecimal(e.target.value, 4))} placeholder="Digital" /></div></Field>
             </div>
             <div className="sm:col-span-2 lg:col-span-9"><Field label="Camera Features">
-              <TextInput value={formatCsv(form.rearCamera?.features)} onChange={(e) => updatePath(["rearCamera", "features"], splitCsv(e.target.value))} />
+              <HelperTermInput suggestions={cameraTermSuggestions.camerafeatures || []} value={formatCsv(form.rearCamera?.features)} onChange={(value) => updatePath(["rearCamera", "features"], splitCsv(value))} commaSeparated />
             </Field></div>
           </div>
 
@@ -4892,47 +5289,27 @@ export default function ProductEditor({ deviceType, pageTitle, pageDescription }
                       <Select value={camera.role || ""} onChange={(e) => updatePath(["rearCamera", "cameras", index, "role"], e.target.value)}><option value="">Select camera</option>{CAMERA_NAME_OPTIONS.map((name) => <option key={`rear-name-${index}-${name}`} value={name}>{name}</option>)}</Select>
                     </Field>
                     <Field label="Camera Type">
-                      <Select value={camera.cameraType || camera.purpose || ""} onChange={(e) => updatePath(["rearCamera", "cameras", index, "cameraType"], e.target.value)}><option value="">Select type</option>{CAMERA_PURPOSE_OPTIONS.map((purpose) => <option key={`rear-purpose-${index}-${purpose}`} value={purpose}>{purpose}</option>)}</Select>
+                      <HelperTermInput suggestions={cameraTermSuggestions.cameratype || CAMERA_PURPOSE_OPTIONS} value={camera.cameraType || camera.purpose || ""} onChange={(value) => updatePath(["rearCamera", "cameras", index, "cameraType"], value)} />
                     </Field>
-                    {postureOptions.length > 1 ? <Field label="Visible Postures">
-                      <div className="flex flex-wrap gap-2">
-                        {postureOptions.map((posture) => {
-                          const selected = (camera.posturesVisible || []).includes(posture);
-                          return (
-                            <button
-                              key={`rear-camera-posture-${index}-${posture}`}
-                              type="button"
-                              onClick={() => {
-                                const current = Array.isArray(camera.posturesVisible) ? camera.posturesVisible : [];
-                                const next = selected ? current.filter((item) => item !== posture) : [...current, posture];
-                                updatePath(["rearCamera", "cameras", index, "posturesVisible"], next);
-                              }}
-                              className={`inline-flex h-8 items-center rounded-md border px-3 text-xs font-semibold ${selected ? "border-blue-700 bg-blue-700 text-white" : "border-slate-300 text-slate-700"}`}
-                            >
-                              {posture}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </Field> : null}
+                    {postureOptions.length > 1 ? <Field label="Visible Postures"><HelperTermInput suggestions={cameraTermSuggestions.visibleposture || postureOptions} value={formatCsv(camera.posturesVisible)} onChange={(value) => updatePath(["rearCamera", "cameras", index, "posturesVisible"], splitCsv(value))} commaSeparated /></Field> : null}
                     <Field label="Camera Resolution"><UnitInput value={camera.resolution || ""} onChange={(e) => updateCameraUnitAndCommon("rearCamera", index, ["resolution"], e.target.value)} suffix="MP" /></Field>
-                    <div className="lg:col-span-3"><Field label="Sensor Name"><TextInput value={camera.sensor?.name || ""} onChange={(e) => updatePath(["rearCamera", "cameras", index, "sensor", "name"], e.target.value)} /></Field></div>
+                    <div className="lg:col-span-3"><Field label="Sensor Name"><HelperTermInput suggestions={cameraTermSuggestions.sensorname || []} value={camera.sensor?.name || ""} onChange={(value) => updatePath(["rearCamera", "cameras", index, "sensor", "name"], value)} /></Field></div>
                     <Field label="Aperture"><UnitInput value={camera.sensor?.aperture || ""} onChange={(e) => updatePath(["rearCamera", "cameras", index, "sensor", "aperture"], e.target.value)} prefix="f/" containerClassName="max-w-36" /></Field>
                     <Field label="Sensor Size"><UnitInput value={camera.sensor?.size || ""} onChange={(e) => updatePath(["rearCamera", "cameras", index, "sensor", "size"], e.target.value)} suffix='"' containerClassName="max-w-36" /></Field>
                     <Field label="Pixel Size"><UnitInput value={camera.sensor?.pixelSize || ""} onChange={(e) => updatePath(["rearCamera", "cameras", index, "sensor", "pixelSize"], e.target.value)} suffix="µm" containerClassName="max-w-36" /></Field>
                     <Field label="Focal Length"><UnitInput value={camera.sensor?.focalLength || ""} onChange={(e) => updatePath(["rearCamera", "cameras", index, "sensor", "focalLength"], e.target.value)} suffix="mm" containerClassName="max-w-36" /></Field>
                     <Field label="FOV"><UnitInput value={camera.sensor?.fov || ""} onChange={(e) => updatePath(["rearCamera", "cameras", index, "sensor", "fov"], e.target.value)} suffix="°" /></Field>
-                    <Field label="Lens Type" className="min-w-0"><TextInput value={camera.sensor?.lensType || ""} onChange={(e) => updatePath(["rearCamera", "cameras", index, "sensor", "lensType"], e.target.value)} placeholder="6P, 7P" className="w-full min-w-0" /></Field>
+                    <Field label="Lens Type" className="min-w-0"><HelperTermInput suggestions={cameraTermSuggestions.lenstype || []} value={camera.sensor?.lensType || ""} onChange={(value) => updatePath(["rearCamera", "cameras", index, "sensor", "lensType"], value)} placeholder="6P, 7P" /></Field>
                     <Field label="Optical Zoom">
-                      <TextInput inputMode="decimal" value={camera.sensor?.opticalZoom || ""} onChange={(e) => updatePath(["rearCamera", "cameras", index, "sensor", "opticalZoom"], sanitizeDecimal(e.target.value, 4))} placeholder="3" className="w-20" />
+                      <UnitInput inputMode="decimal" suffix="x" value={sanitizeDecimal(String(camera.sensor?.opticalZoom || ""), 4)} onChange={(e) => updatePath(["rearCamera", "cameras", index, "sensor", "opticalZoom"], sanitizeDecimal(e.target.value, 4))} placeholder="3" containerClassName="w-20" />
                     </Field>
                     <Field label="Digital Zoom">
-                      <TextInput inputMode="decimal" value={camera.sensor?.digitalZoom || ""} onChange={(e) => updatePath(["rearCamera", "cameras", index, "sensor", "digitalZoom"], sanitizeDecimal(e.target.value, 4))} placeholder="30" className="w-20" />
+                      <UnitInput inputMode="decimal" suffix="x" value={sanitizeDecimal(String(camera.sensor?.digitalZoom || ""), 4)} onChange={(e) => updatePath(["rearCamera", "cameras", index, "sensor", "digitalZoom"], sanitizeDecimal(e.target.value, 4))} placeholder="30" containerClassName="w-20" />
                     </Field>
                     <Field label="OIS / EIS / AF"><div className="inline-flex w-fit overflow-hidden rounded-md border border-slate-300 bg-white"><button type="button" onClick={() => updateCameraUnitAndCommon("rearCamera", index, ["sensor", "ois"], !camera.sensor?.ois)} className={`h-10 px-3 text-xs font-semibold ${camera.sensor?.ois ? "bg-blue-700 text-white" : "text-slate-700"}`}>OIS</button><button type="button" onClick={() => updateCameraUnitAndCommon("rearCamera", index, ["sensor", "eis"], !camera.sensor?.eis)} className={`h-10 border-l border-slate-300 px-3 text-xs font-semibold ${camera.sensor?.eis ? "bg-blue-700 text-white" : "text-slate-700"}`}>EIS</button><button type="button" onClick={() => updateCameraUnitAndCommon("rearCamera", index, ["sensor", "autofocus"], camera.sensor?.autofocus ? "" : "AF")} className={`h-10 border-l border-slate-300 px-3 text-xs font-semibold ${camera.sensor?.autofocus ? "bg-blue-700 text-white" : "text-slate-700"}`}>AF</button></div></Field>
-                    <Field label="Autofocus Detail" className="lg:col-span-2"><TextInput value={camera.sensor?.autofocus === "AF" ? "" : camera.sensor?.autofocus || ""} onChange={(e) => updateCameraUnitAndCommon("rearCamera", index, ["sensor", "autofocus"], e.target.value || (camera.sensor?.autofocus ? "AF" : ""))} placeholder="Dual PDAF" /></Field>
+                    <Field label="Autofocus Detail" className="lg:col-span-2"><HelperTermInput suggestions={cameraTermSuggestions.autofocusdetail || []} value={camera.sensor?.autofocus === "AF" ? "" : camera.sensor?.autofocus || ""} onChange={(value) => updateCameraUnitAndCommon("rearCamera", index, ["sensor", "autofocus"], value || (camera.sensor?.autofocus ? "AF" : ""))} placeholder="Dual PDAF" /></Field>
                     <div className="min-w-0 lg:col-span-1"><Field label="Image Resolution"><div className="grid min-w-0 grid-cols-[64px_auto_64px_auto] items-center gap-1"><TextInput inputMode="numeric" value={String(camera.imageResolutionWidth ?? "")} onChange={(e) => updateCameraImageResolution("rearCamera", index, "width", e.target.value.replace(/\D/g, ""))} placeholder="8140" className="min-w-0 w-full px-2" /><span>×</span><TextInput inputMode="numeric" value={String(camera.imageResolutionHeight ?? "")} onChange={(e) => updateCameraImageResolution("rearCamera", index, "height", e.target.value.replace(/\D/g, ""))} placeholder="7878" className="min-w-0 w-full px-2" /><span className="text-sm text-slate-500">px</span></div></Field></div>
-                    <div className="sm:col-span-2 lg:col-span-6"><Field label="Camera Features"><TextInput value={formatCsv(camera.features)} onChange={(e) => updatePath(["rearCamera", "cameras", index, "features"], splitCsv(e.target.value))} placeholder="Night mode, dual pixel" /></Field></div>
+                    <div className="sm:col-span-2 lg:col-span-6"><Field label="Camera Features"><HelperTermInput suggestions={cameraTermSuggestions.camerafeatures || []} value={formatCsv(camera.features)} onChange={(value) => updatePath(["rearCamera", "cameras", index, "features"], splitCsv(value))} commaSeparated placeholder="Night mode, dual pixel" /></Field></div>
                   </div>
                 </div>
               ))}
@@ -4942,15 +5319,15 @@ export default function ProductEditor({ deviceType, pageTitle, pageDescription }
             <div className="grid gap-3">
               {(form.rearCamera?.videoProfiles || []).map((profile, index) => (
                 <div key={`rear-video-${index}`} className="grid gap-3 rounded-lg border border-slate-200 bg-slate-50 p-3 sm:grid-cols-2 lg:grid-cols-12">
-                  <Field label="Video Type" className="lg:col-span-3"><TextInput value={profile.name || ""} onChange={(e) => updatePath(["rearCamera", "videoProfiles", index, "name"], e.target.value)} placeholder="Ultra-wide video" /></Field>
-                  <Field label="Resolution" className="lg:col-span-2"><Select value={profile.resolution || ""} onChange={(e) => updatePath(["rearCamera", "videoProfiles", index, "resolution"], e.target.value)}><option value="">Select resolution</option>{VIDEO_RESOLUTION_OPTIONS.map((resolution) => <option key={`rear-video-resolution-${index}-${resolution}`} value={resolution}>{resolution}</option>)}</Select></Field>
+                  <Field label="Video Type" className="lg:col-span-3"><HelperTermInput suggestions={cameraTermSuggestions.videotype || []} value={profile.name || ""} onChange={(value) => updatePath(["rearCamera", "videoProfiles", index, "name"], value)} placeholder="Ultra-wide video" /></Field>
+                  <Field label="Video Resolution" className="lg:col-span-2"><HelperTermInput suggestions={cameraTermSuggestions.videoresolution || VIDEO_RESOLUTION_OPTIONS} value={profile.resolution || ""} onChange={(value) => updatePath(["rearCamera", "videoProfiles", index, "resolution"], value)} /></Field>
                   <Field label="Frame Rate" className="lg:col-span-1"><UnitInput inputMode="numeric" value={profile.fps || ""} onChange={(e) => updatePath(["rearCamera", "videoProfiles", index, "fps"], e.target.value.replace(/\D/g, ""))} suffix="fps" /></Field>
-                  <Field label="Comment" className="lg:col-span-5"><TextInput value={profile.comment || ""} onChange={(e) => updatePath(["rearCamera", "videoProfiles", index, "comment"], e.target.value)} placeholder="OIS + EIS" /></Field>
+                  <Field label="Comment" className="lg:col-span-5"><HelperTermInput suggestions={cameraTermSuggestions.comment || []} value={profile.comment || ""} onChange={(value) => updatePath(["rearCamera", "videoProfiles", index, "comment"], value)} placeholder="OIS + EIS" /></Field>
                   <div className="flex items-end lg:col-span-1"><button type="button" onClick={() => { if (window.confirm("Remove this video profile? This cannot be undone.")) removeFromPath(["rearCamera", "videoProfiles"], index); }} className="h-10 w-full rounded-lg bg-rose-600 px-3 text-xs font-semibold text-white">Remove</button></div>
                 </div>
               ))}
             </div>
-            <div><Field label="Video Features"><textarea value={formatCsv(form.rearCamera?.video?.features)} onChange={(e) => updatePath(["rearCamera", "video", "features"], splitCsv(e.target.value))} onInput={(e) => { e.currentTarget.style.height = "auto"; e.currentTarget.style.height = `${e.currentTarget.scrollHeight}px`; }} rows={1} className="min-h-10 w-full resize-none overflow-hidden rounded-lg border border-slate-200 px-3 py-2" placeholder="HDR10+, Dolby Vision, gyro-EIS" /></Field></div>
+            <div><Field label="Video Features"><HelperTermInput suggestions={cameraTermSuggestions.videofeatures || []} value={formatCsv(form.rearCamera?.video?.features)} onChange={(value) => updatePath(["rearCamera", "video", "features"], splitCsv(value))} commaSeparated placeholder="HDR10+, Dolby Vision, gyro-EIS" /></Field></div>
           </CollapsiblePanel>
         </Section>
         </div>
@@ -4959,14 +5336,14 @@ export default function ProductEditor({ deviceType, pageTitle, pageDescription }
         <Section title="Front Camera" description="Structured front camera setup used by selfie and video sections.">
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-9">
             <Field label="Flash" className="lg:col-span-1"><div className="inline-flex w-fit overflow-hidden rounded-md border border-slate-300 bg-white">{[{ label: "Yes", value: true }, { label: "No", value: false }].map((option, index) => <button key={`front-flash-${option.label}`} type="button" onClick={() => updatePath(["frontCamera", "flash", "supported"], option.value)} className={`h-10 w-12 text-xs font-semibold ${index > 0 ? "border-l border-slate-300" : ""} ${form.frontCamera?.flash?.supported === option.value ? "bg-blue-700 text-white" : "text-slate-700"}`}>{option.label}</button>)}</div></Field>
-            <Field label="Flash Name" className="lg:col-span-2"><TextInput value={form.frontCamera?.flash?.name || ""} onChange={(e) => updatePath(["frontCamera", "flash", "name"], e.target.value)} placeholder="LED, Laser AF" /></Field>
+            <Field label="Flash Name" className="lg:col-span-2"><HelperTermInput suggestions={cameraTermSuggestions.flashname || []} value={form.frontCamera?.flash?.name || ""} onChange={(value) => updatePath(["frontCamera", "flash", "name"], value)} placeholder="LED, Laser AF" /></Field>
             <Field label="OIS / EIS / AF" className="lg:col-span-1"><div className="inline-flex w-fit overflow-hidden rounded-md border border-slate-300 bg-white"><button type="button" onClick={() => updatePath(["frontCamera", "ois"], !form.frontCamera?.ois)} className={`h-10 px-3 text-xs font-semibold ${form.frontCamera?.ois ? "bg-blue-700 text-white" : "text-slate-700"}`}>OIS</button><button type="button" onClick={() => updatePath(["frontCamera", "eis"], !form.frontCamera?.eis)} className={`h-10 border-l border-slate-300 px-3 text-xs font-semibold ${form.frontCamera?.eis ? "bg-blue-700 text-white" : "text-slate-700"}`}>EIS</button><button type="button" onClick={() => updatePath(["frontCamera", "autofocus"], form.frontCamera?.autofocus ? "" : "AF")} className={`h-10 border-l border-slate-300 px-3 text-xs font-semibold ${form.frontCamera?.autofocus ? "bg-blue-700 text-white" : "text-slate-700"}`}>AF</button></div></Field>
-            <Field label="AF Detail" className="lg:col-span-2"><TextInput value={form.frontCamera?.autofocus === "AF" ? "" : form.frontCamera?.autofocus || ""} onChange={(e) => updatePath(["frontCamera", "autofocus"], e.target.value || (form.frontCamera?.autofocus ? "AF" : ""))} placeholder="PDAF" /></Field>
+            <Field label="AF Detail" className="lg:col-span-2"><HelperTermInput suggestions={cameraTermSuggestions.afdetail || []} value={form.frontCamera?.autofocus === "AF" ? "" : form.frontCamera?.autofocus || ""} onChange={(value) => updatePath(["frontCamera", "autofocus"], value || (form.frontCamera?.autofocus ? "AF" : ""))} placeholder="PDAF" /></Field>
             <div className="sm:col-span-2 lg:col-span-3 lg:grid lg:grid-cols-[auto_minmax(0,1fr)] lg:items-end lg:gap-3">
               <Field label="Image Resolution"><div className="flex w-fit items-center gap-1"><TextInput inputMode="numeric" value={String(form.frontCamera?.imageResolutionWidth ?? "")} onChange={(e) => updateCommonCameraImageResolution("frontCamera", "width", e.target.value.replace(/\D/g, ""))} placeholder="8140" className="w-16 px-2" /><span>×</span><TextInput inputMode="numeric" value={String(form.frontCamera?.imageResolutionHeight ?? "")} onChange={(e) => updateCommonCameraImageResolution("frontCamera", "height", e.target.value.replace(/\D/g, ""))} placeholder="7878" className="w-16 px-2" /><span className="text-sm text-slate-500">px</span></div></Field>
-              <Field label="Zoom"><div className="grid grid-cols-2 gap-2"><TextInput inputMode="decimal" value={form.frontCamera?.zoom?.optical || ""} onChange={(e) => updatePath(["frontCamera", "zoom", "optical"], sanitizeDecimal(e.target.value, 4))} placeholder="Optical" className="min-w-0 px-2" /><TextInput inputMode="decimal" value={form.frontCamera?.zoom?.digital || ""} onChange={(e) => updatePath(["frontCamera", "zoom", "digital"], sanitizeDecimal(e.target.value, 4))} placeholder="Digital" className="min-w-0 px-2" /></div></Field>
+              <Field label="Zoom"><div className="grid grid-cols-2 gap-2"><UnitInput inputMode="decimal" suffix="x" value={sanitizeDecimal(String(form.frontCamera?.zoom?.optical || ""), 4)} onChange={(e) => updatePath(["frontCamera", "zoom", "optical"], sanitizeDecimal(e.target.value, 4))} placeholder="Optical" /><UnitInput inputMode="decimal" suffix="x" value={sanitizeDecimal(String(form.frontCamera?.zoom?.digital || ""), 4)} onChange={(e) => updatePath(["frontCamera", "zoom", "digital"], sanitizeDecimal(e.target.value, 4))} placeholder="Digital" /></div></Field>
             </div>
-            <div className="sm:col-span-2 lg:col-span-9"><Field label="Camera Features"><TextInput value={formatCsv(form.frontCamera?.features)} onChange={(e) => updatePath(["frontCamera", "features"], splitCsv(e.target.value))} /></Field></div>
+            <div className="sm:col-span-2 lg:col-span-9"><Field label="Camera Features"><HelperTermInput suggestions={cameraTermSuggestions.camerafeatures || []} value={formatCsv(form.frontCamera?.features)} onChange={(value) => updatePath(["frontCamera", "features"], splitCsv(value))} commaSeparated /></Field></div>
           </div>
 
           <CollapsiblePanel title="Front Camera Units" titleRight={<button type="button" onClick={() => { const count = form.frontCamera?.cameras?.length || 0; appendToPath(["frontCamera", "cameras"], { role: getCameraRoleLabel(count), purpose: count === 0 ? "Main" : "", resolution: "", type: "", sensor: {} } satisfies FrontCameraUnit); }} className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700">+ Add Front Camera</button>}>
@@ -4983,42 +5360,22 @@ export default function ProductEditor({ deviceType, pageTitle, pageDescription }
                     <Field label="Camera Name">
                       <Select value={camera.role || ""} onChange={(e) => updatePath(["frontCamera", "cameras", index, "role"], e.target.value)}><option value="">Select camera</option>{CAMERA_NAME_OPTIONS.map((name) => <option key={`front-name-${index}-${name}`} value={name}>{name}</option>)}</Select>
                     </Field>
-                    <Field label="Camera Type"><Select value={camera.cameraType || camera.purpose || ""} onChange={(e) => updatePath(["frontCamera", "cameras", index, "cameraType"], e.target.value)}><option value="">Select type</option>{CAMERA_PURPOSE_OPTIONS.map((purpose) => <option key={`front-purpose-${index}-${purpose}`} value={purpose}>{purpose}</option>)}</Select></Field>
-                    {postureOptions.length > 1 ? <Field label="Visible Postures">
-                      <div className="flex flex-wrap gap-2">
-                        {postureOptions.map((posture) => {
-                          const selected = (camera.posturesVisible || []).includes(posture);
-                          return (
-                            <button
-                              key={`front-camera-posture-${index}-${posture}`}
-                              type="button"
-                              onClick={() => {
-                                const current = Array.isArray(camera.posturesVisible) ? camera.posturesVisible : [];
-                                const next = selected ? current.filter((item) => item !== posture) : [...current, posture];
-                                updatePath(["frontCamera", "cameras", index, "posturesVisible"], next);
-                              }}
-                              className={`inline-flex h-8 items-center rounded-md border px-3 text-xs font-semibold ${selected ? "border-blue-700 bg-blue-700 text-white" : "border-slate-300 text-slate-700"}`}
-                            >
-                              {posture}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </Field> : null}
+                    <Field label="Camera Type"><HelperTermInput suggestions={cameraTermSuggestions.cameratype || CAMERA_PURPOSE_OPTIONS} value={camera.cameraType || camera.purpose || ""} onChange={(value) => updatePath(["frontCamera", "cameras", index, "cameraType"], value)} /></Field>
+                    {postureOptions.length > 1 ? <Field label="Visible Postures"><HelperTermInput suggestions={cameraTermSuggestions.visibleposture || postureOptions} value={formatCsv(camera.posturesVisible)} onChange={(value) => updatePath(["frontCamera", "cameras", index, "posturesVisible"], splitCsv(value))} commaSeparated /></Field> : null}
                     <Field label="Camera Resolution"><UnitInput value={camera.resolution || ""} onChange={(e) => updateCameraUnitAndCommon("frontCamera", index, ["resolution"], e.target.value)} suffix="MP" /></Field>
-                    <div className="lg:col-span-3"><Field label="Sensor Name"><TextInput value={camera.sensor?.name || ""} onChange={(e) => updatePath(["frontCamera", "cameras", index, "sensor", "name"], e.target.value)} /></Field></div>
+                    <div className="lg:col-span-3"><Field label="Sensor Name"><HelperTermInput suggestions={cameraTermSuggestions.sensorname || []} value={camera.sensor?.name || ""} onChange={(value) => updatePath(["frontCamera", "cameras", index, "sensor", "name"], value)} /></Field></div>
                     <Field label="Sensor Size"><UnitInput value={camera.sensor?.size || ""} onChange={(e) => updatePath(["frontCamera", "cameras", index, "sensor", "size"], e.target.value)} suffix='"' /></Field>
                     <Field label="Pixel Size"><UnitInput value={camera.sensor?.pixelSize || ""} onChange={(e) => updatePath(["frontCamera", "cameras", index, "sensor", "pixelSize"], e.target.value)} suffix="µm" /></Field>
                     <Field label="Sensor Aperture"><UnitInput value={camera.sensor?.aperture || ""} onChange={(e) => updatePath(["frontCamera", "cameras", index, "sensor", "aperture"], e.target.value)} prefix="f/" /></Field>
                     <Field label="Focal Length"><UnitInput value={camera.sensor?.focalLength || ""} onChange={(e) => updatePath(["frontCamera", "cameras", index, "sensor", "focalLength"], e.target.value)} suffix="mm" /></Field>
                     <Field label="FOV"><UnitInput value={camera.sensor?.fov || ""} onChange={(e) => updatePath(["frontCamera", "cameras", index, "sensor", "fov"], e.target.value)} suffix="°" /></Field>
-                    <Field label="Lens Type" className="min-w-0"><TextInput value={camera.sensor?.lensType || ""} onChange={(e) => updatePath(["frontCamera", "cameras", index, "sensor", "lensType"], e.target.value)} placeholder="5P, 6P" className="w-full min-w-0" /></Field>
-                    <Field label="Optical Zoom"><TextInput inputMode="decimal" value={camera.sensor?.opticalZoom || ""} onChange={(e) => updatePath(["frontCamera", "cameras", index, "sensor", "opticalZoom"], sanitizeDecimal(e.target.value, 4))} placeholder="2" className="w-20" /></Field>
-                    <Field label="Digital Zoom"><TextInput inputMode="decimal" value={camera.sensor?.digitalZoom || ""} onChange={(e) => updatePath(["frontCamera", "cameras", index, "sensor", "digitalZoom"], sanitizeDecimal(e.target.value, 4))} placeholder="10" className="w-20" /></Field>
+                    <Field label="Lens Type" className="min-w-0"><HelperTermInput suggestions={cameraTermSuggestions.lenstype || []} value={camera.sensor?.lensType || ""} onChange={(value) => updatePath(["frontCamera", "cameras", index, "sensor", "lensType"], value)} placeholder="5P, 6P" /></Field>
+                    <Field label="Optical Zoom"><UnitInput inputMode="decimal" suffix="x" value={sanitizeDecimal(String(camera.sensor?.opticalZoom || ""), 4)} onChange={(e) => updatePath(["frontCamera", "cameras", index, "sensor", "opticalZoom"], sanitizeDecimal(e.target.value, 4))} placeholder="2" containerClassName="w-20" /></Field>
+                    <Field label="Digital Zoom"><UnitInput inputMode="decimal" suffix="x" value={sanitizeDecimal(String(camera.sensor?.digitalZoom || ""), 4)} onChange={(e) => updatePath(["frontCamera", "cameras", index, "sensor", "digitalZoom"], sanitizeDecimal(e.target.value, 4))} placeholder="10" containerClassName="w-20" /></Field>
                     <Field label="OIS / EIS / AF"><div className="inline-flex w-fit overflow-hidden rounded-md border border-slate-300 bg-white"><button type="button" onClick={() => updateCameraUnitAndCommon("frontCamera", index, ["sensor", "ois"], !camera.sensor?.ois)} className={`h-10 px-3 text-xs font-semibold ${camera.sensor?.ois ? "bg-blue-700 text-white" : "text-slate-700"}`}>OIS</button><button type="button" onClick={() => updateCameraUnitAndCommon("frontCamera", index, ["sensor", "eis"], !camera.sensor?.eis)} className={`h-10 border-l border-slate-300 px-3 text-xs font-semibold ${camera.sensor?.eis ? "bg-blue-700 text-white" : "text-slate-700"}`}>EIS</button><button type="button" onClick={() => updateCameraUnitAndCommon("frontCamera", index, ["sensor", "autofocus"], camera.sensor?.autofocus ? "" : "AF")} className={`h-10 border-l border-slate-300 px-3 text-xs font-semibold ${camera.sensor?.autofocus ? "bg-blue-700 text-white" : "text-slate-700"}`}>AF</button></div></Field>
-                    <Field label="Autofocus Detail" className="lg:col-span-2"><TextInput value={camera.sensor?.autofocus === "AF" ? "" : camera.sensor?.autofocus || ""} onChange={(e) => updateCameraUnitAndCommon("frontCamera", index, ["sensor", "autofocus"], e.target.value || (camera.sensor?.autofocus ? "AF" : ""))} placeholder="PDAF" /></Field>
+                    <Field label="Autofocus Detail" className="lg:col-span-2"><HelperTermInput suggestions={cameraTermSuggestions.autofocusdetail || []} value={camera.sensor?.autofocus === "AF" ? "" : camera.sensor?.autofocus || ""} onChange={(value) => updateCameraUnitAndCommon("frontCamera", index, ["sensor", "autofocus"], value || (camera.sensor?.autofocus ? "AF" : ""))} placeholder="PDAF" /></Field>
                     <div className="min-w-0 lg:col-span-1"><Field label="Image Resolution"><div className="grid min-w-0 grid-cols-[64px_auto_64px_auto] items-center gap-1"><TextInput inputMode="numeric" value={String(camera.imageResolutionWidth ?? "")} onChange={(e) => updateCameraImageResolution("frontCamera", index, "width", e.target.value.replace(/\D/g, ""))} placeholder="8140" className="min-w-0 w-full px-2" /><span>×</span><TextInput inputMode="numeric" value={String(camera.imageResolutionHeight ?? "")} onChange={(e) => updateCameraImageResolution("frontCamera", index, "height", e.target.value.replace(/\D/g, ""))} placeholder="7878" className="min-w-0 w-full px-2" /><span className="text-sm text-slate-500">px</span></div></Field></div>
-                    <div className="sm:col-span-2 lg:col-span-6"><Field label="Camera Features"><TextInput value={formatCsv(camera.features)} onChange={(e) => updatePath(["frontCamera", "cameras", index, "features"], splitCsv(e.target.value))} /></Field></div>
+                    <div className="sm:col-span-2 lg:col-span-6"><Field label="Camera Features"><HelperTermInput suggestions={cameraTermSuggestions.camerafeatures || []} value={formatCsv(camera.features)} onChange={(value) => updatePath(["frontCamera", "cameras", index, "features"], splitCsv(value))} commaSeparated /></Field></div>
                   </div>
                 </div>
               ))}
@@ -5028,15 +5385,15 @@ export default function ProductEditor({ deviceType, pageTitle, pageDescription }
             <div className="grid gap-3">
               {(form.frontCamera?.videoProfiles || []).map((profile, index) => (
                 <div key={`front-video-${index}`} className="grid gap-3 rounded-lg border border-slate-200 bg-slate-50 p-3 sm:grid-cols-2 lg:grid-cols-12">
-                  <Field label="Video Type" className="lg:col-span-3"><TextInput value={profile.name || ""} onChange={(e) => updatePath(["frontCamera", "videoProfiles", index, "name"], e.target.value)} placeholder="Slow motion" /></Field>
-                  <Field label="Resolution" className="lg:col-span-2"><Select value={profile.resolution || ""} onChange={(e) => updatePath(["frontCamera", "videoProfiles", index, "resolution"], e.target.value)}><option value="">Select resolution</option>{VIDEO_RESOLUTION_OPTIONS.map((resolution) => <option key={`front-video-resolution-${index}-${resolution}`} value={resolution}>{resolution}</option>)}</Select></Field>
+                  <Field label="Video Type" className="lg:col-span-3"><HelperTermInput suggestions={cameraTermSuggestions.videotype || []} value={profile.name || ""} onChange={(value) => updatePath(["frontCamera", "videoProfiles", index, "name"], value)} placeholder="Slow motion" /></Field>
+                  <Field label="Video Resolution" className="lg:col-span-2"><HelperTermInput suggestions={cameraTermSuggestions.videoresolution || VIDEO_RESOLUTION_OPTIONS} value={profile.resolution || ""} onChange={(value) => updatePath(["frontCamera", "videoProfiles", index, "resolution"], value)} /></Field>
                   <Field label="Frame Rate" className="lg:col-span-1"><UnitInput inputMode="numeric" value={profile.fps || ""} onChange={(e) => updatePath(["frontCamera", "videoProfiles", index, "fps"], e.target.value.replace(/\D/g, ""))} suffix="fps" /></Field>
-                  <Field label="Comment" className="lg:col-span-5"><TextInput value={profile.comment || ""} onChange={(e) => updatePath(["frontCamera", "videoProfiles", index, "comment"], e.target.value)} placeholder="EIS" /></Field>
+                  <Field label="Comment" className="lg:col-span-5"><HelperTermInput suggestions={cameraTermSuggestions.comment || []} value={profile.comment || ""} onChange={(value) => updatePath(["frontCamera", "videoProfiles", index, "comment"], value)} placeholder="EIS" /></Field>
                   <div className="flex items-end lg:col-span-1"><button type="button" onClick={() => { if (window.confirm("Remove this video profile? This cannot be undone.")) removeFromPath(["frontCamera", "videoProfiles"], index); }} className="h-10 w-full rounded-lg bg-rose-600 px-3 text-xs font-semibold text-white">Remove</button></div>
                 </div>
               ))}
             </div>
-            <div><Field label="Video Features"><textarea value={formatCsv(form.frontCamera?.video?.features)} onChange={(e) => updatePath(["frontCamera", "video", "features"], splitCsv(e.target.value))} onInput={(e) => { e.currentTarget.style.height = "auto"; e.currentTarget.style.height = `${e.currentTarget.scrollHeight}px`; }} rows={1} className="min-h-10 w-full resize-none overflow-hidden rounded-lg border border-slate-200 px-3 py-2" placeholder="HDR video, face tracking" /></Field></div>
+            <div><Field label="Video Features"><HelperTermInput suggestions={cameraTermSuggestions.videofeatures || []} value={formatCsv(form.frontCamera?.video?.features)} onChange={(value) => updatePath(["frontCamera", "video", "features"], splitCsv(value))} commaSeparated placeholder="HDR video, face tracking" /></Field></div>
           </CollapsiblePanel>
         </Section>
         </div>
@@ -5613,45 +5970,116 @@ export default function ProductEditor({ deviceType, pageTitle, pageDescription }
         </div>
 
         <div id="mobile-images" className="scroll-mt-40 [order:14]">
-        <Section title="Images" description="Upload and manage all product image URLs used across listing and detail pages.">
-          <Field label="Upload image to Cloudinary">
-            <TextInput type="file" accept="image/*" onChange={(e) => uploadImage(e.currentTarget.files?.[0] || null)} />
-          </Field>
-
-          {form.images.length > 0 && (
-            <ProductImageGallery
-              images={form.images}
-              name={form.name}
-            />
-          )}
-
-          <div className="grid gap-3 sm:grid-cols-2">
-            {(form.images || []).map((image, index) => (
-              <div key={`${image}-${index}`} className="flex items-center gap-2 rounded-lg border border-slate-200 p-2">
-                <div className="relative h-14 w-20 overflow-hidden rounded-md border border-slate-100 bg-slate-50">
-                  <Image src={image} alt="Product" fill className="object-cover" unoptimized />
-                </div>
-                <div className="grid flex-1 gap-2">
-                  <TextInput
-                    value={image}
-                    onChange={(e) => {
-                      const next = [...(form.images || [])];
-                      next[index] = e.target.value;
-                      setField("images", next);
-                    }}
-                    className="text-xs"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setField("images", (form.images || []).filter((_, itemIndex) => itemIndex !== index))}
-                    className="w-fit rounded-lg bg-rose-600 px-3 py-1 text-xs font-semibold text-white"
-                  >
-                    Remove
-                  </button>
-                </div>
-              </div>
-            ))}
+          <Section title="Images" description="Upload product photos in Cloudinary Media Library, then add their delivery URLs here. All-colors overview appears first, followed by the selected color’s images.">
+          <div className="grid gap-1">
+            <span className="text-xs font-bold uppercase tracking-wide text-slate-600">Gallery background</span>
+            <div className="flex flex-wrap items-center gap-3">
+              <label className="flex items-center gap-2 text-sm text-slate-700">
+                <input
+                  type="color"
+                  value={/^#[0-9a-f]{6}$/i.test(form.imageBackground || "") ? form.imageBackground : "#ffffff"}
+                  onChange={(e) => setField("imageBackground", e.target.value)}
+                  className="h-10 w-12 cursor-pointer rounded border border-slate-200 bg-white p-1"
+                  aria-label="Choose gallery background color"
+                />
+                Choose color
+              </label>
+              <button
+                type="button"
+                onClick={() => setField("imageBackground", "#ffffff")}
+                className={`rounded-lg border px-3 py-2 text-sm font-medium ${String(form.imageBackground || "#ffffff").toLowerCase() === "#ffffff" ? "border-blue-500 bg-blue-50 text-blue-800" : "border-slate-200 bg-white text-slate-700"}`}
+              >
+                White
+              </button>
+              <button
+                type="button"
+                onClick={() => setField("imageBackground", "transparent")}
+                className={`rounded-lg border px-3 py-2 text-sm font-medium ${form.imageBackground === "transparent" ? "border-blue-500 bg-blue-50 text-blue-800" : "border-slate-200 bg-white text-slate-700"}`}
+              >
+                Transparent
+              </button>
+              {form.imageBackground === "transparent" ? <span className="text-xs text-slate-500">Choose a color above to return to a solid background.</span> : null}
+            </div>
           </div>
+          <p className="mb-2 text-xs text-slate-500">Paste delivery URLs for images uploaded in Cloudinary Media Library. Select “All colors” for an overview, or choose one of Smartphone Colors for a color-specific photo.</p>
+          <div className="grid items-end gap-2 rounded-lg border border-slate-200 bg-slate-50 p-3 md:grid-cols-[170px_150px_minmax(0,1fr)_auto]">
+            <Field label="Purpose">
+              <select value={imagePurposeDraft} onChange={(event) => { setImagePurposeDraft(event.target.value); if (event.target.value === "All colors") setImageColorDraft("All colors"); else if (imageColorDraft === "All colors") setImageColorDraft(""); }} className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm">
+                {PRODUCT_IMAGE_PURPOSES.map((purpose) => <option key={purpose} value={purpose}>{purpose}</option>)}
+              </select>
+            </Field>
+            <Field label="Color">
+              <select value={imagePurposeDraft === "All colors" ? "All colors" : imageColorDraft} disabled={imagePurposeDraft === "All colors"} onChange={(event) => setImageColorDraft(event.target.value)} className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm">
+                <option value="">No color</option>
+                <option value="All colors">All colors</option>
+                {(form.design?.colors || []).map((color) => <option key={color} value={color}>{color}</option>)}
+              </select>
+            </Field>
+            <Field label={<span className="flex w-full items-center justify-between gap-2"><span>Cloudinary delivery URL</span><button type="button" onClick={addAutomaticImageOptimizations} className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-800 hover:bg-blue-100">Add f_auto/q_auto</button></span>}>
+              <div className="mb-1 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-xs text-slate-500">
+                <span>(</span>
+                <code className="break-all">{CLOUDINARY_DELIVERY_URL_PREFIX}</code>
+                <span>)</span>
+                <button type="button" onClick={copyCloudinaryDeliveryUrlPrefix} className="shrink-0 font-semibold text-blue-700 underline underline-offset-2">Copy prefix</button>
+              </div>
+              <TextInput className="w-full min-w-0 bg-white" value={imageUrlDraft} onChange={(event) => setImageUrlDraft(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); addCloudinaryImageUrl(); } }} placeholder="https://res.cloudinary.com/.../image/upload/..." />
+            </Field>
+            <button type="button" onClick={addCloudinaryImageUrl} className="rounded-lg bg-blue-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">Add image</button>
+          </div>
+          <div className="inline-flex w-fit overflow-hidden rounded-lg border border-slate-300 bg-white" role="tablist" aria-label="Image display mode">
+            <button type="button" role="tab" aria-selected={imageAdminView === "list"} onClick={() => setImageAdminView("list")} className={`px-4 py-2 text-sm font-semibold ${imageAdminView === "list" ? "bg-blue-700 text-white" : "text-slate-700 hover:bg-slate-50"}`}>Image list</button>
+            <button type="button" role="tab" aria-selected={imageAdminView === "preview"} onClick={() => setImageAdminView("preview")} className={`border-l border-slate-300 px-4 py-2 text-sm font-semibold ${imageAdminView === "preview" ? "bg-blue-700 text-white" : "text-slate-700 hover:bg-slate-50"}`}>Image preview</button>
+          </div>
+          {imageAdminView === "list" ? (
+            <ProductImageItemsEditor
+              items={form.imageItems || []}
+              colorOptions={form.design?.colors || []}
+              imageBackground={form.imageBackground || "#ffffff"}
+              disabled={false}
+              onChange={(items) => setField("imageItems", items)}
+            />
+          ) : (
+            (form.imageItems || []).length > 0 ? (() => {
+              const previewItems = form.imageItems || [];
+              const activeIndex = Math.min(imagePreviewIndex, previewItems.length - 1);
+              const activeItem = previewItems[activeIndex];
+              const previewBackground = form.imageBackground === "transparent" ? "transparent" : form.imageBackground || "#ffffff";
+              return (
+                <div className="grid gap-3" aria-label="Preview product gallery">
+                  <div className="grid gap-2 sm:grid-cols-[72px_minmax(0,1fr)]">
+                    <div className="order-2 flex gap-2 overflow-x-auto sm:order-1 sm:max-h-64 sm:flex-col sm:overflow-y-auto sm:overflow-x-hidden">
+                      {previewItems.slice(0, 8).map((item, index) => (
+                        <button key={`${item.url}-${index}`} type="button" onClick={() => setImagePreviewIndex(index)} aria-pressed={activeIndex === index} aria-label={`Show image ${index + 1}`} style={{ backgroundColor: previewBackground }} className={`relative h-16 w-16 shrink-0 overflow-hidden rounded-lg border ${activeIndex === index ? "border-blue-400" : "border-slate-200"}`}>
+                          <Image src={item.url} alt={`${form.name || "Product"} thumbnail ${index + 1}`} fill className="object-contain p-1" unoptimized />
+                        </button>
+                      ))}
+                    </div>
+                    <div className="order-1 grid min-w-0 gap-2 sm:order-2">
+                      <div style={{ backgroundColor: previewBackground }} className="relative h-64 overflow-hidden rounded-xl border border-slate-100">
+                        <Image src={activeItem.url} alt={`${form.name || "Product"} image ${activeIndex + 1}`} fill className="object-contain" unoptimized />
+                      </div>
+                      <div className="flex flex-wrap justify-center gap-2" aria-label={`Metadata for image ${activeIndex + 1}`}>
+                        <span className="rounded-full bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-800">{activeItem.purpose || "Other"}</span>
+                        <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-700">{activeItem.color || "No color"}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })() : <p className="text-sm text-slate-500">Add an image to preview it here.</p>
+          )}
+          {imageColorErrors.length > 0 ? (
+            <div className="grid gap-1 rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800" role="alert">
+              <strong>Image color names must match Smartphone Colors.</strong>
+              {imageColorErrors.map((item) => <button key={`${item.index}-${item.color}`} type="button" className="w-fit text-left underline" onClick={() => { const field = document.querySelector(`[aria-label="Image ${item.index + 1} color"]`); field?.scrollIntoView({ behavior: "smooth", block: "center" }); (field as HTMLElement | null)?.focus(); }}>Image {item.index + 1}: {item.message} Go to row.</button>)}
+            </div>
+          ) : null}
+          {dimensionColorErrors.length > 0 ? (
+            <div className="grid gap-1 rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800" role="alert">
+              <strong>Body Size &amp; Weight colors must match Smartphone Colors.</strong>
+              {dimensionColorErrors.map((item) => <button key={`${item.path}-${item.color}`} type="button" className="w-fit text-left underline" onClick={() => { const field = document.querySelector(`[data-color-path="${item.path}"]`); field?.scrollIntoView({ behavior: "smooth", block: "center" }); (field as HTMLElement | null)?.focus(); }}>{item.label}: “{item.color}” is not in Smartphone Colors. Go to field.</button>)}
+            </div>
+          ) : null}
         </Section>
         </div>
         </>
@@ -5668,17 +6096,18 @@ export default function ProductEditor({ deviceType, pageTitle, pageDescription }
 
         <div className="pb-8">
           <div className="panel flex flex-wrap gap-2 p-4">
-            <button type="submit" disabled={saving || uploading} className="rounded-lg bg-blue-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60">
+            <button type="submit" disabled={saving} className="rounded-lg bg-blue-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60">
               {saving ? "Saving..." : editingId ? `Update ${pageTitle}` : `Create ${pageTitle}`}
             </button>
             {editingId ? (
               <button
                 type="button"
+
                 onClick={() => {
                   resetForm();
                   goToListView();
                 }}
-                className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
               >
                 Cancel Edit
               </button>
@@ -5700,7 +6129,7 @@ export default function ProductEditor({ deviceType, pageTitle, pageDescription }
             <div className="flex flex-col gap-2">
               <button
                 type="submit"
-                disabled={saving || uploading}
+                disabled={saving}
                 className="rounded-lg bg-blue-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
               >
                 {saving ? "Saving..." : editingId ? `Update ${pageTitle}` : `Create ${pageTitle}`}

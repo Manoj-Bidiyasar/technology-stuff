@@ -368,6 +368,22 @@ function normalizeProduct(input: Partial<Product>): Product {
     ...(input.status === "scheduled" && input.scheduledAt ? { scheduledAt: input.scheduledAt } : {}),
     shortDescription: input.shortDescription || "",
     images: Array.isArray(input.images) ? input.images.filter(Boolean) : [],
+    imageItems: Array.isArray(input.imageItems)
+      ? input.imageItems
+          .filter((item: { purpose?: string; color?: string; url?: string }) => typeof item?.url === "string" && Boolean(item.url.trim()))
+          .map((item: { purpose?: string; color?: string; url: string }) => ({
+            purpose: String(item.purpose || "Other"),
+            color: String(item.color || ""),
+            url: item.url.trim(),
+          }))
+      : [],
+    allColorImages: Array.isArray(input.allColorImages) ? input.allColorImages.filter(Boolean) : [],
+    imageVariants: Array.isArray(input.imageVariants)
+      ? input.imageVariants
+          .filter((variant: { color?: string; images?: string[] }) => Boolean(variant?.color?.trim()) && Array.isArray(variant.images))
+          .map((variant: { color: string; images: string[] }) => ({ color: variant.color.trim(), images: variant.images.filter(Boolean) }))
+      : [],
+    imageBackground: input.imageBackground || "#ffffff",
     specs: input.specs || {},
     performance: input.performance || {},
     camera: input.camera || {},

@@ -72,7 +72,14 @@ function getStartingPrice(product: Product, fallbackPrice: number): number {
 }
 
 export default function ProductCard({ product, basePath = "/mobile" }: { product: Product; basePath?: string }) {
-  const image = product.images[0] || "https://placehold.co/640x420?text=Phone";
+  const unifiedImage = product.imageItems?.find((item) => item.purpose === "All colors" || item.color.toLowerCase() === "all colors")?.url
+    || product.imageItems?.find((item) => !item.color.trim())?.url
+    || product.imageItems?.[0]?.url;
+  const image = unifiedImage
+    || product.allColorImages?.[0]
+    || product.imageVariants?.find((variant) => variant.color?.trim() && variant.images?.length)?.images[0]
+    || product.images[0]
+    || "https://placehold.co/640x420?text=Phone";
   const overall100 = calculateOverallScore100(product);
   const badgeTone = getScoreBadgeTone(overall100);
   const liveAmount = Number(product.priceLive?.amount || 0);
@@ -94,7 +101,7 @@ export default function ProductCard({ product, basePath = "/mobile" }: { product
             </span>
           </span>
         </span>
-      <div className="relative h-40 overflow-hidden rounded-lg border border-slate-100 bg-white">
+      <div style={{ backgroundColor: product.imageBackground === "transparent" ? "transparent" : product.imageBackground || "#ffffff" }} className="relative h-40 overflow-hidden rounded-lg border border-slate-100">
         <Image src={image} alt={product.name} fill className="object-contain p-3" unoptimized />
       </div>
       <h3 className="mt-3 line-clamp-2 text-sm font-bold text-slate-900">{product.name}</h3>

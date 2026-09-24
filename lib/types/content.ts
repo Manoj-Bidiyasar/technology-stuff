@@ -489,6 +489,7 @@ export type ProductGeneral = {
   announceDate?: string;
   launchDate?: string;
   modelNumber?: string;
+  originCountry?: string[];
   packageContents?: string[];
   variants?: ProductGeneralVariant[];
   multimedia?: string[];
@@ -558,6 +559,12 @@ export type ProductRatings = {
   overall?: number;
 };
 
+export type ProductImageItem = {
+  purpose: string;
+  color: string;
+  url: string;
+};
+
 export type Product = {
   id?: string;
   deviceType?: "smartphone" | "tablet";
@@ -574,6 +581,10 @@ export type Product = {
   scheduledAt?: TimestampLike;
   shortDescription?: string;
   images: string[];
+  imageItems?: ProductImageItem[];
+  allColorImages?: string[];
+  imageVariants?: Array<{ color: string; images: string[] }>;
+  imageBackground?: string;
   specs: ProductSpecs;
   performance?: ProductPerformance;
   camera?: ProductCamera;

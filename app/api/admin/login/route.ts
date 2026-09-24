@@ -18,13 +18,15 @@ export async function POST(request: NextRequest) {
     });
     if (!result.ok) {
       const status =
-        result.error === "session/device-not-allowed"
-          ? 403
-          : result.error === "user-profile-missing"
-            ? 404
-            : result.error === "user-not-active" || result.error === "user-role-not-allowed"
-              ? 403
-              : 401;
+        result.error.startsWith("admin-session-start-failed")
+          ? 503
+          : result.error === "session/device-not-allowed"
+            ? 403
+            : result.error === "user-profile-missing"
+              ? 404
+              : result.error === "user-not-active" || result.error === "user-role-not-allowed"
+                ? 403
+                : 401;
       return NextResponse.json({ error: result.error }, { status });
     }
 

@@ -503,6 +503,478 @@
   ],
   "smartphone": [
     {
+      "section": "Display",
+      "field": "Other Features",
+      "name": "Other 23, Other 24",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-09-23T19:16:33.610Z"
+    },
+    {
+      "section": "Display",
+      "field": "Other Features",
+      "name": "Other 2",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-09-23T19:16:19.535Z"
+    },
+    {
+      "section": "Display",
+      "field": "Other Features",
+      "name": "Other 1",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-09-23T19:16:10.623Z"
+    },
+    {
+      "section": "Display",
+      "field": "Certification",
+      "name": "Certification 21,  Certification22",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-09-23T19:15:57.319Z"
+    },
+    {
+      "section": "Display",
+      "field": "Certification",
+      "name": "Certification 2",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-09-23T19:15:44.799Z"
+    },
+    {
+      "section": "Display",
+      "field": "Certification",
+      "name": "Certification 1",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-09-23T19:15:34.847Z"
+    },
+    {
+      "section": "Display",
+      "field": "Stylus / Pen",
+      "name": "Stylus 12, Stylus 122",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-09-23T19:15:18.934Z"
+    },
+    {
+      "section": "Display",
+      "field": "Stylus / Pen",
+      "name": "Stylus 11",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-09-23T19:15:02.386Z"
+    },
+    {
+      "section": "Display",
+      "field": "Stylus / Pen",
+      "name": "Stylus 1",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-09-23T19:14:44.220Z"
+    },
+    {
+      "section": "Display",
+      "field": "Dimming",
+      "name": "Dimming 21, Dimming 22",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-09-23T19:14:28.803Z"
+    },
+    {
+      "section": "Display",
+      "field": "Dimming",
+      "name": "Dimming 2",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-09-23T19:14:08.553Z"
+    },
+    {
+      "section": "Display",
+      "field": "Dimming",
+      "name": "Dimming 1",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-09-23T19:13:57.532Z"
+    },
+    {
+      "section": "Display",
+      "field": "Type",
+      "name": "type 21, type 22",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-09-23T19:13:37.731Z"
+    },
+    {
+      "section": "Display",
+      "field": "Type",
+      "name": "type 2",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-09-23T19:13:24.066Z"
+    },
+    {
+      "section": "Display",
+      "field": "Type",
+      "name": "type",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-09-23T19:13:11.727Z"
+    },
+    {
+      "section": "Display",
+      "field": "protection",
+      "name": "zmbzv, jhdsk",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-09-23T19:06:54.251Z"
+    },
+    {
+      "section": "Display",
+      "field": "protection",
+      "name": "zxcmbzv",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-09-23T19:06:42.538Z"
+    },
+    {
+      "section": "Display",
+      "field": "protection",
+      "name": "gfghf",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-09-23T19:06:31.197Z"
+    },
+    {
+      "section": "Camera",
+      "field": "Visible Posture",
+      "name": "Visible Posture  21, Visible Posture 41",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-09-23T18:58:14.847Z"
+    },
+    {
+      "section": "Camera",
+      "field": "Visible Posture",
+      "name": "Visible Posture  2",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-09-23T18:58:02.707Z"
+    },
+    {
+      "section": "Camera",
+      "field": "Visible Posture",
+      "name": "Visible Posture 1",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-09-23T18:57:50.206Z"
+    },
+    {
+      "section": "Camera",
+      "field": "Camera Type",
+      "name": "Camera Type 21, Camera Type 31",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-09-23T18:57:31.069Z"
+    },
+    {
+      "section": "Camera",
+      "field": "Camera Type",
+      "name": "Camera Type 2",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-09-23T18:57:17.754Z"
+    },
+    {
+      "section": "Camera",
+      "field": "Camera Type",
+      "name": "Camera Type 1",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-09-23T18:57:08.783Z"
+    },
+    {
+      "section": "Camera",
+      "field": "Video Features",
+      "name": "Video Features 21, Video Features 22",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-09-23T18:56:52.629Z"
+    },
+    {
+      "section": "Camera",
+      "field": "Video Features",
+      "name": "Video Features 2",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-09-23T18:56:39.164Z"
+    },
+    {
+      "section": "Camera",
+      "field": "Video Features",
+      "name": "Video Features 1",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-09-23T18:56:28.944Z"
+    },
+    {
+      "section": "Camera",
+      "field": "Comment",
+      "name": "Comment 21, Comment 23",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-09-23T18:56:11.026Z"
+    },
+    {
+      "section": "Camera",
+      "field": "Comment",
+      "name": "Comment 2",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-09-23T18:55:58.692Z"
+    },
+    {
+      "section": "Camera",
+      "field": "Comment",
+      "name": "Comment 1",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-09-23T18:55:50.325Z"
+    },
+    {
+      "section": "Camera",
+      "field": "Video Resolution",
+      "name": "Video Resolution 21, Video Resolution 22",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-09-23T18:55:36.628Z"
+    },
+    {
+      "section": "Camera",
+      "field": "Video Resolution",
+      "name": "Video Resolution 2",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-09-23T18:55:22.132Z"
+    },
+    {
+      "section": "Camera",
+      "field": "Video Resolution",
+      "name": "Video Resolution 1",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-09-23T18:55:13.370Z"
+    },
+    {
+      "section": "Camera",
+      "field": "Video Type",
+      "name": "Video Type 11, Video Type 21",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-09-23T18:54:52.517Z"
+    },
+    {
+      "section": "Camera",
+      "field": "Video Type",
+      "name": "Video Type 2",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-09-23T18:54:39.495Z"
+    },
+    {
+      "section": "Camera",
+      "field": "Video Type",
+      "name": "Video Type 1",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-09-23T18:54:30.372Z"
+    },
+    {
+      "section": "Camera",
+      "field": "Autofocus Detail",
+      "name": "Autofocus Detail 21, Autofocus Detail 22",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-09-23T18:53:52.091Z"
+    },
+    {
+      "section": "Camera",
+      "field": "Autofocus Detail",
+      "name": "Autofocus Detail 2",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-09-23T18:53:38.380Z"
+    },
+    {
+      "section": "Camera",
+      "field": "Autofocus Detail",
+      "name": "Autofocus Detail 1",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-09-23T18:53:28.119Z"
+    },
+    {
+      "section": "Camera",
+      "field": "Lens Type",
+      "name": "Lens Type 21, Lens Type 22",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-09-23T18:53:06.706Z"
+    },
+    {
+      "section": "Camera",
+      "field": "Lens Type",
+      "name": "Lens Type 2",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-09-23T18:52:53.176Z"
+    },
+    {
+      "section": "Camera",
+      "field": "Lens Type",
+      "name": "Lens Type 1",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-09-23T18:52:43.353Z"
+    },
+    {
+      "section": "Camera",
+      "field": "Sensor Name",
+      "name": "Sensor Name 21, Sensor Name 22",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-09-23T18:52:22.925Z"
+    },
+    {
+      "section": "Camera",
+      "field": "Sensor Name",
+      "name": "Sensor Name 2",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-09-23T18:52:06.518Z"
+    },
+    {
+      "section": "Camera",
+      "field": "Sensor Name",
+      "name": "Sensor Name 1",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-09-23T18:51:56.440Z"
+    },
+    {
+      "section": "Camera",
+      "field": "Camera Features",
+      "name": "Camera Features 21, Camera Features 22",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-09-23T18:51:36.703Z"
+    },
+    {
+      "section": "Camera",
+      "field": "Camera Features",
+      "name": "Camera Features 2",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-09-23T18:51:22.827Z"
+    },
+    {
+      "section": "Camera",
+      "field": "Camera Features",
+      "name": "Camera Features 1",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-09-23T18:51:13.331Z"
+    },
+    {
+      "section": "Camera",
+      "field": "Flash Name",
+      "name": "Flash 31,  Flash 32",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-09-23T18:47:45.625Z"
+    },
+    {
+      "section": "Camera",
+      "field": "Flash Name",
+      "name": "Flash 21",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-09-23T18:47:24.554Z"
+    },
+    {
+      "section": "Camera",
+      "field": "AF Detail",
+      "name": "AF Details 10, AF Details 11",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-09-23T18:47:11.388Z"
+    },
+    {
+      "section": "Camera",
+      "field": "AF Detail",
+      "name": "AF Details 2",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-09-23T18:46:56.689Z"
+    },
+    {
+      "section": "Camera",
+      "field": "AF Detail",
+      "name": "AF Details 1",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-09-23T18:46:46.078Z"
+    },
+    {
+      "section": "Camera",
+      "field": "Flash Name",
+      "name": "Flash 1, Flash 2",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-09-23T18:46:23.865Z"
+    },
+    {
+      "section": "Camera",
+      "field": "Flash Name",
+      "name": "Flash 2",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-09-23T18:46:03.562Z"
+    },
+    {
+      "section": "Camera",
+      "field": "Flash Name",
+      "name": "Flash 1",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-09-23T18:45:50.813Z"
+    },
+    {
+      "section": "General",
+      "field": "Origin / Country",
+      "name": "India, China",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-09-23T18:31:10.367Z"
+    },
+    {
+      "section": "General",
+      "field": "Origin / Country",
+      "name": "China",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-09-23T18:30:51.750Z"
+    },
+    {
+      "section": "General",
+      "field": "Origin / Country",
+      "name": "India",
+      "aliases": [],
+      "status": "approved",
+      "createdAt": "2026-09-23T18:30:41.468Z"
+    },
+    {
       "section": "Performance",
       "field": "Other AI Feature",
       "name": "x3",

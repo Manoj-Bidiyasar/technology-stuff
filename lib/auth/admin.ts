@@ -188,8 +188,10 @@ export async function createAdminSessionFromIdToken(input: CreateAdminSessionInp
 
     await batch.commit();
     return { ok: true, sessionToken };
-  } catch {
-    return { ok: false, error: "admin-session-start-failed" };
+  } catch (error) {
+    console.error("[admin-auth] Failed to create the admin session.", error);
+    const detail = process.env.NODE_ENV === "development" && error instanceof Error ? `: ${error.message}` : "";
+    return { ok: false, error: `admin-session-start-failed${detail}` };
   }
 }
 
