@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { Suspense } from "react";
 import { Sora, Space_Mono } from "next/font/google";
 import MainNav from "@/components/MainNav";
 import LayoutHeaderSearch from "@/components/LayoutHeaderSearch";
@@ -42,7 +43,9 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
         />
       </head>
       <body className={`${sora.variable} ${spaceMono.variable} antialiased`}>
-        <FirebaseAnalytics />
+        <Suspense fallback={null}>
+          <FirebaseAnalytics />
+        </Suspense>
         <header className="sticky top-0 z-40 border-b border-white/70 bg-white/85 backdrop-blur">
           <div className="mobile-container py-3">
             <div className="flex flex-wrap items-center justify-between gap-3">
