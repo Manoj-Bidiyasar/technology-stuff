@@ -784,7 +784,7 @@ function OrderedImageUrlList({
 }: {
   images: string[];
   onChange: (images: string[]) => void;
-  label: string;
+  label: React.ReactNode;
   disabled?: boolean;
 }) {
   const [draggingIndex, setDraggingIndex] = useState<number | null>(null);
