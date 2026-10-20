@@ -304,6 +304,8 @@ export type RearCameraUnit = {
     aperture?: string;
     size?: string;
     pixelSize?: string;
+    binnedResolution?: string;
+    binnedPixelSize?: string;
     focalLength?: string;
     fov?: string;
     lensType?: string;
