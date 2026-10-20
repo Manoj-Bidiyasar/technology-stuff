@@ -423,7 +423,7 @@ export default async function MobileDetailPage({ params, searchParams }: MobileD
             {product.shortDescription ? <p className="mt-3 text-sm text-slate-600">{product.shortDescription}</p> : null}
 
             <div className="mt-4 grid gap-3 sm:grid-cols-[0.9fr_1.1fr]">
-              <ProductImageGallery images={product.images} allColorImages={product.allColorImages} imageVariants={product.imageVariants} imageItems={product.imageItems} colors={product.design?.colors} name={product.name} background={product.imageBackground} />
+              <ProductImageGallery images={product.images} allColorImages={product.allColorImages} imageVariants={product.imageVariants} imageItems={product.imageItems} colors={product.design?.colors} memoryVariants={product.general?.variants} name={product.name} background={product.imageBackground} />
               <div className="space-y-2 p-1">
                 {quickSpecs.map((item) => (
                   <div key={item.key} className="flex items-center gap-2.5 border-b border-slate-200 pb-2.5 last:border-b-0 last:pb-0">
@@ -450,7 +450,7 @@ export default async function MobileDetailPage({ params, searchParams }: MobileD
                 Compare Now
               </Link>
             ) : null}
-            <ImageGalleryModalButton images={product.images} allColorImages={product.allColorImages} imageVariants={product.imageVariants} imageItems={product.imageItems} colors={product.design?.colors} name={product.name} background={product.imageBackground} />
+            <ImageGalleryModalButton images={product.images} allColorImages={product.allColorImages} imageVariants={product.imageVariants} imageItems={product.imageItems} colors={product.design?.colors} memoryVariants={product.general?.variants} name={product.name} background={product.imageBackground} />
             {!product.affiliateLinks.amazon && !product.affiliateLinks.flipkart ? (
               <div className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5">
                 <p className="text-sm font-semibold text-slate-700">Currently unavailable on Amazon and Flipkart.</p>

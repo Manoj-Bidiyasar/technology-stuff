@@ -10,6 +10,20 @@ function cleanValue(value: unknown): string {
   return text && text.toLowerCase() !== "null" && text.toLowerCase() !== "undefined" ? text : "";
 }
 
+function formatUnit(value: unknown, unit: string, prefix = ""): string {
+  const text = cleanValue(value);
+  if (!text) return "";
+  if (prefix && text.toLowerCase().startsWith(prefix.toLowerCase())) return text;
+  if (unit && text.toLowerCase().endsWith(unit.toLowerCase())) return text;
+  return `${prefix}${text}${unit}`;
+}
+
+function formatFocalLengths(value: unknown): string {
+  const text = cleanValue(value);
+  if (!text) return "";
+  return text.split(",").map((part) => formatUnit(part.trim(), "mm")).join(", ");
+}
+
 function formatFeatures(list?: string[]): string {
   if (!Array.isArray(list) || list.length === 0) return "-";
   return list
@@ -62,7 +76,19 @@ function formatSensorDetails(cameras?: FrontCameraUnit[]): string[] {
 
   return cameras
     .map((camera, index) => {
-      const details = cleanValue(camera.sensor?.size);
+      const details = [
+        formatUnit(camera.sensor?.aperture, "", "f/"),
+        formatUnit(camera.sensor?.size, '"'),
+        formatUnit(camera.sensor?.pixelSize, "µm"),
+        camera.sensor?.binnedResolution || camera.sensor?.binnedPixelSize
+          ? `Binned: ${[
+              formatUnit(camera.sensor?.binnedResolution, " MP"),
+              formatUnit(camera.sensor?.binnedPixelSize, "µm"),
+            ].filter(Boolean).join(", ")}`
+          : "",
+        formatUnit(camera.sensor?.fov, "°"),
+        formatFocalLengths(camera.sensor?.focalLength),
+      ].filter(Boolean).join(", ");
 
       const resolution = formatResolutionLabel(camera.resolution);
       const role = cleanValue(camera.role).toLowerCase();

@@ -62,9 +62,11 @@ export type ProductDisplayPanel = {
   screenToBody?: string | number;
   aspectRatio?: string;
   touchSamplingRate?: string | number;
+  instantTouchSamplingRate?: string | number;
   curved?: boolean;
   curvedDegree?: string | number;
   colorGamut?: string[];
+  colorDepth?: string;
   displayModes?: string[];
   colorProfiles?: Array<{
     mode?: string;
@@ -171,6 +173,7 @@ export type ProductPerformance = {
   gpu?: string;
   gpuFrequency?: string;
   gpuFlops?: string;
+  cameraIsp?: string;
   aiEngine?: string;
   otherAiFeatures?: string[];
   coolingSystem?: string;
@@ -187,6 +190,8 @@ export type ProductCameraSensor = {
   aperture?: string;
   focalLength?: string;
   pixelSize?: string;
+  binnedResolution?: string;
+  binnedPixelSize?: string;
   eis?: boolean;
   ois?: boolean;
   autofocus?: boolean | string;
@@ -226,6 +231,8 @@ export type FrontCameraUnit = {
     name?: string;
     size?: string;
     pixelSize?: string;
+    binnedResolution?: string;
+    binnedPixelSize?: string;
     aperture?: string;
     lensType?: string;
     focalLength?: string;
@@ -311,6 +318,8 @@ export type RearCameraUnit = {
 
 export type ProductRearCamera = {
   cameras?: RearCameraUnit[];
+  cameraIsp?: string;
+  cameraIspVisible?: boolean;
   features?: string[];
   aiFeatures?: string[];
   flash?: {
@@ -346,6 +355,7 @@ export type ProductRearCamera = {
 };
 
 export type ProductSecurity = {
+  vibrationMotors?: string[];
   fingerprint?: {
     available?: boolean;
     locations?: string[];
@@ -481,6 +491,7 @@ export type ProductGeneralVariant = {
   storage?: string;
   storageType?: string;
   virtualRam?: string;
+  colors?: string[];
   launchPrice?: number;
   livePrice?: number;
 };
@@ -489,6 +500,8 @@ export type ProductGeneral = {
   announceDate?: string;
   launchDate?: string;
   modelNumber?: string;
+  headSarWkg?: number;
+  bodySarWkg?: number;
   originCountry?: string[];
   packageContents?: string[];
   variants?: ProductGeneralVariant[];
@@ -497,6 +510,7 @@ export type ProductGeneral = {
     audioJack35mm?: boolean;
     typeCAudioJack?: boolean;
     lightningAudioJack?: boolean;
+    features?: string[];
     fmRadio?: boolean;
     hiResAudio?: boolean;
     hiResVideo?: boolean;

@@ -31,6 +31,10 @@ function formatPrice(value?: number): string {
   return new Intl.NumberFormat("en-IN", { maximumFractionDigits: 0 }).format(value);
 }
 
+function formatSar(value?: number): string {
+  return typeof value === "number" && Number.isFinite(value) && value >= 0 ? `${value} W/kg` : "-";
+}
+
 function variantAmount(value: unknown): number {
   const text = String(value ?? "").trim();
   const parsed = Number(text.replace(/[^0-9.]/g, ""));
@@ -89,6 +93,8 @@ export default function GeneralSection({ general, specs }: GeneralSectionProps) 
       {row("Launch Date", launchDate)}
       {row("Announce Date", announceDate)}
       {row("Model Number", modelNumber)}
+      {row("Head SAR", formatSar(general?.headSarWkg))}
+      {row("Body SAR", formatSar(general?.bodySarWkg))}
       {row("Package Contents", packageContents)}
       {row("Variants", variants)}
       {row("Multimedia", multimedia)}

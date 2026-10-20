@@ -34,8 +34,10 @@ export default function DisplayDetailsCollapse({ display }: DisplayDetailsCollap
     ["Protection", safe.protection || "-"],
     ["HDR Support", safe.hdr && safe.hdr.length > 0 ? safe.hdr.join(", ") : "-"],
     ["Pixel Density", formatWithUnit(safe.pixelDensity, "ppi")],
+    ["Color Depth", safe.colorDepth || "-"],
     ["Screen-to-body Ratio", formatWithUnit(safe.screenToBody, "%")],
-    ["Touch Sampling Rate", formatWithUnit(safe.touchSamplingRate, "Hz")],
+    ["Touch Sampling Rate (TSR)", formatWithUnit(safe.touchSamplingRate, "Hz")],
+    ["Instant Touch Sampling Rate (Instant TSR)", formatWithUnit(safe.instantTouchSamplingRate, "Hz")],
     ["Curved Display", formatBoolean(safe.curved)],
   ];
 

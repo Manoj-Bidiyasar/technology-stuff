@@ -308,7 +308,7 @@ export default function SpecsTable({ specs, ratings, memoryStorage, variants, ba
             ) : section.title === "Front Camera" ? (
               <FrontCameraSection frontCamera={effectiveFrontCamera} />
             ) : section.title === "Security & Sensors" ? (
-              <SecurityAndSensorsSection security={security} sensors={sensors} />
+              <SecurityAndSensorsSection security={security} sensors={sensors} network={network} />
             ) : section.title === "Network" ? (
               <NetworkSection network={network} />
             ) : section.title === "Software" ? (

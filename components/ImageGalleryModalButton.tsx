@@ -3,7 +3,7 @@
 import Image from "next/image";
 import { useEffect, useMemo, useState } from "react";
 import { announceProductImageColorSelection, PRODUCT_IMAGE_COLOR_SELECTION_EVENT } from "@/lib/utils/productImageSelection";
-import type { ProductImageItem } from "@/lib/types/content";
+import type { ProductGeneralVariant, ProductImageItem } from "@/lib/types/content";
 
 type ImageGalleryModalButtonProps = {
   images: string[];
@@ -11,11 +11,12 @@ type ImageGalleryModalButtonProps = {
   imageVariants?: Array<{ color: string; images: string[] }>;
   imageItems?: ProductImageItem[];
   colors?: string[];
+  memoryVariants?: ProductGeneralVariant[];
   name: string;
   background?: string;
 };
 
-export default function ImageGalleryModalButton({ images, allColorImages = [], imageVariants = [], imageItems = [], colors = [], name, background = "#ffffff" }: ImageGalleryModalButtonProps) {
+export default function ImageGalleryModalButton({ images, allColorImages = [], imageVariants = [], imageItems = [], colors = [], memoryVariants = [], name, background = "#ffffff" }: ImageGalleryModalButtonProps) {
   const unified = imageItems.filter((item) => item.url?.trim());
   const normalizedVariants = useMemo(() => {
     if (unified.length) {
@@ -37,23 +38,27 @@ export default function ImageGalleryModalButton({ images, allColorImages = [], i
   const generalImages = useMemo(() => unified.length
     ? unified.filter((item) => !item.color.trim() || item.color.toLowerCase() === "all colors").map((item) => item.url)
     : (images || []).filter(Boolean), [images, unified]);
+  const hasVariantColorAvailability = memoryVariants.some((variant) => Array.isArray(variant.colors));
+  const availableImageVariants = hasVariantColorAvailability
+    ? normalizedVariants.filter((imageVariant) => memoryVariants.some((variant) => !Array.isArray(variant.colors) || variant.colors.some((color) => color.trim().toLocaleLowerCase() === imageVariant.color.trim().toLocaleLowerCase())))
+    : normalizedVariants;
 
   const [open, setOpen] = useState(false);
-  const [selectedColorIndex, setSelectedColorIndex] = useState<number | null>(null);
+  const [selectedColor, setSelectedColor] = useState<string | null>(null);
   const [activeIndex, setActiveIndex] = useState(0);
   useEffect(() => {
     const handleSelection = (event: Event) => {
-      const index = (event as CustomEvent<number | null>).detail;
-      setSelectedColorIndex(index);
+      const color = (event as CustomEvent<string | null>).detail;
+      setSelectedColor(color);
       setActiveIndex(0);
     };
     window.addEventListener(PRODUCT_IMAGE_COLOR_SELECTION_EVENT, handleSelection);
     return () => window.removeEventListener(PRODUCT_IMAGE_COLOR_SELECTION_EVENT, handleSelection);
   }, []);
 
-  const selectedVariant = selectedColorIndex === null ? undefined : normalizedVariants[Math.min(selectedColorIndex, Math.max(0, normalizedVariants.length - 1))];
-  const selectedImages = selectedColorIndex !== null && selectedVariant
-    ? selectedVariant.images
+  const selectedVariant = selectedColor === null ? undefined : normalizedVariants.find((variant) => variant.color.trim().toLocaleLowerCase() === selectedColor.trim().toLocaleLowerCase());
+  const selectedImages = selectedColor !== null
+    ? selectedVariant?.images || generalImages
     : [...overviewImages, ...generalImages];
   const normalized = selectedImages.length > 0
     ? selectedImages
@@ -93,26 +98,26 @@ export default function ImageGalleryModalButton({ images, allColorImages = [], i
               </button>
             </div>
 
-            {normalizedVariants.length > 0 ? (
+            {availableImageVariants.length > 0 ? (
               <div className="mb-3 flex flex-wrap items-center gap-2" aria-label="Choose phone color">
                 <span className="mr-1 text-sm font-semibold text-slate-700">Color:</span>
-                {overviewImages.length > 0 ? (
+                {overviewImages.length > 0 || selectedColor !== null ? (
                   <button
                     type="button"
-                    onClick={() => { setSelectedColorIndex(null); setActiveIndex(0); announceProductImageColorSelection(null); }}
-                    aria-pressed={selectedColorIndex === null}
-                    className={`rounded-full border px-3 py-1.5 text-sm font-medium ${selectedColorIndex === null ? "border-blue-600 bg-blue-50 text-blue-800" : "border-slate-300 bg-white text-slate-700 hover:border-slate-400"}`}
+                    onClick={() => { setSelectedColor(null); setActiveIndex(0); announceProductImageColorSelection(null); }}
+                    aria-pressed={selectedColor === null}
+                    className={`rounded-full border px-3 py-1.5 text-sm font-medium ${selectedColor === null ? "border-blue-600 bg-blue-50 text-blue-800" : "border-slate-300 bg-white text-slate-700 hover:border-slate-400"}`}
                   >
                     All colors
                   </button>
                 ) : null}
-                {normalizedVariants.map((variant, index) => (
+                {availableImageVariants.map((variant, index) => (
                   <button
                     key={`${variant.color}-${index}`}
                     type="button"
-                    onClick={() => { setSelectedColorIndex(index); setActiveIndex(0); announceProductImageColorSelection(index); }}
-                    aria-pressed={selectedColorIndex === index}
-                    className={`rounded-full border px-3 py-1.5 text-sm font-medium ${selectedColorIndex === index ? "border-blue-600 bg-blue-50 text-blue-800" : "border-slate-300 bg-white text-slate-700 hover:border-slate-400"}`}
+                    onClick={() => { setSelectedColor(variant.color); setActiveIndex(0); announceProductImageColorSelection(variant.color); }}
+                    aria-pressed={selectedColor?.trim().toLocaleLowerCase() === variant.color.trim().toLocaleLowerCase()}
+                    className={`rounded-full border px-3 py-1.5 text-sm font-medium ${selectedColor?.trim().toLocaleLowerCase() === variant.color.trim().toLocaleLowerCase() ? "border-blue-600 bg-blue-50 text-blue-800" : "border-slate-300 bg-white text-slate-700 hover:border-slate-400"}`}
                   >
                     {variant.color}
                   </button>

@@ -1,8 +1,9 @@
-﻿import type { ProductSecurity } from "@/lib/types/content";
+import type { ProductNetwork, ProductSecurity } from "@/lib/types/content";
 
 type SecurityAndSensorsSectionProps = {
   security?: ProductSecurity;
   sensors?: string[];
+  network?: ProductNetwork;
 };
 
 function cleanValue(value: unknown): string {
@@ -80,16 +81,21 @@ function row(label: string, value: string) {
   );
 }
 
-export default function SecurityAndSensorsSection({ security, sensors }: SecurityAndSensorsSectionProps) {
+export default function SecurityAndSensorsSection({ security, sensors, network }: SecurityAndSensorsSectionProps) {
   const fingerprint = formatFingerprint(security);
   const faceUnlock = formatFaceUnlock(security);
-  const sensorsLine = formatSensors(sensors);
+  const sensorsLine = formatSensors([
+    ...(sensors || []),
+    ...(network?.nfc ? ["NFC"] : []),
+    ...(network?.infrared ? ["IR Blaster"] : []),
+  ]);
 
   return (
     <div className="rounded-xl border border-slate-200 bg-white">
       {row("Fingerprint Sensor", fingerprint)}
       {row("Face Unlock", faceUnlock)}
       {security?.irisScanner === true ? row("Other Biometric Unlock", "Iris Scanner") : null}
+      {Array.isArray(security?.vibrationMotors) && security.vibrationMotors.length > 0 ? row("Vibration Motor", safeArrayJoin(security.vibrationMotors, ", ")) : null}
       {row("Sensors", sensorsLine || "-")}
     </div>
   );

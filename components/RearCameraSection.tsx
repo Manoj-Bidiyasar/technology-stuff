@@ -14,6 +14,20 @@ function cleanValue(value: unknown): string {
   return text && text.toLowerCase() !== "null" && text.toLowerCase() !== "undefined" ? text : "";
 }
 
+function formatUnit(value: unknown, unit: string, prefix = ""): string {
+  const text = cleanValue(value);
+  if (!text) return "";
+  if (prefix && text.toLowerCase().startsWith(prefix.toLowerCase())) return text;
+  if (unit && text.toLowerCase().endsWith(unit.toLowerCase())) return text;
+  return `${prefix}${text}${unit}`;
+}
+
+function formatFocalLengths(value: unknown): string {
+  const text = cleanValue(value);
+  if (!text) return "";
+  return text.split(",").map((part) => formatUnit(part.trim(), "mm")).join(", ");
+}
+
 function prettyRole(input?: string): string {
   const key = cleanValue(input).toLowerCase();
   if (!key) return "";
@@ -70,13 +84,19 @@ function formatSensorLine(camera: RearCameraUnit): string {
 
   const extras = [
     cleanValue(camera.sensor?.name),
-    cleanValue(camera.sensor?.aperture),
-    cleanValue(camera.sensor?.focalLength),
-    cleanValue(camera.sensor?.size),
-    cleanValue(camera.sensor?.pixelSize),
+    formatUnit(camera.sensor?.aperture, "", "f/"),
+    formatFocalLengths(camera.sensor?.focalLength),
+    formatUnit(camera.sensor?.size, '"'),
+    formatUnit(camera.sensor?.pixelSize, "µm"),
+    camera.sensor?.binnedResolution || camera.sensor?.binnedPixelSize
+      ? `Binned: ${[
+          formatUnit(camera.sensor?.binnedResolution, " MP"),
+          formatUnit(camera.sensor?.binnedPixelSize, "µm"),
+        ].filter(Boolean).join(", ")}`
+      : "",
     cleanValue(camera.sensor?.autofocus),
     cleanValue(camera.sensor?.zoom),
-    cleanValue(camera.sensor?.fov),
+    formatUnit(camera.sensor?.fov, "°"),
     camera.sensor?.ois ? "OIS" : "",
     camera.sensor?.eis ? "EIS" : "",
   ]
@@ -125,6 +145,7 @@ export default function RearCameraSection({ rearCamera }: RearCameraSectionProps
             "-"
           ),
         )}
+        {rearCamera?.cameraIsp && rearCamera.cameraIspVisible === true ? row("Camera ISP", rearCamera.cameraIsp) : null}
         {row("Features", formatFeatures(rearCamera?.features))}
         {row("Zoom", zoom || "-")}
         {row("Video Recording", formatVideo(rearCamera?.video?.recording))}

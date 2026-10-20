@@ -7,6 +7,7 @@ import { forwardRef, useCallback, useEffect, useMemo, useState } from "react";
 import type {
   FrontCameraUnit,
   MemoryVariant,
+  ProductGeneralVariant,
   Product,
   ProductImageItem,
   ProductDisplayPanel,
@@ -57,6 +58,7 @@ const FINGERPRINT_SETUP_OPTIONS: Array<{ value: "" | "none" | "rear" | "side-mou
   { value: "in-display", label: "In-Display" },
 ];
 const FINGERPRINT_TYPE_OPTIONS = ["Optical", "Ultrasonic", "Capacitive"] as const;
+const VIBRATION_MOTOR_OPTIONS = ["X-Axis Vibration Motor", "X-Axis Linear Vibration Motor", "Z-Axis Vibration Motor", "Z-Axis Linear Vibration Motor", "ERM Vibration Motor", "Dual Linear Vibration Motors", "Other"] as const;
 const FACE_UNLOCK_OPTIONS = [
   { value: "", label: "Unknown" },
   { value: "No", label: "No" },
@@ -73,8 +75,11 @@ const SENSOR_BASE_OPTIONS = [
   { key: "compass", label: "Compass" },
   { key: "ambientlight", label: "Ambient Light" },
   { key: "barometer", label: "Barometer" },
+  { key: "irblaster", label: "IR Blaster" },
+  { key: "nfc", label: "NFC" },
   { key: "hallsensor", label: "Hall Sensor" },
   { key: "stepsensor", label: "Step Sensor" },
+  { key: "irsensor", label: "IR Sensor" },
 ] as const;
 const SUPPORTED_NETWORK_OPTIONS = ["5G", "4G", "3G", "2G"] as const;
 const SIM_SINGLE_OPTIONS = ["Nano SIM", "Micro SIM", "Mini SIM", "Hybrid SIM", "eSIM"] as const;
@@ -126,6 +131,7 @@ const FORM_FACTOR_OPTIONS = [
   { key: "tri_fold", label: "Tri-Fold" },
 ] as const;
 const HARDWARE_SENSOR_OPTIONS = SENSOR_BASE_OPTIONS.filter((sensor) => sensor.key !== "ecompass");
+const MULTIMEDIA_FEATURE_OPTIONS = ["FM Radio", "Hi-Res Audio Wired", "Hi-Res Audio Wireless", "Hi-Res Audio Both", "Hi-Res Video", "Dolby Atmos", "Dolby Vision", "DTS Sound", "Widevine L1", "Widevine L3", "Spatial Sound", "Single Speaker", "Dual Stereo Speaker"] as const;
 const DISPLAY_FORM_FACTOR_OPTIONS = [
   { key: "bar", label: "Normal" },
   { key: "bar_cover", label: "Normal + Cover" },
@@ -1419,13 +1425,15 @@ export default function ProductEditor({ deviceType, pageTitle, pageDescription }
   }, []);
   const selectedHardwareSensorKeys = useMemo(() => {
     const keys = new Set<string>();
+    if (form.network?.nfc) keys.add("nfc");
+    if (form.network?.infrared) keys.add("irblaster");
     (form.sensors || []).forEach((item) => {
       const key = normalizeSensorBaseKey(item);
       if (!key || !sensorOptionMap.has(key) || isVirtualSensorLabel(item)) return;
       keys.add(key);
     });
     return keys;
-  }, [form.sensors, sensorOptionMap]);
+  }, [form.sensors, form.network?.nfc, form.network?.infrared, sensorOptionMap]);
   const selectedVirtualSensorKeys = useMemo(() => {
     const keys = new Set<string>();
     (form.sensors || []).forEach((item) => {
@@ -1699,6 +1707,16 @@ export default function ProductEditor({ deviceType, pageTitle, pageDescription }
     updatePath(["design", "colors"], colors);
     setForm((previous) => ({
       ...previous,
+      general: {
+        ...(previous.general || {}),
+        variants: previous.general?.variants?.map((variant) => ({
+          ...variant,
+          ...(Array.isArray(variant.colors) ? { colors: variant.colors.flatMap((color) => {
+            const canonical = colorMap.get(color.trim().toLocaleLowerCase());
+            return canonical ? [canonical] : [];
+          }) } : {}),
+        })),
+      },
       imageItems: (previous.imageItems || []).map((item) => ({
         ...item,
         color: item.purpose === "All colors" || item.color.toLocaleLowerCase() === "all colors"
@@ -1708,6 +1726,29 @@ export default function ProductEditor({ deviceType, pageTitle, pageDescription }
     }));
     setImageColorDraft((previous) => colorMap.get(previous.trim().toLocaleLowerCase()) || previous);
     setImageColorErrors([]);
+  }
+
+  function updateVariantAvailableColor(variantIndex: number, color: string, checked: boolean) {
+    setForm((previous) => {
+      const masterColors = previous.design?.colors || [];
+      const currentVariants: ProductGeneralVariant[] = Array.isArray(previous.general?.variants) && previous.general.variants.length > 0
+        ? [...previous.general.variants]
+        : [{ ram: "", storage: "", launchPrice: undefined, livePrice: undefined }];
+      const variants = currentVariants.map((variant) => ({
+        ...variant,
+        colors: Array.isArray(variant.colors)
+          ? [...variant.colors]
+          : [...masterColors],
+      }));
+      const selected = variants[variantIndex];
+      if (!selected) return previous;
+      const selectedColors = selected.colors || [];
+      const hasColor = selectedColors.some((entry) => entry.toLocaleLowerCase() === color.toLocaleLowerCase());
+      selected.colors = checked
+        ? hasColor ? selectedColors : [...selectedColors, color]
+        : selectedColors.filter((entry) => entry.toLocaleLowerCase() !== color.toLocaleLowerCase());
+      return setAtPath(previous, ["general", "variants"], variants);
+    });
   }
 
   function updatePath(path: PathKey[], value: unknown) {
@@ -1896,6 +1937,10 @@ export default function ProductEditor({ deviceType, pageTitle, pageDescription }
             threeDMarkWildLifeExtreme: Number(benchmarks.threeDMarkWildLifeExtreme || 0) || prev.performance?.benchmarks?.threeDMarkWildLifeExtreme,
           },
         },
+        rearCamera: {
+          ...prev.rearCamera,
+          cameraIsp: String(detail.cameraIsp || prev.rearCamera?.cameraIsp || prev.performance?.cameraIsp || "").trim(),
+        },
       }));
 
       setMessage("Processor fields fetched. You can edit anything manually.");
@@ -2079,19 +2124,23 @@ export default function ProductEditor({ deviceType, pageTitle, pageDescription }
         if (isVirtualSensorLabel(item)) virtual.add(key);
         else hardware.add(key);
       });
+      if (prev.network?.nfc && !hardware.has("nfc")) hardware.add("nfc");
+      if (prev.network?.infrared && !hardware.has("irblaster") && !hardware.has("irsensor")) hardware.add("irblaster");
 
       const target = mode === "virtual" ? virtual : hardware;
       if (target.has(sensorKey)) target.delete(sensorKey);
       else target.add(sensorKey);
-
       const rebuilt = [
         ...SENSOR_BASE_OPTIONS.filter((item) => hardware.has(item.key)).map((item) => item.label),
         ...SENSOR_BASE_OPTIONS.filter((item) => virtual.has(item.key)).map((item) => item.key === "ecompass" ? item.label : `Virtual ${item.label}`),
       ];
-
+      let nextForm = { ...prev, sensors: [...rebuilt, ...extras] };
+      if (mode === "hardware") {
+        if (sensorKey === "nfc") nextForm = setAtPath(nextForm, ["network", "nfc"], hardware.has("nfc"));
+        if (sensorKey === "irblaster" || sensorKey === "irsensor") nextForm = setAtPath(nextForm, ["network", "infrared"], hardware.has("irblaster") || hardware.has("irsensor"));
+      }
       return {
-        ...prev,
-        sensors: [...rebuilt, ...extras],
+        ...nextForm,
       };
     });
   }
@@ -2105,6 +2154,67 @@ export default function ProductEditor({ deviceType, pageTitle, pageDescription }
         ? existing.filter((item) => item.toLowerCase() !== option.toLowerCase())
         : [...existing, option];
       return setAtPath(prev, path, next);
+    });
+  }
+
+  function getSelectedMultimediaFeatures(): string[] {
+    const details = form.general?.multimediaDetails;
+    const legacyFeatures = (form.general?.multimedia || []).map((item) => cleanText(item)).filter(Boolean).map((item) => item === "Hi-Res Audio" ? "Hi-Res Audio Both" : item === "Dual Stereo" ? "Dual Stereo Speaker" : item === "DTS" ? "DTS Sound" : item);
+    const normalizedDetails = [
+      ...(details?.fmRadio ? ["FM Radio"] : []),
+      ...(details?.hiResAudio ? ["Hi-Res Audio Both"] : []),
+      ...(details?.hiResVideo ? ["Hi-Res Video"] : []),
+      ...(details?.dolbyAtmos ? ["Dolby Atmos"] : []),
+      ...(details?.dolbyVision ? ["Dolby Vision"] : []),
+      ...(details?.dts ? ["DTS Sound"] : []),
+      ...(details?.widevineLevels || []).map((level) => `Widevine ${level}`),
+      ...(details?.speakerSetup === "single" ? ["Single Speaker"] : []),
+      ...(details?.speakerSetup === "dual_stereo" ? ["Dual Stereo Speaker"] : []),
+      ...(details?.spatialSound ? ["Spatial Sound"] : []),
+    ];
+    const features = Array.from(new Set([...legacyFeatures, ...normalizedDetails]));
+    const hasWired = features.includes("Hi-Res Audio Wired");
+    const hasWireless = features.includes("Hi-Res Audio Wireless");
+    if (hasWired && hasWireless) return [...features.filter((item) => !item.startsWith("Hi-Res Audio ")), "Hi-Res Audio Both"];
+    return features;
+  }
+
+  function toggleMultimediaFeature(feature: string) {
+    const selected = getSelectedMultimediaFeatures();
+    let next = selected.includes(feature) ? selected.filter((item) => item !== feature) : [...selected, feature];
+    if (feature === "Hi-Res Audio Wired" && !selected.includes(feature) && selected.includes("Hi-Res Audio Wireless")) {
+      next = [...next.filter((item) => !item.startsWith("Hi-Res Audio ")), "Hi-Res Audio Both"];
+    } else if (feature === "Hi-Res Audio Wireless" && !selected.includes(feature) && selected.includes("Hi-Res Audio Wired")) {
+      next = [...next.filter((item) => !item.startsWith("Hi-Res Audio ")), "Hi-Res Audio Both"];
+    } else if (["Hi-Res Audio Wired", "Hi-Res Audio Wireless", "Hi-Res Audio Both"].includes(feature) && !selected.includes(feature)) {
+      next = [...next.filter((item) => !item.startsWith("Hi-Res Audio ")), feature];
+    }
+    const has = (item: string) => next.includes(item);
+    if (feature === "Single Speaker" && has("Single Speaker")) {
+      const withoutDual = next.filter((item) => item !== "Dual Stereo Speaker");
+      updatePath(["general", "multimedia"], withoutDual);
+      updatePath(["general", "multimediaDetails", "speakerSetup"], "single");
+      return;
+    }
+    if (feature === "Dual Stereo Speaker" && has("Dual Stereo Speaker")) {
+      const withoutSingle = next.filter((item) => item !== "Single Speaker");
+      updatePath(["general", "multimedia"], withoutSingle);
+      updatePath(["general", "multimediaDetails", "speakerSetup"], "dual_stereo");
+      return;
+    }
+    updatePath(["general", "multimedia"], next);
+    updatePath(["general", "multimediaDetails"], {
+      ...form.general?.multimediaDetails,
+      fmRadio: has("FM Radio"),
+      hiResAudio: has("Hi-Res Audio Wired") || has("Hi-Res Audio Wireless") || has("Hi-Res Audio Both"),
+      hiResVideo: has("Hi-Res Video"),
+      dolbyAtmos: has("Dolby Atmos"),
+      dolbyVision: has("Dolby Vision"),
+      dts: has("DTS Sound"),
+      widevineLevels: ["L1", "L3"].filter((level) => has(`Widevine ${level}`)),
+      speakerSetup: has("Dual Stereo Speaker") ? "dual_stereo" : has("Single Speaker") ? "single" : undefined,
+      spatialSound: has("Spatial Sound"),
+      features: next,
     });
   }
 
@@ -2800,13 +2910,24 @@ export default function ProductEditor({ deviceType, pageTitle, pageDescription }
       normalDimensionVariants: normalizedForm.design?.normalDimensionVariants?.map((item) => ({ ...item, color: canonicalDimensionValue(item.color) })),
       postureDimensionVariants: normalizedForm.design?.postureDimensionVariants?.map((item) => ({ ...item, color: canonicalDimensionValue(item.color) })),
     };
-    const normalizedForSave = { ...normalizedForm, design: normalizedDesign };
     const imageItems = (normalizedForm.imageItems || []).filter((item) => item.url.trim()).map((item) => ({
       purpose: item.purpose || "Other",
       color: item.purpose === "All colors" || item.color.trim().toLocaleLowerCase() === "all colors" ? "All colors" : canonicalizeColor(item.color),
       url: item.url.trim(),
     }));
     const definedColors = normalizedDesign.colors || [];
+    const normalizedGeneral = normalizedForm.general ? {
+      ...normalizedForm.general,
+      variants: normalizedForm.general.variants?.map((variant) => {
+        if (!Array.isArray(variant.colors)) return variant;
+        const canonicalColors = variant.colors.flatMap((color) => {
+          const canonical = definedColors.find((defined) => defined.trim().toLocaleLowerCase() === color.trim().toLocaleLowerCase());
+          return canonical ? [canonical] : [];
+        });
+        return { ...variant, colors: Array.from(new Set(canonicalColors)) };
+      }),
+    } : normalizedForm.general;
+    const normalizedForSave = { ...normalizedForm, general: normalizedGeneral, design: normalizedDesign };
     const dimensionColorFields: Array<{ path: string; label: string; color: string }> = [];
     (normalizedForm.design?.normalDimensionVariants || []).forEach((item, index) => {
       normalizePhoneColors(item.color || "").forEach((color) => dimensionColorFields.push({ path: `design.normalDimensionVariants.${index}.color`, label: `Body Size & Weight color ${index + 1}`, color }));
@@ -3670,17 +3791,26 @@ export default function ProductEditor({ deviceType, pageTitle, pageDescription }
               <span id="smartphone-colors-help" className="text-xs text-slate-500">Enter one or more colors separated by commas. These names appear on the product page and are used by image rows.</span>
             </Field>
           </div>
+          {deviceType === "smartphone" ? (
+            <div className="rounded-lg border border-slate-200 p-3">
+              <p className="mb-3 text-sm font-extrabold text-slate-900">Safety</p>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <Field label="Head SAR (W/kg)">
+                  <TextInput type="number" min="0" step="any" inputMode="decimal" value={form.general?.headSarWkg ?? ""} onChange={(event) => updatePath(["general", "headSarWkg"], parseOptionalNumber(event.target.value))} placeholder="e.g. 0.72" />
+                </Field>
+                <Field label="Body SAR (W/kg)">
+                  <TextInput type="number" min="0" step="any" inputMode="decimal" value={form.general?.bodySarWkg ?? ""} onChange={(event) => updatePath(["general", "bodySarWkg"], parseOptionalNumber(event.target.value))} placeholder="e.g. 0.89" />
+                </Field>
+              </div>
+              <p className="mt-2 text-xs text-slate-500">Optional. Enter the manufacturer’s published values in W/kg.</p>
+            </div>
+          ) : null}
           <div className="rounded-lg border border-slate-200 p-3">
             <p className="mb-3 text-sm font-extrabold text-slate-900">Package Content</p>
-            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="flex flex-wrap gap-2">
               {packageBaseToggles.map((item) => (
-                <label key={`package-toggle-${item.key}`} className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-700">
-                  <input
-                    type="checkbox"
-                    className="h-4 w-4 accent-blue-600"
-                    checked={item.checked}
-                    onChange={(e) => {
-                      const next = packageBaseToggles.map((entry) => (entry.key === item.key ? { ...entry, checked: e.target.checked } : entry));
+                <button key={`package-toggle-${item.key}`} type="button" aria-pressed={item.checked} className={`inline-flex h-9 items-center rounded-md border px-3 text-sm font-semibold transition ${item.checked ? "border-blue-700 bg-blue-700 text-white" : "border-slate-300 bg-white text-slate-700 hover:bg-slate-100"}`} onClick={() => {
+                      const next = packageBaseToggles.map((entry) => (entry.key === item.key ? { ...entry, checked: !entry.checked } : entry));
                       updatePackageContents(
                         buildPackageContentsFromInputs({
                           handset: (next.find((entry) => entry.key === "handset")?.checked ? next.find((entry) => entry.key === "handset")?.value : "") || "",
@@ -3696,10 +3826,7 @@ export default function ProductEditor({ deviceType, pageTitle, pageDescription }
                           documentation: (next.find((entry) => entry.key === "documentation")?.checked ? next.find((entry) => entry.key === "documentation")?.value : "") || "",
                         })
                       );
-                    }}
-                  />
-                  <span>{item.label}</span>
-                </label>
+                    }}>{item.label}</button>
               ))}
             </div>
             <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -4373,13 +4500,13 @@ export default function ProductEditor({ deviceType, pageTitle, pageDescription }
                     <Field label="Type">
                       <HelperTermInput suggestions={displayTermSuggestions.type || []} value={panelValue.type || ""} onChange={(value) => updatePath([...basePath, "type"], value)} commaSeparated />
                     </Field>
-                    <Field label="Size">
+                    <Field label="Size (inches, cm)">
                       <div className="flex w-fit gap-1.5">
                         <TextInput type="number" min="0" step="0.01" value={String(panelValue.sizeInches ?? panelValue.size ?? "")} onChange={(e) => updatePath([...basePath, "sizeInches"], e.target.value)} placeholder="Inches" className="w-[95px] px-2" />
                         <TextInput type="number" min="0" step="0.01" value={String(panelValue.sizeCm ?? "")} onChange={(e) => updatePath([...basePath, "sizeCm"], e.target.value)} placeholder="cm" className="w-[95px] px-2" />
                       </div>
                     </Field>
-                    <Field label="Resolution">
+                    <Field label="Resolution (width × height)">
                       <div className="grid w-fit grid-cols-[95px_auto_95px] items-center gap-1.5">
                         <TextInput inputMode="numeric" value={String(panelValue.resolutionWidth ?? "")} onChange={(e) => updateDisplayResolution(basePath, "width", e.target.value)} placeholder="Width" className="px-2" />
                         <span className="font-bold text-slate-500">×</span>
@@ -4408,8 +4535,11 @@ export default function ProductEditor({ deviceType, pageTitle, pageDescription }
                     <Field label="Touch Sampling Rate (Hz)">
                       <TextInput value={String(panelValue.touchSamplingRate ?? "")} onChange={(e) => updatePath([...basePath, "touchSamplingRate"], e.target.value)} />
                     </Field>
+                    <Field label="Instant Touch Sampling Rate (Hz)">
+                      <TextInput value={String(panelValue.instantTouchSamplingRate ?? "")} onChange={(e) => updatePath([...basePath, "instantTouchSamplingRate"], e.target.value)} placeholder="Instant TSR" />
+                    </Field>
                     <div className={isWidePanel ? "sm:col-span-2 xl:col-span-4" : "sm:col-span-2"}>
-                    <Field label="Brightness (nits)">
+                    <Field label="Brightness (typical, HDR, max rated, peak; nits)">
                       <div className={`grid grid-cols-2 gap-2 ${isWidePanel ? "xl:grid-cols-4" : ""}`}>
                         <TextInput value={String(panelValue.brightness?.typical ?? "")} onChange={(e) => updatePath([...basePath, "brightness", "typical"], e.target.value)} placeholder="Typical" />
                         <TextInput value={String(panelValue.brightness?.hdr ?? "")} onChange={(e) => updatePath([...basePath, "brightness", "hdr"], e.target.value)} placeholder="HDR" />
@@ -4427,11 +4557,29 @@ export default function ProductEditor({ deviceType, pageTitle, pageDescription }
                     <Field label="Pixel Density (PPI)">
                       <TextInput value={String(panelValue.pixelDensity ?? "")} onChange={(e) => updatePath([...basePath, "pixelDensity"], e.target.value)} />
                     </Field>
+                    <Field label="Color Depth / Colors">
+                      {(() => {
+                        const current = String(panelValue.colorDepth || "").trim();
+                        const match = current.match(/^([\d.,]+)\s*(million|millions|billion|billions)(?:\s+colors?)?$/i);
+                        const amount = match?.[1] || "";
+                        const unit = /^billion/i.test(match?.[2] || "") ? "billion" : "million";
+                        return <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-2">
+                          <TextInput type="number" min="0" step="any" value={amount} onChange={(e) => updatePath([...basePath, "colorDepth"], e.target.value ? `${e.target.value} ${unit} colors` : "")} placeholder="e.g. 16.7" />
+                          <div className="inline-flex overflow-hidden rounded-md border border-slate-300 bg-white">
+                            {["million", "billion"].map((option, optionIndex) => <button key={option} type="button" onClick={() => {
+                              const value = amount ? `${amount} ${option} colors` : "";
+                              updatePath([...basePath, "colorDepth"], value);
+                            }} className={`h-10 px-3 text-xs font-semibold capitalize ${optionIndex ? "border-l border-slate-300" : ""} ${unit === option && match ? "bg-blue-700 text-white" : "text-slate-700 hover:bg-slate-50"}`}>{option}</button>)}
+                          </div>
+                          {!match && current ? <p className="col-span-2 text-xs text-slate-500">Saved value: {current}. Enter a number and choose a unit to replace it.</p> : null}
+                        </div>;
+                      })()}
+                    </Field>
                     <Field label="Curved (degrees)">
                       <TextInput type="number" min="0" step="0.1" value={String(curvedDegree)} onChange={(e) => updateCurvedDegree(basePath, e.target.value)} placeholder="0 = No" />
                     </Field>
                     <div className={isWidePanel ? "sm:col-span-2 xl:col-span-4" : "sm:col-span-2"}>
-                    <Field label="Color Coverage by Display Mode">
+                    <Field label="Color Coverage">
                       <div className="grid gap-2">
                         {(panelValue.colorProfiles || []).map((profile, profileIndex) => (
                           <div key={`${panelGroup.title}-color-profile-${profileIndex}`} className="grid grid-cols-1 gap-2 sm:grid-cols-[minmax(110px,1fr)_minmax(110px,1fr)_minmax(110px,1fr)_minmax(110px,1fr)_28px]">
@@ -4513,103 +4661,27 @@ export default function ProductEditor({ deviceType, pageTitle, pageDescription }
         <div id="mobile-multimedia" className="scroll-mt-40 [order:10]">
         <Section title="Multimedia" description="Audio/media features used for public multimedia highlights.">
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-            <Field label="3.5mm Audio Jack">
-              <div className="inline-flex w-fit overflow-hidden rounded-md border border-slate-300 bg-white">
-                {[{ label: "No", value: false }, { label: "Yes", value: true }].map((option, index) => (
-                  <button key={`mm-audio-jack-${option.label}`} type="button" onClick={() => updatePath(["general", "multimediaDetails", "audioJack35mm"], option.value)} className={`inline-flex h-8 items-center px-3 text-xs font-semibold ${index > 0 ? "border-l border-slate-300" : ""} ${form.general?.multimediaDetails?.audioJack35mm === option.value ? "bg-blue-700 text-white" : "text-slate-700"}`}>{option.label}</button>
-                ))}
+            <Field label="Audio Jacks" className="sm:col-span-2 lg:col-span-5">
+              <div className="flex flex-wrap gap-2">
+                {(["3.5mm Audio Jack", "Type-C Audio Jack", "Lightning to 3.5mm"] as const).map((jack) => {
+                  const selected = jack === "3.5mm Audio Jack"
+                    ? form.general?.multimediaDetails?.audioJack35mm === true
+                    : jack === "Type-C Audio Jack"
+                      ? form.general?.multimediaDetails?.typeCAudioJack === true
+                      : form.general?.multimediaDetails?.lightningAudioJack === true;
+                  return <button key={`mm-jack-${jack}`} type="button" onClick={() => {
+                    const path = jack === "3.5mm Audio Jack" ? "audioJack35mm" : jack === "Type-C Audio Jack" ? "typeCAudioJack" : "lightningAudioJack";
+                    updatePath(["general", "multimediaDetails", path], !selected);
+                  }} className={`inline-flex h-8 items-center rounded-md border px-2.5 text-xs font-semibold ${selected ? "border-blue-700 bg-blue-700 text-white" : "border-slate-300 text-slate-700 hover:bg-slate-100"}`}>{jack}</button>;
+                })}
               </div>
             </Field>
-            {form.general?.multimediaDetails?.audioJack35mm === false ? (
-              <Field label="Type-C Audio Jack">
-                <div className="inline-flex w-fit overflow-hidden rounded-md border border-slate-300 bg-white">
-                  {[{ label: "No", value: false }, { label: "Yes", value: true }].map((option, index) => (
-                    <button key={`mm-typec-jack-${option.label}`} type="button" onClick={() => updatePath(["general", "multimediaDetails", "typeCAudioJack"], option.value)} className={`inline-flex h-8 items-center px-3 text-xs font-semibold ${index > 0 ? "border-l border-slate-300" : ""} ${form.general?.multimediaDetails?.typeCAudioJack === option.value ? "bg-blue-700 text-white" : "text-slate-700"}`}>{option.label}</button>
-                  ))}
-                </div>
-              </Field>
-            ) : null}
-            {form.general?.multimediaDetails?.audioJack35mm === false ? (
-              <Field label="Lightning to 3.5mm">
-                <div className="inline-flex w-fit overflow-hidden rounded-md border border-slate-300 bg-white">
-                  {[{ label: "No", value: false }, { label: "Yes", value: true }].map((option, index) => (
-                    <button key={`mm-lightning-jack-${option.label}`} type="button" onClick={() => updatePath(["general", "multimediaDetails", "lightningAudioJack"], option.value)} className={`inline-flex h-8 items-center px-3 text-xs font-semibold ${index > 0 ? "border-l border-slate-300" : ""} ${form.general?.multimediaDetails?.lightningAudioJack === option.value ? "bg-blue-700 text-white" : "text-slate-700"}`}>{option.label}</button>
-                  ))}
-                </div>
-              </Field>
-            ) : null}
-            <Field label="FM Radio">
-              <div className="inline-flex w-fit overflow-hidden rounded-md border border-slate-300 bg-white">
-                {[{ label: "No", value: false }, { label: "Yes", value: true }].map((option, index) => (
-                  <button key={`mm-fm-${option.label}`} type="button" onClick={() => updatePath(["general", "multimediaDetails", "fmRadio"], option.value)} className={`inline-flex h-8 items-center px-3 text-xs font-semibold ${index > 0 ? "border-l border-slate-300" : ""} ${form.general?.multimediaDetails?.fmRadio === option.value ? "bg-blue-700 text-white" : "text-slate-700"}`}>{option.label}</button>
-                ))}
-              </div>
-            </Field>
-            <Field label="Hi-Res Audio">
-              <div className="inline-flex w-fit overflow-hidden rounded-md border border-slate-300 bg-white">
-                {[{ label: "No", value: false }, { label: "Yes", value: true }].map((option, index) => (
-                  <button key={`mm-hires-audio-${option.label}`} type="button" onClick={() => updatePath(["general", "multimediaDetails", "hiResAudio"], option.value)} className={`inline-flex h-8 items-center px-3 text-xs font-semibold ${index > 0 ? "border-l border-slate-300" : ""} ${form.general?.multimediaDetails?.hiResAudio === option.value ? "bg-blue-700 text-white" : "text-slate-700"}`}>{option.label}</button>
-                ))}
-              </div>
-            </Field>
-            <Field label="Hi-Res Video">
-              <div className="inline-flex w-fit overflow-hidden rounded-md border border-slate-300 bg-white">
-                {[{ label: "No", value: false }, { label: "Yes", value: true }].map((option, index) => (
-                  <button key={`mm-hires-video-${option.label}`} type="button" onClick={() => updatePath(["general", "multimediaDetails", "hiResVideo"], option.value)} className={`inline-flex h-8 items-center px-3 text-xs font-semibold ${index > 0 ? "border-l border-slate-300" : ""} ${form.general?.multimediaDetails?.hiResVideo === option.value ? "bg-blue-700 text-white" : "text-slate-700"}`}>{option.label}</button>
-                ))}
-              </div>
-            </Field>
-            <Field label="Dolby Atmos">
-              <div className="inline-flex w-fit overflow-hidden rounded-md border border-slate-300 bg-white">
-                {[{ label: "No", value: false }, { label: "Yes", value: true }].map((option, index) => (
-                  <button key={`mm-atmos-${option.label}`} type="button" onClick={() => updatePath(["general", "multimediaDetails", "dolbyAtmos"], option.value)} className={`inline-flex h-8 items-center px-3 text-xs font-semibold ${index > 0 ? "border-l border-slate-300" : ""} ${form.general?.multimediaDetails?.dolbyAtmos === option.value ? "bg-blue-700 text-white" : "text-slate-700"}`}>{option.label}</button>
-                ))}
-              </div>
-            </Field>
-            <Field label="Dolby Vision">
-              <div className="inline-flex w-fit overflow-hidden rounded-md border border-slate-300 bg-white">
-                {[{ label: "No", value: false }, { label: "Yes", value: true }].map((option, index) => (
-                  <button key={`mm-vision-${option.label}`} type="button" onClick={() => updatePath(["general", "multimediaDetails", "dolbyVision"], option.value)} className={`inline-flex h-8 items-center px-3 text-xs font-semibold ${index > 0 ? "border-l border-slate-300" : ""} ${form.general?.multimediaDetails?.dolbyVision === option.value ? "bg-blue-700 text-white" : "text-slate-700"}`}>{option.label}</button>
-                ))}
-              </div>
-            </Field>
-            <Field label="DTS">
-              <div className="inline-flex w-fit overflow-hidden rounded-md border border-slate-300 bg-white">
-                {[{ label: "No", value: false }, { label: "Yes", value: true }].map((option, index) => (
-                  <button key={`mm-dts-${option.label}`} type="button" onClick={() => updatePath(["general", "multimediaDetails", "dts"], option.value)} className={`inline-flex h-8 items-center px-3 text-xs font-semibold ${index > 0 ? "border-l border-slate-300" : ""} ${form.general?.multimediaDetails?.dts === option.value ? "bg-blue-700 text-white" : "text-slate-700"}`}>{option.label}</button>
-                ))}
-              </div>
-            </Field>
-            <Field label="Widevine Levels">
-              <div className="flex gap-2">
-                {["L1", "L3"].map((level) => (
-                  <button
-                    key={`mm-widevine-level-${level}`}
-                    type="button"
-                    onClick={() => {
-                      const current = Array.isArray(form.general?.multimediaDetails?.widevineLevels) ? form.general?.multimediaDetails?.widevineLevels : [];
-                      const next = current.includes(level) ? current.filter((item) => item !== level) : [...current, level];
-                      updatePath(["general", "multimediaDetails", "widevineLevels"], next);
-                    }}
-                    className={`inline-flex h-8 items-center rounded-md border px-3 text-xs font-semibold ${(Array.isArray(form.general?.multimediaDetails?.widevineLevels) ? form.general?.multimediaDetails?.widevineLevels : []).includes(level) ? "border-blue-700 bg-blue-700 text-white" : "border-slate-300 text-slate-700"}`}
-                  >
-                    {level}
-                  </button>
-                ))}
-              </div>
-            </Field>
-            <Field label="Speaker Setup">
-              <div className="inline-flex w-fit overflow-hidden rounded-md border border-slate-300 bg-white">
-                {[{ label: "Single Speaker", value: "single" }, { label: "Dual Stereo", value: "dual_stereo" }].map((option, index) => (
-                  <button key={`mm-speaker-${option.value}`} type="button" onClick={() => updatePath(["general", "multimediaDetails", "speakerSetup"], option.value)} className={`inline-flex h-8 items-center px-3 text-xs font-semibold ${index > 0 ? "border-l border-slate-300" : ""} ${form.general?.multimediaDetails?.speakerSetup === option.value ? "bg-blue-700 text-white" : "text-slate-700"}`}>{option.label}</button>
-                ))}
-              </div>
-            </Field>
-            <Field label="Spatial Sound">
-              <div className="inline-flex w-fit overflow-hidden rounded-md border border-slate-300 bg-white">
-                {[{ label: "No", value: false }, { label: "Yes", value: true }].map((option, index) => (
-                  <button key={`mm-spatial-${option.label}`} type="button" onClick={() => updatePath(["general", "multimediaDetails", "spatialSound"], option.value)} className={`inline-flex h-8 items-center px-3 text-xs font-semibold ${index > 0 ? "border-l border-slate-300" : ""} ${form.general?.multimediaDetails?.spatialSound === option.value ? "bg-blue-700 text-white" : "text-slate-700"}`}>{option.label}</button>
-                ))}
+            <Field label="Multimedia Features" className="sm:col-span-2 lg:col-span-5">
+              <div className="flex flex-wrap gap-2">
+                {MULTIMEDIA_FEATURE_OPTIONS.map((feature) => {
+                  const selected = getSelectedMultimediaFeatures().includes(feature);
+                  return <button key={`mm-feature-${feature}`} type="button" onClick={() => toggleMultimediaFeature(feature)} className={`inline-flex h-8 items-center rounded-md border px-2.5 text-xs font-semibold ${selected ? "border-blue-700 bg-blue-700 text-white" : "border-slate-300 text-slate-700 hover:bg-slate-100"}`}>{feature}</button>;
+                })}
               </div>
             </Field>
           </div>
@@ -4826,6 +4898,7 @@ export default function ProductEditor({ deviceType, pageTitle, pageDescription }
           }
         >
           <div className="rounded-lg border border-slate-200 p-3">
+            {deviceType === "smartphone" ? <p className="mb-3 text-xs text-slate-500">Choose which Smartphone Colors are sold with each RAM/storage configuration. Existing variants start with all colors selected.</p> : null}
             <div className="grid gap-2">
               {(Array.isArray(form.general?.variants) && form.general.variants.length ? form.general.variants : [{ ram: "", storage: "", launchPrice: undefined, livePrice: undefined }]).map((variant, index) => (
                 <div key={`memory-variant-group-${index}`} className="rounded-lg border border-slate-200 bg-slate-50 p-2">
@@ -4953,6 +5026,24 @@ export default function ProductEditor({ deviceType, pageTitle, pageDescription }
                       )}
                     </div>
                   </div>
+                  {deviceType === "smartphone" ? <div className="mt-3 border-t border-slate-200 pt-3">
+                    <p className="mb-2 text-[10px] font-bold uppercase tracking-wide text-slate-600">Available colors</p>
+                    {(form.design?.colors || []).length > 0 ? (
+                      <div className="flex flex-wrap gap-2">
+                        {(form.design?.colors || []).map((color) => {
+                          const savedVariant = form.general?.variants?.[index];
+                          const selectedColors = Array.isArray(savedVariant?.colors) ? savedVariant.colors : form.design?.colors || [];
+                          const checked = selectedColors.some((entry) => entry.toLocaleLowerCase() === color.toLocaleLowerCase());
+                          return (
+                            <label key={`${index}-${color}`} className={`inline-flex cursor-pointer items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-semibold ${checked ? "border-blue-300 bg-blue-50 text-blue-800" : "border-slate-200 bg-white text-slate-600"}`}>
+                              <input type="checkbox" checked={checked} onChange={(event) => updateVariantAvailableColor(index, color, event.target.checked)} className="accent-blue-700" />
+                              {color}
+                            </label>
+                          );
+                        })}
+                      </div>
+                    ) : <p className="text-xs text-slate-500">Add colors in the General section first.</p>}
+                  </div> : null}
                   </div>
                 </div>
               ))}
@@ -5269,6 +5360,16 @@ export default function ProductEditor({ deviceType, pageTitle, pageDescription }
               <Field label="Image Resolution"><div className="flex w-fit items-center gap-1"><TextInput inputMode="numeric" value={String(form.rearCamera?.imageResolutionWidth ?? "")} onChange={(e) => updateCommonCameraImageResolution("rearCamera", "width", e.target.value.replace(/\D/g, ""))} placeholder="8140" className="w-16 px-2" /><span>×</span><TextInput inputMode="numeric" value={String(form.rearCamera?.imageResolutionHeight ?? "")} onChange={(e) => updateCommonCameraImageResolution("rearCamera", "height", e.target.value.replace(/\D/g, ""))} placeholder="7878" className="w-16 px-2" /><span className="text-sm text-slate-500">px</span></div></Field>
               <Field label="Zoom"><div className="grid grid-cols-2 gap-2"><UnitInput inputMode="decimal" suffix="x" value={sanitizeDecimal(String(form.rearCamera?.zoom?.optical || ""), 4)} onChange={(e) => updatePath(["rearCamera", "zoom", "optical"], sanitizeDecimal(e.target.value, 4))} placeholder="Optical" /><UnitInput inputMode="decimal" suffix="x" value={sanitizeDecimal(String(form.rearCamera?.zoom?.digital || ""), 4)} onChange={(e) => updatePath(["rearCamera", "zoom", "digital"], sanitizeDecimal(e.target.value, 4))} placeholder="Digital" /></div></Field>
             </div>
+            <div className="sm:col-span-2 lg:col-span-9 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              <Field label="Camera ISP">
+                <TextInput value={form.rearCamera?.cameraIsp || ""} onChange={(e) => updatePath(["rearCamera", "cameraIsp"], e.target.value)} placeholder="e.g. Qualcomm Spectra ISP" />
+              </Field>
+              <Field label="Camera ISP Public Visibility">
+                <div className="flex flex-wrap gap-2">
+                  <button type="button" aria-pressed={form.rearCamera?.cameraIspVisible === true} onClick={() => updatePath(["rearCamera", "cameraIspVisible"], form.rearCamera?.cameraIspVisible === true ? undefined : true)} className={`inline-flex h-9 items-center rounded-md border px-3 text-xs font-semibold ${form.rearCamera?.cameraIspVisible === true ? "border-blue-700 bg-blue-700 text-white" : "border-slate-300 text-slate-700 hover:bg-slate-100"}`}>Show on Public</button>
+                </div>
+              </Field>
+            </div>
             <div className="sm:col-span-2 lg:col-span-9"><Field label="Camera Features">
               <HelperTermInput suggestions={cameraTermSuggestions.camerafeatures || []} value={formatCsv(form.rearCamera?.features)} onChange={(value) => updatePath(["rearCamera", "features"], splitCsv(value))} commaSeparated />
             </Field></div>
@@ -5297,7 +5398,9 @@ export default function ProductEditor({ deviceType, pageTitle, pageDescription }
                     <Field label="Aperture"><UnitInput value={camera.sensor?.aperture || ""} onChange={(e) => updatePath(["rearCamera", "cameras", index, "sensor", "aperture"], e.target.value)} prefix="f/" containerClassName="max-w-36" /></Field>
                     <Field label="Sensor Size"><UnitInput value={camera.sensor?.size || ""} onChange={(e) => updatePath(["rearCamera", "cameras", index, "sensor", "size"], e.target.value)} suffix='"' containerClassName="max-w-36" /></Field>
                     <Field label="Pixel Size"><UnitInput value={camera.sensor?.pixelSize || ""} onChange={(e) => updatePath(["rearCamera", "cameras", index, "sensor", "pixelSize"], e.target.value)} suffix="µm" containerClassName="max-w-36" /></Field>
-                    <Field label="Focal Length"><UnitInput value={camera.sensor?.focalLength || ""} onChange={(e) => updatePath(["rearCamera", "cameras", index, "sensor", "focalLength"], e.target.value)} suffix="mm" containerClassName="max-w-36" /></Field>
+                    <Field label="Binned Resolution"><UnitInput value={camera.sensor?.binnedResolution || ""} onChange={(e) => updatePath(["rearCamera", "cameras", index, "sensor", "binnedResolution"], e.target.value)} suffix="MP" placeholder="e.g. 16" /></Field>
+                    <Field label="Binned Pixel Size"><UnitInput value={camera.sensor?.binnedPixelSize || ""} onChange={(e) => updatePath(["rearCamera", "cameras", index, "sensor", "binnedPixelSize"], e.target.value)} suffix="µm" placeholder="e.g. 1.2" /></Field>
+                    <Field label="Focal Length"><UnitInput value={camera.sensor?.focalLength || ""} onChange={(e) => updatePath(["rearCamera", "cameras", index, "sensor", "focalLength"], e.target.value)} suffix="mm" containerClassName="max-w-36" placeholder="e.g. 24 or 24-70" /></Field>
                     <Field label="FOV"><UnitInput value={camera.sensor?.fov || ""} onChange={(e) => updatePath(["rearCamera", "cameras", index, "sensor", "fov"], e.target.value)} suffix="°" /></Field>
                     <Field label="Lens Type" className="min-w-0"><HelperTermInput suggestions={cameraTermSuggestions.lenstype || []} value={camera.sensor?.lensType || ""} onChange={(value) => updatePath(["rearCamera", "cameras", index, "sensor", "lensType"], value)} placeholder="6P, 7P" /></Field>
                     <Field label="Optical Zoom">
@@ -5366,8 +5469,10 @@ export default function ProductEditor({ deviceType, pageTitle, pageDescription }
                     <div className="lg:col-span-3"><Field label="Sensor Name"><HelperTermInput suggestions={cameraTermSuggestions.sensorname || []} value={camera.sensor?.name || ""} onChange={(value) => updatePath(["frontCamera", "cameras", index, "sensor", "name"], value)} /></Field></div>
                     <Field label="Sensor Size"><UnitInput value={camera.sensor?.size || ""} onChange={(e) => updatePath(["frontCamera", "cameras", index, "sensor", "size"], e.target.value)} suffix='"' /></Field>
                     <Field label="Pixel Size"><UnitInput value={camera.sensor?.pixelSize || ""} onChange={(e) => updatePath(["frontCamera", "cameras", index, "sensor", "pixelSize"], e.target.value)} suffix="µm" /></Field>
+                    <Field label="Binned Resolution"><UnitInput value={camera.sensor?.binnedResolution || ""} onChange={(e) => updatePath(["frontCamera", "cameras", index, "sensor", "binnedResolution"], e.target.value)} suffix="MP" placeholder="e.g. 16" /></Field>
+                    <Field label="Binned Pixel Size"><UnitInput value={camera.sensor?.binnedPixelSize || ""} onChange={(e) => updatePath(["frontCamera", "cameras", index, "sensor", "binnedPixelSize"], e.target.value)} suffix="µm" placeholder="e.g. 1.2" /></Field>
                     <Field label="Sensor Aperture"><UnitInput value={camera.sensor?.aperture || ""} onChange={(e) => updatePath(["frontCamera", "cameras", index, "sensor", "aperture"], e.target.value)} prefix="f/" /></Field>
-                    <Field label="Focal Length"><UnitInput value={camera.sensor?.focalLength || ""} onChange={(e) => updatePath(["frontCamera", "cameras", index, "sensor", "focalLength"], e.target.value)} suffix="mm" /></Field>
+                    <Field label="Focal Length"><UnitInput value={camera.sensor?.focalLength || ""} onChange={(e) => updatePath(["frontCamera", "cameras", index, "sensor", "focalLength"], e.target.value)} suffix="mm" placeholder="e.g. 24 or 24-70" /></Field>
                     <Field label="FOV"><UnitInput value={camera.sensor?.fov || ""} onChange={(e) => updatePath(["frontCamera", "cameras", index, "sensor", "fov"], e.target.value)} suffix="°" /></Field>
                     <Field label="Lens Type" className="min-w-0"><HelperTermInput suggestions={cameraTermSuggestions.lenstype || []} value={camera.sensor?.lensType || ""} onChange={(value) => updatePath(["frontCamera", "cameras", index, "sensor", "lensType"], value)} placeholder="5P, 6P" /></Field>
                     <Field label="Optical Zoom"><UnitInput inputMode="decimal" suffix="x" value={sanitizeDecimal(String(camera.sensor?.opticalZoom || ""), 4)} onChange={(e) => updatePath(["frontCamera", "cameras", index, "sensor", "opticalZoom"], sanitizeDecimal(e.target.value, 4))} placeholder="2" containerClassName="w-20" /></Field>
@@ -5444,53 +5549,26 @@ export default function ProductEditor({ deviceType, pageTitle, pageDescription }
                 ))}
               </div>
             </Field>
-            <Field label="NFC Sensor">
-              <div className="inline-flex w-fit overflow-hidden rounded-md border border-slate-300 bg-slate-100">
-                {[
-                  { value: false, label: "No" },
-                  { value: true, label: "Yes" },
-                ].map((option, index) => (
-                  <button
-                    key={`nfc-${option.label.toLowerCase()}`}
-                    type="button"
-                    onClick={() => {
-                      const current = form.network?.nfc;
-                      updatePath(["network", "nfc"], current === option.value ? undefined : option.value);
-                    }}
-                    className={`inline-flex h-8 items-center justify-center whitespace-nowrap px-3 py-0 text-xs font-semibold leading-none transition ${index > 0 ? "border-l border-slate-300" : ""} ${
-                      form.network?.nfc === option.value ? "bg-blue-700 text-white" : "text-slate-600 hover:bg-slate-50"
-                    }`}
-                  >
-                    {option.label}
-                  </button>
-                ))}
-              </div>
-            </Field>
-            <Field label="Infrared Sensor">
-              <div className="inline-flex w-fit overflow-hidden rounded-md border border-slate-300 bg-slate-100">
-                {[
-                  { value: false, label: "No" },
-                  { value: true, label: "Yes" },
-                ].map((option, index) => (
-                  <button
-                    key={`infrared-${option.label.toLowerCase()}`}
-                    type="button"
-                    onClick={() => {
-                      const current = form.network?.infrared;
-                      updatePath(["network", "infrared"], current === option.value ? undefined : option.value);
-                    }}
-                    className={`inline-flex h-8 items-center justify-center whitespace-nowrap px-3 py-0 text-xs font-semibold leading-none transition ${index > 0 ? "border-l border-slate-300" : ""} ${
-                      form.network?.infrared === option.value ? "bg-blue-700 text-white" : "text-slate-600 hover:bg-slate-50"
-                    }`}
-                  >
-                    {option.label}
-                  </button>
-                ))}
-              </div>
-            </Field>
           </div>
 
           <div className="grid gap-3">
+            <div className="rounded-lg border border-slate-200 p-3">
+              <p className="mb-2 text-xs font-bold uppercase tracking-wide text-slate-600">Vibration Motor</p>
+              <div className="flex flex-wrap gap-2">
+                {VIBRATION_MOTOR_OPTIONS.map((motor) => (
+                  <button key={`vibration-motor-${motor}`} type="button" onClick={() => toggleTextOption(["security", "vibrationMotors"], motor)} className={`inline-flex h-8 items-center rounded-md border px-2.5 text-xs font-semibold ${(form.security?.vibrationMotors || []).includes(motor) ? "border-blue-700 bg-blue-700 text-white" : "border-slate-300 text-slate-700 hover:bg-slate-100"}`}>{motor}</button>
+                ))}
+              </div>
+              <div className="mt-3">
+                <Field label="Other Vibration Motor Types">
+                  <HelperTermInput suggestions={securityTermSuggestions.additionalsensors || []} value={formatCsv((form.security?.vibrationMotors || []).filter((item) => !(VIBRATION_MOTOR_OPTIONS as readonly string[]).includes(item)))} onChange={(value) => {
+                    const custom = splitCsv(value);
+                    const selected = (form.security?.vibrationMotors || []).filter((item) => (VIBRATION_MOTOR_OPTIONS as readonly string[]).includes(item));
+                    updatePath(["security", "vibrationMotors"], [...selected, ...custom]);
+                  }} commaSeparated placeholder="e.g. Dual X-axis linear motors" />
+                </Field>
+              </div>
+            </div>
             <div className="rounded-lg border border-slate-200 p-3">
               <p className="mb-2 text-xs font-bold uppercase tracking-wide text-slate-600">Hardware Sensors</p>
               <div className="flex flex-wrap gap-2">
@@ -5514,7 +5592,7 @@ export default function ProductEditor({ deviceType, pageTitle, pageDescription }
             <div className="rounded-lg border border-slate-200 p-3">
               <p className="mb-2 text-xs font-bold uppercase tracking-wide text-slate-600">Electronic / Virtual Sensors</p>
               <div className="flex flex-wrap gap-2">
-                {SENSOR_BASE_OPTIONS.map((sensor) => (
+                {SENSOR_BASE_OPTIONS.filter((sensor) => sensor.key !== "nfc").map((sensor) => (
                   <button
                     key={`sensor-virtual-${sensor.key}`}
                     type="button"

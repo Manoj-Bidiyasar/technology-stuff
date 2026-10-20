@@ -19,6 +19,20 @@ function formatBoolean(value?: boolean): string {
   return value ? "Yes" : "No";
 }
 
+function formatUnit(value: unknown, unit: string, prefix = ""): string {
+  const text = cleanValue(value);
+  if (text === "-") return "-";
+  if (prefix && text.toLowerCase().startsWith(prefix.toLowerCase())) return text;
+  if (unit && text.toLowerCase().endsWith(unit.toLowerCase())) return text;
+  return `${prefix}${text}${unit}`;
+}
+
+function formatFocalLengths(value: unknown): string {
+  const text = cleanValue(value);
+  if (text === "-") return "-";
+  return text.split(",").map((part) => formatUnit(part.trim(), "mm")).join(", ");
+}
+
 export default function SensorDetailsModal({ open, onClose, rearCamera }: SensorDetailsModalProps) {
   useEffect(() => {
     if (!open) return;
@@ -62,6 +76,7 @@ export default function SensorDetailsModal({ open, onClose, rearCamera }: Sensor
                 <th className="px-3 py-2">Aperture</th>
                 <th className="px-3 py-2">Sensor Size</th>
                 <th className="px-3 py-2">Pixel Size</th>
+                <th className="px-3 py-2">Binned Output</th>
                 <th className="px-3 py-2">FOV</th>
                 <th className="px-3 py-2">Focal Length</th>
                 <th className="px-3 py-2">Zoom</th>
@@ -80,11 +95,15 @@ export default function SensorDetailsModal({ open, onClose, rearCamera }: Sensor
                   return (
                     <tr key={`${title}-${index}`} className="border-t border-slate-100 text-slate-800">
                       <td className="px-3 py-2 font-semibold">{title || "-"}</td>
-                      <td className="px-3 py-2">{cleanValue(camera.sensor?.aperture)}</td>
-                      <td className="px-3 py-2">{cleanValue(camera.sensor?.size)}</td>
-                      <td className="px-3 py-2">{cleanValue(camera.sensor?.pixelSize)}</td>
-                      <td className="px-3 py-2">{cleanValue(camera.sensor?.fov)}</td>
-                      <td className="px-3 py-2">{cleanValue(camera.sensor?.focalLength)}</td>
+                      <td className="px-3 py-2">{formatUnit(camera.sensor?.aperture, "", "f/")}</td>
+                      <td className="px-3 py-2">{formatUnit(camera.sensor?.size, '"')}</td>
+                      <td className="px-3 py-2">{formatUnit(camera.sensor?.pixelSize, "µm")}</td>
+                      <td className="px-3 py-2">{[
+                        formatUnit(camera.sensor?.binnedResolution, " MP"),
+                        formatUnit(camera.sensor?.binnedPixelSize, "µm"),
+                      ].filter(Boolean).join(", ") || "-"}</td>
+                      <td className="px-3 py-2">{formatUnit(camera.sensor?.fov, "°")}</td>
+                      <td className="px-3 py-2">{formatFocalLengths(camera.sensor?.focalLength)}</td>
                       <td className="px-3 py-2">{cleanValue(camera.sensor?.zoom)}</td>
                       <td className="px-3 py-2">{cleanValue(camera.sensor?.autofocus)}</td>
                       <td className="px-3 py-2">{formatBoolean(camera.sensor?.ois)}</td>
@@ -94,7 +113,7 @@ export default function SensorDetailsModal({ open, onClose, rearCamera }: Sensor
                 })
               ) : (
                 <tr>
-                  <td className="px-3 py-3 text-sm font-semibold text-slate-500" colSpan={10}>
+                  <td className="px-3 py-3 text-sm font-semibold text-slate-500" colSpan={11}>
                     No rear sensor details available.
                   </td>
                 </tr>
