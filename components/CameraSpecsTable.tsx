@@ -1,4 +1,4 @@
-﻿import type { ReactNode } from "react";
+import type { ReactNode } from "react";
 import Tag from "@/components/Tag";
 import type { ProductCamera, ProductCameraSensor, ProductSpecs } from "@/lib/types/content";
 
@@ -50,9 +50,10 @@ function sensorSummary(sensors: ProductCameraSensor[]): string {
 
 function renderRow(label: string, value: ReactNode) {
   return (
-    <div className="grid grid-cols-[140px_minmax(0,1fr)] items-center gap-3 border-b border-slate-100 px-3 py-2.5 last:border-b-0 sm:grid-cols-[180px_minmax(0,1fr)]">
-      <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500">{label}</p>
-      <div className="text-sm font-semibold text-slate-900">{value}</div>
+    <div className="grid grid-cols-[104px_8px_minmax(0,1fr)] items-center gap-1 border-b border-slate-100 px-2 py-2 last:border-b-0 sm:grid-cols-[180px_16px_minmax(0,1fr)] sm:gap-3 sm:px-3 sm:py-2.5">
+      <p className="text-[9px] font-normal uppercase tracking-[0.04em] text-slate-500 sm:text-[11px] sm:font-bold sm:tracking-wide">{label}</p>
+      <p className="relative -left-1 text-xs font-semibold text-slate-500 sm:left-0 sm:text-sm">-</p>
+      <div className="relative -left-1 min-w-0 text-[11px] font-semibold text-slate-900 sm:left-0 sm:text-sm">{value}</div>
     </div>
   );
 }

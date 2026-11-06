@@ -66,7 +66,7 @@ export default function ScoreCard({ product }: { product: Product }) {
   return (
     <section className="panel p-4">
       <h2 className="text-base font-bold text-slate-900">Ratings</h2>
-      <div className="mt-3 grid grid-cols-2 gap-2">
+      <div className="mt-3 grid grid-cols-1 gap-2">
         {items.map((item) => (
           <article
             key={item.label}
@@ -78,8 +78,8 @@ export default function ScoreCard({ product }: { product: Product }) {
             </div>
           </article>
         ))}
-        <div className="col-span-2 flex justify-center">
-          <article className="w-full max-w-[220px] rounded-lg border border-slate-200 bg-slate-50 px-2 py-2.5 text-center">
+        <div className="flex justify-center">
+          <article className="w-full rounded-lg border border-slate-200 bg-slate-50 px-2 py-2.5 text-center">
             <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{overall.label}</p>
             <div className="mt-2 flex items-center justify-center">
               <ScoreCircle value={overall.value} max={overall.max} />

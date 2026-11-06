@@ -57,27 +57,57 @@ export function formatMemoryCapacity(value?: string | number): string {
     }
     return `${match[1]}GB`;
   }
-  return /^\d+(?:\.\d+)?$/.test(raw) ? `${raw}GB` : raw;
+  if (/^\d+(?:\.\d+)?$/.test(raw)) {
+    const gb = Number(raw);
+    if (Number.isFinite(gb) && gb >= 1024) {
+      const tb = gb / 1024;
+      return `${Number.isInteger(tb) ? tb : Number(tb.toFixed(1))}TB`;
+    }
+    return `${raw}GB`;
+  }
+  return raw;
 }
 
 function normalizePanel(panel?: ProductDisplayPanel): ProductDisplayPanel {
   return {
+    role: panel?.role,
+    posturesVisible: panel?.posturesVisible,
     type: panel?.type,
-    size: panel?.size,
+    size: panel?.sizeInches ?? panel?.size,
+    sizeInches: panel?.sizeInches,
+    sizeCm: panel?.sizeCm,
     resolution: panel?.resolution,
+    resolutionWidth: panel?.resolutionWidth,
+    resolutionHeight: panel?.resolutionHeight,
+    resolutionLabel: panel?.resolutionLabel,
     refreshRate: panel?.refreshRate,
+    adaptiveRefreshRate: panel?.adaptiveRefreshRate,
     adaptive: panel?.adaptive,
+    brightness: panel?.brightness,
     peakBrightness: panel?.peakBrightness,
     protection: panel?.protection,
-    hdr: Array.isArray(panel?.hdr) ? panel?.hdr : [],
+    hdr: Array.isArray(panel?.hdr) ? panel.hdr : [],
     pixelDensity: panel?.pixelDensity,
     screenToBody: panel?.screenToBody,
     aspectRatio: panel?.aspectRatio,
     touchSamplingRate: panel?.touchSamplingRate,
+    instantTouchSamplingRate: panel?.instantTouchSamplingRate,
     curved: panel?.curved,
-    extras: Array.isArray(panel?.extras) ? panel?.extras : [],
-    certifications: Array.isArray(panel?.certifications) ? panel?.certifications : [],
-    others: Array.isArray(panel?.others) ? panel?.others : [],
+    curvedDegree: panel?.curvedDegree,
+    colorGamut: Array.isArray(panel?.colorGamut) ? panel.colorGamut : [],
+    colorDepth: panel?.colorDepth,
+    displayModes: Array.isArray(panel?.displayModes) ? panel.displayModes : [],
+    colorProfiles: Array.isArray(panel?.colorProfiles) ? panel.colorProfiles : [],
+    dimming: Array.isArray(panel?.dimming) ? panel.dimming : [],
+    includeDimmingInOtherFeatures: panel?.includeDimmingInOtherFeatures,
+    includeAlwaysOnDisplayInOtherFeatures: panel?.includeAlwaysOnDisplayInOtherFeatures,
+    includePalmRejectionInOtherFeatures: panel?.includePalmRejectionInOtherFeatures,
+    alwaysOnDisplay: Array.isArray(panel?.alwaysOnDisplay) ? panel.alwaysOnDisplay : [],
+    alwaysOnDisplayHz: panel?.alwaysOnDisplayHz,
+    stylus: panel?.stylus,
+    extras: Array.isArray(panel?.extras) ? panel.extras : [],
+    certifications: Array.isArray(panel?.certifications) ? panel.certifications : [],
+    others: Array.isArray(panel?.others) ? panel.others : [],
   };
 }
 

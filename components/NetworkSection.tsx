@@ -1,4 +1,4 @@
-﻿import type { ProductNetwork } from "@/lib/types/content";
+import type { ProductNetwork } from "@/lib/types/content";
 import type { ReactNode } from "react";
 
 type NetworkSectionProps = {
@@ -88,12 +88,12 @@ function formatUsbVersion(usb?: ProductNetwork["usb"]): string {
 }
 
 function row(label: string, value: ReactNode) {
-  const isDashValue = typeof value === "string" && value.trim() === "-";
+  if (value == null || value === "" || value === "-") return null;
   return (
-    <div className="grid grid-cols-[140px_16px_minmax(0,1fr)] items-center gap-3 border-b border-slate-100 px-3 py-2.5 last:border-b-0 sm:grid-cols-[180px_16px_minmax(0,1fr)]">
-      <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500">{label}</p>
-      <p className="text-sm font-semibold text-slate-500">-</p>
-      <div className="text-sm font-semibold text-slate-900">{isDashValue ? "NA" : value}</div>
+    <div className="grid grid-cols-[104px_8px_minmax(0,1fr)] items-center gap-1 border-b border-slate-100 px-2 py-2 last:border-b-0 sm:grid-cols-[180px_16px_minmax(0,1fr)] sm:gap-3 sm:px-3 sm:py-2.5">
+      <p className="text-[9px] font-normal uppercase tracking-[0.04em] text-slate-500 sm:text-[11px] sm:font-bold sm:tracking-wide">{label}</p>
+      <p className="relative -left-1 text-xs font-semibold text-slate-500 sm:left-0 sm:text-sm">-</p>
+      <div className="relative -left-1 min-w-0 text-[11px] font-semibold text-slate-900 sm:left-0 sm:text-sm">{value}</div>
     </div>
   );
 }
@@ -101,22 +101,42 @@ function row(label: string, value: ReactNode) {
 export default function NetworkSection({ network }: NetworkSectionProps) {
   const supported = network?.supported || [];
   const has5G = supported.map((item) => cleanValue(item).toUpperCase()).includes("5G");
-  const fiveGBands = formatList(network?.bands?.["5G"]?.all);
+  const fiveGBandNames = Array.from(new Set([
+    ...(network?.bands?.["5G"]?.all || []),
+    ...(network?.bands?.["5G"]?.fdd || []),
+    ...(network?.bands?.["5G"]?.tdd || []),
+  ].map((band) => cleanValue(band)).filter(Boolean)));
+  const fiveGBands = fiveGBandNames.join(", ");
+  const fiveGBandCount = Number(network?.fiveGBandCount) > 0
+    ? Math.floor(Number(network?.fiveGBandCount))
+    : fiveGBandNames.length;
+  const fiveGBandValue: ReactNode = (
+    <>
+      <span className="sm:hidden">
+        {fiveGBandCount > 0 ? `${fiveGBandCount} ${fiveGBandCount === 1 ? "Band" : "Bands"}` : ""}
+        {fiveGBands ? <span className="font-normal text-slate-600"> ({fiveGBands})</span> : null}
+      </span>
+      <span className="hidden sm:inline">
+        {fiveGBandCount > 0 ? `${fiveGBandCount} ${fiveGBandCount === 1 ? "Band" : "Bands"}` : ""}
+        {fiveGBands ? <span className="font-normal text-slate-600">{fiveGBandCount > 0 ? " " : ""}({fiveGBands})</span> : null}
+      </span>
+    </>
+  );
   const fourGBands = formatList(network?.bands?.["4G"]?.all);
   const wifi = formatWifi(network?.wifi);
   const sim = formatSim(network?.sim);
   const bluetooth = selectLatestVersion(network?.bluetooth, ["6.0", "5.4", "5.3", "5.2", "5.1", "5.0", "4.2"]) || "-";
   const bluetoothFeatures = formatBluetoothFeatures(network?.bluetoothFeatures);
   const wifiFeatures = formatList(network?.wifi?.features);
-  const otherNetwork = formatList(network?.otherFeatures);
+  const callingFeatures = formatList(network?.otherFeatures);
   const gps = formatList(network?.gps) || "-";
   const usbVersion = formatUsbVersion(network?.usb);
   const usbFeatures = formatList(network?.usb?.features);
   return (
-    <div className="rounded-xl border border-slate-200 bg-white">
+    <div className="empty:hidden rounded-xl border border-slate-200 bg-white">
       {row("Supported Network", formatNetworkType(supported))}
-      {otherNetwork ? row("Other Network", otherNetwork) : null}
-      {has5G ? (fiveGBands ? row("5G Band", fiveGBands) : null) : (fourGBands ? row("4G Band", fourGBands) : null)}
+      {callingFeatures ? row("Calling Features", callingFeatures) : null}
+      {has5G ? (fiveGBands || fiveGBandCount ? row("5G Bands", fiveGBandValue) : null) : (fourGBands ? row("4G Band", fourGBands) : null)}
       {row("SIM Type", sim)}
       {row("Wi-Fi", wifi)}
       {wifiFeatures ? row("Wi-Fi Features", wifiFeatures) : null}

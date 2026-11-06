@@ -63,7 +63,7 @@ function toDate(value?: TimestampLike): Date | null {
 }
 
 function formatBadgeDate(value: Date): string {
-  return value.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
+  return value.toLocaleDateString("en-IN", { day: "2-digit", month: "long", year: "numeric" });
 }
 
 function parseStorageToGb(value: string): number {

@@ -1,4 +1,4 @@
-﻿import BatterySpecsTable from "@/components/BatterySpecsTable";
+import BatterySpecsTable from "@/components/BatterySpecsTable";
 import DesignSection from "@/components/DesignSection";
 import DisplaySpecsTable from "@/components/DisplaySpecsTable";
 import FrontCameraSection from "@/components/FrontCameraSection";
@@ -294,13 +294,13 @@ export default function SpecsTable({ specs, ratings, memoryStorage, variants, ba
             {section.title === "Display" ? (
               <DisplaySpecsTable display={effectiveDisplay} displays={displays} />
             ) : section.title === "General" ? (
-              <GeneralSection general={general} specs={specs} />
+              <GeneralSection general={general} />
             ) : section.title === "Design & Build" ? (
               <DesignSection design={design} />
             ) : section.title === "Performance" ? (
               <PerformanceSection performance={effectivePerformance} />
             ) : section.title === "Storage" ? (
-              <StorageSpecsTable memoryStorage={effectiveStorage.memoryStorage} variants={effectiveStorage.variants} />
+              <StorageSpecsTable memoryStorage={effectiveStorage.memoryStorage} variants={effectiveStorage.variants} general={general} />
             ) : section.title === "Battery & Charging" ? (
               <BatterySpecsTable battery={effectiveBattery} />
             ) : section.title === "Rear Camera" ? (
@@ -308,20 +308,21 @@ export default function SpecsTable({ specs, ratings, memoryStorage, variants, ba
             ) : section.title === "Front Camera" ? (
               <FrontCameraSection frontCamera={effectiveFrontCamera} />
             ) : section.title === "Security & Sensors" ? (
-              <SecurityAndSensorsSection security={security} sensors={sensors} network={network} />
+              <SecurityAndSensorsSection security={security} general={general} sensors={sensors} network={network} />
             ) : section.title === "Network" ? (
               <NetworkSection network={network} />
             ) : section.title === "Software" ? (
               <SoftwareSection software={software} />
             ) : (
-              <div className="rounded-xl border border-slate-200 bg-white">
-                {section.rows.map(([label, value]) => (
+              <div className="empty:hidden rounded-xl border border-slate-200 bg-white">
+                {section.rows.filter(([, value]) => Boolean(String(value || "").trim()) && String(value).trim() !== "-").map(([label, value]) => (
                   <div
                     key={`${section.title}-${label}`}
-                    className="grid grid-cols-[140px_minmax(0,1fr)] items-center gap-3 border-b border-slate-100 px-3 py-2.5 last:border-b-0 sm:grid-cols-[180px_minmax(0,1fr)]"
+                    className="grid grid-cols-[104px_8px_minmax(0,1fr)] items-center gap-1 border-b border-slate-100 px-2 py-2 last:border-b-0 sm:grid-cols-[180px_16px_minmax(0,1fr)] sm:gap-3 sm:px-3 sm:py-2.5"
                   >
-                    <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500">{label}</p>
-                    <p className="text-sm font-semibold text-slate-900">{value || "NA"}</p>
+                    <p className="text-[9px] font-normal uppercase tracking-[0.04em] text-slate-500 sm:text-[11px] sm:font-bold sm:tracking-wide">{label}</p>
+                    <p className="relative -left-1 text-xs font-semibold text-slate-500 sm:left-0 sm:text-sm">-</p>
+                    <p className="relative -left-1 min-w-0 text-[11px] font-semibold text-slate-900 sm:left-0 sm:text-sm">{value}</p>
                   </div>
                 ))}
               </div>

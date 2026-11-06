@@ -63,7 +63,7 @@ function formatDate(value: unknown): string {
   if (raw === "N/A") return raw;
   const date = new Date(raw);
   if (Number.isNaN(date.getTime())) return raw;
-  return date.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
+  return date.toLocaleDateString("en-IN", { day: "2-digit", month: "long", year: "numeric" });
 }
 
 function buildCompareSlug(items: Product[]): string {
@@ -640,50 +640,32 @@ export default function CompareTable({
             label: "Wired Charging",
             values: padToThree(
               products.map((p) => {
-                if (p.battery?.wired?.supported) {
-                  const power = asText(p.battery?.wired?.maxPower);
-                  const protocol = asText(p.battery?.wired?.protocol);
-                  const powerText = power !== "N/A" ? cleanWiredCharging(power) : "Yes";
-                  if (protocol !== "N/A") return `${powerText}, ${protocol}`;
-                  return powerText;
-                }
-                if (p.battery?.wired?.supported === false) return "No";
-                return cleanWiredCharging(p.specs?.charging);
-              })
-            ),
-          },
-          {
-            label: "Wired Speed",
-            values: padToThree(
-              products.map((p) => {
-                const speed = p.battery?.wired?.speed || {};
+                const maxPower = Number.parseFloat(String(p.battery?.wired?.maxPower ?? ""));
+                const inBoxPower = Number.parseFloat(String(p.battery?.chargerInBox?.power ?? ""));
+                const maxPowerText = asText(p.battery?.wired?.maxPower);
+                const inBoxPowerText = asText(p.battery?.chargerInBox?.power);
+                const support = p.battery?.wired?.supported
+                  ? p.battery?.chargerInBox?.available && maxPower > inBoxPower && maxPowerText !== "N/A" && inBoxPowerText !== "N/A"
+                    ? `${cleanWiredCharging(maxPowerText)} support (${cleanWiredCharging(inBoxPowerText)} in box)`
+                    : `${maxPowerText !== "N/A" ? cleanWiredCharging(maxPowerText) : "Wired charging"} support`
+                  : p.battery?.chargerInBox?.available
+                    ? `${inBoxPowerText !== "N/A" ? cleanWiredCharging(inBoxPowerText) : "Charger"} support`
+                    : p.battery?.wired?.supported === false
+                      ? "No"
+                      : cleanWiredCharging(p.specs?.charging);
+                const speed = p.battery?.wired?.speed || p.battery?.chargerInBox?.speed || {};
                 const entries = Object.entries(speed)
                   .map(([k, v]) => `${k}: ${v}`)
                   .filter((x) => !x.includes("undefined"));
-                return entries.length ? entries.join(" | ") : "N/A";
+                return support;
               })
             ),
           },
           {
-            label: "Charger in Box",
-            values: padToThree(
-              products.map((p) =>
-                p.battery?.chargerInBox?.available
-                  ? [
-                    p.battery?.chargerInBox?.power ? `${p.battery.chargerInBox.power}W` : "Yes",
-                    p.battery?.chargerInBox?.protocol ? String(p.battery.chargerInBox.protocol) : "",
-                  ].filter(Boolean).join(", ")
-                  : p.battery?.chargerInBox?.available === false
-                    ? "No"
-                    : "N/A"
-              )
-            ),
-          },
-          {
-            label: "In-Box Speed",
+            label: "Charging Speed",
             values: padToThree(
               products.map((p) => {
-                const speed = p.battery?.chargerInBox?.speed || {};
+                const speed = p.battery?.wired?.speed || p.battery?.chargerInBox?.speed || {};
                 const entries = Object.entries(speed)
                   .map(([k, v]) => `${k}: ${v}`)
                   .filter((x) => !x.includes("undefined"));

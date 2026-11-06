@@ -4,6 +4,7 @@ export function toMemoryStorageObject(memoryStorage?: MemoryStorage): MemoryStor
   return {
     ram: Array.isArray(memoryStorage?.ram) ? memoryStorage?.ram : [],
     ramType: Array.isArray(memoryStorage?.ramType) ? memoryStorage?.ramType : [],
+    showOnlyMaxRamStorageTypes: memoryStorage?.showOnlyMaxRamStorageTypes ?? true,
     internalStorage: Array.isArray(memoryStorage?.internalStorage) ? memoryStorage?.internalStorage : [],
     storageType: Array.isArray(memoryStorage?.storageType) ? memoryStorage?.storageType : [],
     virtualRam: Array.isArray(memoryStorage?.virtualRam) ? memoryStorage?.virtualRam : [],

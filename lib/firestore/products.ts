@@ -1,4 +1,4 @@
-import { FieldValue } from "firebase-admin/firestore";
+import { FieldPath, FieldValue } from "firebase-admin/firestore";
 import { unstable_cache } from "next/cache";
 import { adminDb } from "@/lib/firebase/admin";
 import type { Product, ProductFilters } from "@/lib/types/content";
@@ -367,6 +367,7 @@ function normalizeProduct(input: Partial<Product>): Product {
     status: normalizeProductStatus(input.status),
     ...(input.status === "scheduled" && input.scheduledAt ? { scheduledAt: input.scheduledAt } : {}),
     shortDescription: input.shortDescription || "",
+    seo: input.seo || {},
     images: Array.isArray(input.images) ? input.images.filter(Boolean) : [],
     imageItems: Array.isArray(input.imageItems)
       ? input.imageItems
@@ -384,6 +385,9 @@ function normalizeProduct(input: Partial<Product>): Product {
           .map((variant: { color: string; images: string[] }) => ({ color: variant.color.trim(), images: variant.images.filter(Boolean) }))
       : [],
     imageBackground: input.imageBackground || "#ffffff",
+    ...(Array.isArray(input.quickSpecs) ? { quickSpecs: input.quickSpecs } : {}),
+    ...(typeof input.quickSpecsVersion === "number" ? { quickSpecsVersion: input.quickSpecsVersion } : {}),
+    ...(input.quickSpecOverrides && typeof input.quickSpecOverrides === "object" ? { quickSpecOverrides: input.quickSpecOverrides } : {}),
     specs: input.specs || {},
     performance: input.performance || {},
     camera: input.camera || {},
@@ -407,6 +411,8 @@ function normalizeProduct(input: Partial<Product>): Product {
     cons: Array.isArray(input.cons) ? input.cons : [],
     tags: Array.isArray(input.tags) ? input.tags : [],
     trending: Boolean(input.trending),
+    createdBy: input.createdBy,
+    updatedBy: input.updatedBy,
     createdAt: input.createdAt,
     updatedAt: input.updatedAt,
   };
@@ -1162,9 +1168,29 @@ export async function updateProduct(id: string, data: Partial<Product>): Promise
   const payload = normalizeProduct({ ...oldData, ...data });
   const nextId = payload.slug || id;
   const nextRef = productsRef.doc(nextId);
-  const writePayload = {
+  const writePayload: Record<string, unknown> = {
     ...(stripUndefinedDeep(payload) as Record<string, unknown>),
     ...(payload.status === "scheduled" ? {} : { scheduledAt: FieldValue.delete() }),
+  };
+
+  // Firestore merges nested maps when merge:true is used. Delete removed
+  // battery speed milestones explicitly after writing the updated maps.
+  const speedSections = ["wired", "chargerInBox", "wireless", "reverseWireless", "reverseWired"] as const;
+  const previousBattery = oldData.battery;
+  const nextBattery = payload.battery;
+  const removedSpeedFieldPaths: FieldPath[] = [];
+  if (nextBattery) {
+    for (const section of speedSections) {
+      const previousSpeed = previousBattery?.[section]?.speed || {};
+      const nextSpeed = nextBattery[section]?.speed || {};
+      const removedKeys = Object.keys(previousSpeed).filter((key) => !(key in nextSpeed));
+      removedKeys.forEach((key) => removedSpeedFieldPaths.push(new FieldPath("battery", section, "speed", key)));
+    }
+  }
+
+  const deleteRemovedSpeedMilestones = async () => {
+    if (removedSpeedFieldPaths.length === 0) return;
+    await Promise.all(removedSpeedFieldPaths.map((path) => nextRef.update(path, FieldValue.delete())));
   };
 
   if (nextId !== id) {
@@ -1173,6 +1199,7 @@ export async function updateProduct(id: string, data: Partial<Product>): Promise
       ...writePayload,
       updatedAt: FieldValue.serverTimestamp(),
     }, { merge: true });
+    await deleteRemovedSpeedMilestones();
     if (oldDoc.exists) {
       await oldRef.delete();
     }
@@ -1184,6 +1211,7 @@ export async function updateProduct(id: string, data: Partial<Product>): Promise
     ...writePayload,
     updatedAt: FieldValue.serverTimestamp(),
   }, { merge: true });
+  await deleteRemovedSpeedMilestones();
   return nextId;
 }
 

@@ -17,6 +17,7 @@ import {
   listRelatedProducts,
 } from "@/lib/firestore/products";
 import { productSchema } from "@/lib/seo/schema";
+import { getShowSmartphoneRamStorageConfiguration } from "@/lib/firestore/siteSettings";
 import { buildAutoProsCons } from "@/lib/utils/prosCons";
 import { calculateOverallScore100 } from "@/lib/utils/score";
 import { getScoreBadgeTone } from "@/lib/utils/scoreBadge";
@@ -25,7 +26,7 @@ import { getAdminViewerFromSessionToken } from "@/lib/auth/admin";
 import { hasCapability } from "@/lib/admin/permissions";
 import { ADMIN_SESSION_COOKIE } from "@/lib/auth/constants";
 import type { ReactNode } from "react";
-import type { ProductNetwork, TimestampLike } from "@/lib/types/content";
+import { DEFAULT_PRODUCT_QUICK_SPECS, type ProductQuickSpecKey, type ProductDisplayPanel, type ProductNetwork, type TimestampLike } from "@/lib/types/content";
 
 type MobileDetailProps = {
   params: Promise<{ slug: string }>;
@@ -63,13 +64,16 @@ function toDate(value?: TimestampLike): Date | null {
 }
 
 function formatBadgeDate(value: Date): string {
-  return value.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
+  return value.toLocaleDateString("en-IN", { day: "2-digit", month: "long", year: "numeric" });
 }
 
 function parseStorageToGb(value: string): number {
   const text = cleanValue(value).toUpperCase();
   const match = text.match(/(\d+(\.\d+)?)\s*(TB|GB)/);
-  if (!match) return 0;
+  if (!match) {
+    const bareAmount = Number(text);
+    return Number.isFinite(bareAmount) && bareAmount > 0 ? bareAmount : 0;
+  }
   const number = Number(match[1]);
   if (!Number.isFinite(number) || number <= 0) return 0;
   return match[3] === "TB" ? number * 1024 : number;
@@ -87,12 +91,14 @@ function formatCapacity(valueGb: number): string {
 function maxRamAndStorage(product: Awaited<ReturnType<typeof getPublishedProductBySlug>>) {
   const ramCandidates = [
     ...(product?.memoryStorage?.ram || []),
+    ...((product?.general?.variants || []).map((v) => cleanValue(v.ram)).filter(Boolean)),
     ...((product?.variants || []).map((v) => cleanValue(v.ram)).filter(Boolean)),
     cleanValue(product?.specs?.ram),
   ].filter(Boolean);
 
   const storageCandidates = [
     ...(product?.memoryStorage?.internalStorage || []),
+    ...((product?.general?.variants || []).map((v) => cleanValue(v.storage)).filter(Boolean)),
     ...((product?.variants || []).map((v) => cleanValue(v.storage)).filter(Boolean)),
     cleanValue(product?.specs?.storage),
   ].filter(Boolean);
@@ -100,20 +106,41 @@ function maxRamAndStorage(product: Awaited<ReturnType<typeof getPublishedProduct
   const maxRamGb = Math.max(...ramCandidates.map(parseStorageToGb), 0);
   const maxStorageGb = Math.max(...storageCandidates.map(parseStorageToGb), 0);
 
+  const ramTypes = [
+    cleanValue(product?.memoryStorage?.commonRamType),
+    ...(product?.memoryStorage?.ramType || []).map(cleanValue),
+    ...(product?.memoryStorage?.variantGroups || []).map((variant) => cleanValue(variant.ramType)),
+    ...((product?.general?.variants || []).map((variant) => cleanValue(variant.ramType))),
+  ].filter(Boolean);
+  const storageTypes = [
+    cleanValue(product?.memoryStorage?.commonStorageType),
+    ...(product?.memoryStorage?.storageType || []).map(cleanValue),
+    ...(product?.memoryStorage?.variantGroups || []).map((variant) => cleanValue(variant.storageType)),
+    ...((product?.general?.variants || []).map((variant) => cleanValue(variant.storageType))),
+  ].filter(Boolean);
+  const highestType = (types: string[]) => [...new Set(types)].sort((left, right) => {
+    const rank = (type: string) => {
+      const match = type.match(/(\d+(?:\.\d+)?)([A-Z])?/i);
+      if (!match) return 0;
+      return Number(match[1]) + (match[2]?.toUpperCase() === "T" ? 0.02 : match[2]?.toUpperCase() === "X" ? 0.01 : 0);
+    };
+    return rank(left) - rank(right);
+  }).pop() || "";
   const ramText = formatCapacity(maxRamGb);
   const storageText = formatCapacity(maxStorageGb);
-  if (ramText && storageText) return `${ramText} RAM + ${storageText} Storage`;
-  return ramText || storageText || "";
+  const ramSummary = ramText ? `${ramText}${highestType(ramTypes) ? ` ${highestType(ramTypes)}` : ""} RAM` : "";
+  const storageSummary = storageText ? `${storageText}${highestType(storageTypes) ? ` ${highestType(storageTypes)}` : ""} Storage` : "";
+  return [ramSummary, storageSummary].filter(Boolean).join(" · ");
 }
 
 function rearCameraSummary(product: Awaited<ReturnType<typeof getPublishedProductBySlug>>) {
   const fromStructured = Array.isArray(product?.rearCamera?.cameras) && product.rearCamera!.cameras!.length > 0
     ? product.rearCamera!.cameras!
-        .map((item) => cleanValue(item.resolution))
+        .map((item) => formatCameraMp(cleanValue(item.resolution) || cleanValue(item.imageResolution)))
         .filter(Boolean)
         .join(" + ")
     : "";
-  const text = fromStructured || cleanValue(product?.specs?.rearCamera) || cleanValue(product?.specs?.camera) || "";
+  const text = fromStructured || formatCameraMp(cleanValue(product?.specs?.rearCamera) || cleanValue(product?.specs?.camera));
   if (!text) return "";
   return `${text} Rear Camera`;
 }
@@ -121,25 +148,91 @@ function rearCameraSummary(product: Awaited<ReturnType<typeof getPublishedProduc
 function frontCameraSummary(product: Awaited<ReturnType<typeof getPublishedProductBySlug>>) {
   const fromStructured = Array.isArray(product?.frontCamera?.cameras) && product.frontCamera!.cameras!.length > 0
     ? product.frontCamera!.cameras!
-        .map((item) => cleanValue(item.resolution))
+        .map((item) => formatCameraMp(cleanValue(item.resolution) || cleanValue(item.imageResolution)))
         .filter(Boolean)
         .join(" + ")
     : "";
-  const text = fromStructured || cleanValue(product?.specs?.frontCamera) || "";
+  const text = fromStructured || formatCameraMp(cleanValue(product?.frontCamera?.maxCameraResolution) || cleanValue(product?.specs?.frontCamera));
   if (!text) return "";
   return `${text} Front Camera`;
 }
 
+function formatCameraMp(value: string): string {
+  return value && /^\d+(\.\d+)?$/.test(value) ? `${value}MP` : value;
+}
+
 function batterySummary(product: Awaited<ReturnType<typeof getPublishedProductBySlug>>) {
-  const capacity = cleanValue(product?.battery?.capacity) || cleanValue(product?.specs?.battery);
-  const batteryText = capacity ? `${capacity} Battery` : "";
-  if (!batteryText) return "";
-  const inBox = product?.battery?.chargerInBox?.available;
-  const power = cleanValue(product?.battery?.chargerInBox?.power);
-  if (inBox && power) {
-    return `${batteryText}, ${power} Charger in box`;
+  const capacity = cleanValue(product?.battery?.capacityTypical) || cleanValue(product?.battery?.capacity) || cleanValue(product?.specs?.batteryMah) || cleanValue(product?.specs?.battery);
+  const power = cleanValue(product?.battery?.chargerInBox?.power) || cleanValue(product?.battery?.wired?.maxPower) || cleanValue(product?.specs?.charging);
+  const capacityLabel = capacity ? `${/^\d+(\.\d+)?$/.test(capacity) ? `${capacity} mAh` : capacity} Battery` : "";
+  const powerLabel = power ? `${/^\d+(\.\d+)?$/.test(power) ? `${power}W` : power} Charger` : "";
+  return [capacityLabel, powerLabel].filter(Boolean).join(" · ");
+}
+
+function formatDisplayPanel(panel?: ProductDisplayPanel): string {
+  if (!panel) return "";
+  const sizeValue = cleanValue(panel.sizeInches ?? panel.size);
+  const size = sizeValue ? `${sizeValue.replace(/\s*(inches|inch|in|\")$/i, "")}\"` : "";
+  const resolution = cleanValue(panel.resolutionLabel || panel.resolution || (panel.resolutionWidth && panel.resolutionHeight ? `${panel.resolutionWidth} × ${panel.resolutionHeight}` : ""));
+  const type = cleanValue(panel.type);
+  const curved = panel.curved ? "Curved" : "";
+  return [size, resolution, curved, type, "Display"].filter(Boolean).join(" ");
+}
+
+function displaySummary(product: Awaited<ReturnType<typeof getPublishedProductBySlug>>): string {
+  const customText = cleanValue(product?.display?.quickSpecText);
+  if (customText) return customText;
+  return formatDisplayPanel(product?.display?.primary || product?.display || product?.displays?.[0]) || cleanValue(product?.specs?.display);
+}
+
+function secondaryDisplaySummary(product: Awaited<ReturnType<typeof getPublishedProductBySlug>>): string {
+  return formatDisplayPanel(product?.display?.secondary || product?.displays?.[1]) || cleanValue(product?.specs?.secondaryDisplay);
+}
+
+function refreshRateSummary(product: Awaited<ReturnType<typeof getPublishedProductBySlug>>): string {
+  const rate = cleanValue(product?.display?.primary?.refreshRate ?? product?.display?.refreshRate ?? product?.displays?.[0]?.refreshRate ?? product?.specs?.refreshRateHz);
+  return rate ? `${rate}${/hz/i.test(rate) ? "" : "Hz"} Refresh Rate` : "";
+}
+
+function securitySummary(product: Awaited<ReturnType<typeof getPublishedProductBySlug>>): string {
+  const fingerprint = product?.security?.fingerprint;
+  if (fingerprint?.available) {
+    const location = cleanValue(fingerprint.locations?.[0]);
+    const type = cleanValue(fingerprint.type?.[0]);
+    const normalizedLocation = /in[\s-]?display/i.test(location)
+      ? "In-display"
+      : /side/i.test(location)
+        ? "Side-mounted"
+        : /top/i.test(location)
+          ? "Top-mounted"
+          : location;
+    return [normalizedLocation, "Fingerprint"].filter(Boolean).join(" ");
   }
-  return batteryText;
+
+  const face = product?.security?.faceUnlock;
+  if (face?.available) {
+    const type = cleanValue(face.type);
+    return type || "Face Unlock";
+  }
+  return "";
+}
+
+function softwareSummary(product: Awaited<ReturnType<typeof getPublishedProductBySlug>>): string {
+  const osName = cleanValue(product?.software?.os?.name);
+  const osVersion = cleanValue(product?.software?.os?.version);
+  const normalizedOs = osName.toLowerCase() === "android" ? "Android" : osName.toLowerCase() === "ios" ? "iOS" : osName;
+  const os = [normalizedOs, osVersion].filter(Boolean).join(" ");
+  const ui = cleanValue(product?.software?.ui);
+  return [os, ui].filter(Boolean).join(" + ");
+}
+
+function softwareUpdatesSummary(product: Awaited<ReturnType<typeof getPublishedProductBySlug>>): string {
+  const updates = product?.software?.updates;
+  const parts = [
+    updates?.os ? `${updates.os} years OS updates` : "",
+    updates?.security ? `${updates.security} years security updates` : "",
+  ].filter(Boolean);
+  return parts.join(" · ");
 }
 
 function maxNetworkType(supported?: string[]): string {
@@ -189,13 +282,7 @@ function connectivitySummary(product: Awaited<ReturnType<typeof getPublishedProd
         {network}
       </span>
       <span className="inline-flex items-center gap-1.5 rounded-full bg-blue-100 px-2.5 py-1 text-xs font-extrabold text-blue-800 ring-1 ring-blue-200">
-        <svg viewBox="0 0 24 24" fill="none" className="h-4 w-4 text-blue-700" aria-hidden="true">
-          <path d="M3.8 9.2a13.5 13.5 0 0 1 16.4 0" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" />
-          <path d="M6.9 12.4a8.7 8.7 0 0 1 10.2 0" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" />
-          <path d="M10.1 15.6a3.8 3.8 0 0 1 3.8 0" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" />
-          <circle cx="12" cy="18.9" r="1.2" fill="currentColor" />
-        </svg>
-        {wifi}
+        Wi-Fi {wifi}
       </span>
       <span className="inline-flex items-center gap-1.5 rounded-full bg-blue-100 px-2.5 py-1 text-xs font-extrabold text-blue-800 ring-1 ring-blue-200">
         <svg viewBox="0 0 24 24" fill="none" className="h-4 w-4 text-blue-700" aria-hidden="true">
@@ -213,7 +300,7 @@ function hasSummaryValue(value: ReactNode): boolean {
   return value !== null && value !== undefined && value !== false;
 }
 
-function SpecIcon({ kind }: { kind: "processor" | "memory" | "rear" | "front" | "connectivity" | "battery" }) {
+function SpecIcon({ kind }: { kind: "processor" | "memory" | "rear" | "front" | "connectivity" | "battery" | "display" | "fingerprint" | "software" }) {
   const iconClass = "h-4 w-4 text-blue-700";
   if (kind === "processor") {
     return (
@@ -242,6 +329,30 @@ function SpecIcon({ kind }: { kind: "processor" | "memory" | "rear" | "front" | 
       </svg>
     );
   }
+  if (kind === "display") {
+    return (
+      <svg viewBox="0 0 24 24" fill="none" className={iconClass} aria-hidden="true">
+        <rect x="3" y="4" width="18" height="13" rx="2" stroke="currentColor" strokeWidth="1.8" />
+        <path d="M8 21h8M12 17v4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+      </svg>
+    );
+  }
+  if (kind === "fingerprint") {
+    return (
+      <svg viewBox="0 0 24 24" fill="none" className={iconClass} aria-hidden="true">
+        <path d="M12 3.5a7.5 7.5 0 0 0-7.5 7.5M12 6.5a4.5 4.5 0 0 0-4.5 4.5c0 3.2-.6 5.9-1.8 8" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
+        <path d="M12 9.5a1.5 1.5 0 0 0-1.5 1.5c0 4-.5 6.9-1.5 9.5M12 3.5a7.5 7.5 0 0 1 7.5 7.5c0 2.7-.2 5-.8 7M15 11c0 4.2-.3 7.1-1.1 9.5M18 11c0 2.2-.1 4-.4 5.5" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
+      </svg>
+    );
+  }
+  if (kind === "software") {
+    return (
+      <svg viewBox="0 0 24 24" fill="none" className={iconClass} aria-hidden="true">
+        <rect x="4" y="5" width="16" height="14" rx="2" stroke="currentColor" strokeWidth="1.8" />
+        <path d="M8 9h8M8 12h5M8 15h3" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+      </svg>
+    );
+  }
   if (kind === "connectivity") {
     return (
       <svg viewBox="0 0 24 24" fill="none" className={iconClass} aria-hidden="true">
@@ -267,12 +378,18 @@ export async function generateMetadata({ params }: MobileDetailProps): Promise<M
     return { title: "Product not found" };
   }
 
+  const title = product.seo?.metaTitle || product.name;
+  const description = product.seo?.metaDescription || product.shortDescription || `${product.name} full specs, rating, pros and cons, and comparison suggestions.`;
+  const newsKeywords = product.seo?.newsKeywords?.filter(Boolean) || [];
   return {
-    title: product.name,
-    description: product.shortDescription || `${product.name} full specs, rating, pros and cons, and comparison suggestions.`,
+    title,
+    description,
+    keywords: product.seo?.keywords?.filter(Boolean),
+    alternates: product.seo?.canonicalUrl ? { canonical: product.seo.canonicalUrl } : undefined,
+    other: newsKeywords.length ? { "news_keywords": newsKeywords.join(", ") } : undefined,
     openGraph: {
-      title: product.name,
-      description: product.shortDescription || `${product.name} review page`,
+      title,
+      description,
       images: product.images.slice(0, 1),
     },
   };
@@ -310,9 +427,10 @@ export default async function MobileDetailPage({ params, searchParams }: MobileD
     );
   }
 
-  const [related, allComparisonSuggestions] = await Promise.all([
+  const [related, allComparisonSuggestions, showRamStorageConfiguration] = await Promise.all([
     listRelatedProducts(product, 16),
     listComparisonSuggestions(product, 120),
+    getShowSmartphoneRamStorageConfiguration().catch(() => false),
   ]);
   const suggestions = allComparisonSuggestions.slice(0, 6);
   const extraComparisonSuggestions = allComparisonSuggestions.slice(6);
@@ -329,26 +447,51 @@ export default async function MobileDetailPage({ params, searchParams }: MobileD
   const isNew = (product.tags || []).some((tag) => cleanValue(tag).toLowerCase() === "new");
   const launchState = getLaunchState(product.general, product.tags);
   const isUpcoming = launchState === "upcoming";
-  const quickSpecs: Array<{ key: string; value: ReactNode; kind: "processor" | "memory" | "rear" | "front" | "connectivity" | "battery" }> = [
-    { key: "processor", value: cleanValue(product.specs.processor), kind: "processor" as const },
-    { key: "ram-storage", value: maxRamAndStorage(product), kind: "memory" as const },
-    {
-      key: "rear",
-      value: rearCameraSummary(product),
-      kind: "rear" as const,
-    },
-    {
-      key: "front",
-      value: frontCameraSummary(product),
-      kind: "front" as const,
-    },
-    { key: "battery", value: batterySummary(product), kind: "battery" as const },
-    {
-      key: "connectivity",
-      value: connectivitySummary(product),
-      kind: "connectivity" as const,
-    },
-  ].filter((item) => hasSummaryValue(item.value));
+  const generatedQuickSpecValues: Record<ProductQuickSpecKey, { value: ReactNode; kind: "processor" | "memory" | "rear" | "front" | "battery" | "display" | "fingerprint" | "software" }> = {
+    processor: { value: cleanValue(product.specs.processor), kind: "processor" },
+    "chipset-score": { value: product.specs.chipsetScore ? `${product.specs.chipsetScore} Chipset Score` : "", kind: "processor" },
+    display: { value: displaySummary(product), kind: "display" },
+    "primary-display": { value: formatDisplayPanel(product.display?.primary || product.display || product.displays?.[0]) || cleanValue(product.specs.primaryDisplay), kind: "display" },
+    "secondary-display": { value: secondaryDisplaySummary(product), kind: "display" },
+    "refresh-rate": { value: refreshRateSummary(product), kind: "display" },
+    "ram-storage": { value: maxRamAndStorage(product), kind: "memory" },
+    rear: { value: rearCameraSummary(product), kind: "rear" },
+    front: { value: frontCameraSummary(product), kind: "front" },
+    battery: { value: batterySummary(product), kind: "battery" },
+    security: { value: securitySummary(product), kind: "fingerprint" },
+    software: { value: softwareSummary(product), kind: "software" },
+    updates: { value: softwareUpdatesSummary(product), kind: "memory" },
+  };
+  const selectedQuickSpecs = product.quickSpecsVersion && product.quickSpecsVersion >= 2
+    ? product.quickSpecs || DEFAULT_PRODUCT_QUICK_SPECS
+    : Array.from(new Set([
+      ...(product.quickSpecs || DEFAULT_PRODUCT_QUICK_SPECS),
+      "chipset-score",
+      "primary-display",
+      "secondary-display",
+      "refresh-rate",
+    ] as ProductQuickSpecKey[]));
+  const quickSpecs = selectedQuickSpecs
+    .map((key) => ({
+    key,
+    ...generatedQuickSpecValues[key],
+    value: product.quickSpecOverrides?.[key]?.trim()
+      ? product.quickSpecOverrides[key]
+      : generatedQuickSpecValues[key].value,
+    })).filter((item) => item.key === "ram-storage" || hasSummaryValue(item.value));
+  const connectivitySpec = {
+    key: "connectivity",
+    value: connectivitySummary(product),
+    kind: "connectivity" as const,
+  };
+  /*
+   * Connectivity stays visible as its own badge row; its supported generation
+   * is computed automatically and it is intentionally not an Admin option.
+   */
+  const publicQuickSpecs = [
+    ...quickSpecs,
+    ...(hasSummaryValue(connectivitySpec.value) ? [connectivitySpec] : []),
+  ];
 
   return (
     <main className="mobile-container py-6 pb-24 sm:py-8 sm:pb-8">
@@ -369,7 +512,7 @@ export default async function MobileDetailPage({ params, searchParams }: MobileD
         </div>
       </section>
 
-      <section className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_340px]">
+      <section className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_250px]">
         <div className="space-y-3">
           <article className="panel relative p-4 sm:p-5">
             <span className={`absolute right-1 top-1 inline-flex h-[40px] w-[40px] rounded-full p-[1.5px] shadow-[0_6px_14px_rgba(15,23,42,0.22)] sm:right-2 sm:top-2 sm:h-[58px] sm:w-[58px] ${overallBadgeTone.outerClass}`}>
@@ -423,21 +566,26 @@ export default async function MobileDetailPage({ params, searchParams }: MobileD
             {product.shortDescription ? <p className="mt-3 text-sm text-slate-600">{product.shortDescription}</p> : null}
 
             <div className="mt-4 grid gap-3 sm:grid-cols-[0.9fr_1.1fr]">
-              <ProductImageGallery images={product.images} allColorImages={product.allColorImages} imageVariants={product.imageVariants} imageItems={product.imageItems} colors={product.design?.colors} memoryVariants={product.general?.variants} name={product.name} background={product.imageBackground} />
-              <div className="space-y-2 p-1">
-                {quickSpecs.map((item) => (
-                  <div key={item.key} className="flex items-center gap-2.5 border-b border-slate-200 pb-2.5 last:border-b-0 last:pb-0">
-                    {item.kind === "connectivity" ? null : <div className="flex items-center gap-1"><SpecIcon kind={item.kind} /></div>}
-                    <div className="text-sm font-semibold text-slate-900 whitespace-pre-line">{item.value}</div>
-                  </div>
-                ))}
+              <ProductImageGallery images={product.images} allColorImages={product.allColorImages} imageVariants={product.imageVariants} imageItems={product.imageItems} colors={product.design?.colors} memoryVariants={product.general?.variants} name={product.name} background={product.imageBackground} hideControls />
+              <div className="space-y-6 p-1">
+                <div className="space-y-2">
+                  {publicQuickSpecs.map((item) => (
+                    <div key={item.key} className="border-b border-slate-200 pb-2.5 last:border-b-0 last:pb-0">
+                      <div className="flex items-center gap-2.5">
+                        {item.kind === "connectivity" ? null : <div className="flex items-center gap-1"><SpecIcon kind={item.kind} /></div>}
+                        <div className="text-sm font-semibold text-slate-900 whitespace-pre-line">{item.value || (item.key === "ram-storage" ? "RAM / Storage" : null)}</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <ProductImageGallery images={product.images} allColorImages={product.allColorImages} imageVariants={product.imageVariants} imageItems={product.imageItems} colors={product.design?.colors} memoryVariants={product.general?.variants} name={product.name} background={product.imageBackground} controlsOnly showVariantSelector={showRamStorageConfiguration} />
               </div>
             </div>
 
             <div className="mt-4 flex flex-wrap gap-2">
               {product.affiliateLinks.amazon ? (
                 <a href={product.affiliateLinks.amazon} target="_blank" rel="noreferrer" className="rounded-lg bg-orange-500 px-4 py-2 text-sm font-semibold text-white">
-                  Buy on Amazon
+                  Buy Now
                 </a>
               ) : null}
               {product.affiliateLinks.flipkart ? (

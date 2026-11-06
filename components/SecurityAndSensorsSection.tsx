@@ -1,7 +1,8 @@
-import type { ProductNetwork, ProductSecurity } from "@/lib/types/content";
+import type { ProductGeneral, ProductNetwork, ProductSecurity } from "@/lib/types/content";
 
 type SecurityAndSensorsSectionProps = {
   security?: ProductSecurity;
+  general?: ProductGeneral;
   sensors?: string[];
   network?: ProductNetwork;
 };
@@ -48,10 +49,17 @@ function formatFingerprint(security?: ProductSecurity): string {
   if (!available) return "No";
 
   const location = cleanValue(security?.fingerprint?.locations?.[0]);
-  const technology = cleanValue(security?.fingerprint?.type?.[0]);
-  const isInDisplay = /in[\s-]?display/i.test(location);
-  if (isInDisplay) return technology ? `${technology} In-Display Fingerprint Sensor` : "In-Display Fingerprint Sensor";
-  return location ? `${location} Fingerprint Sensor` : "Fingerprint Sensor";
+  if (!location) return "";
+  const normalizedLocation = /in[\s-]?display/i.test(location)
+    ? "In-display"
+    : /side/i.test(location)
+      ? "Side-mounted"
+      : /rear|back/i.test(location)
+        ? "Rear-mounted"
+        : /top/i.test(location)
+          ? "Top-mounted"
+          : location;
+  return `${normalizedLocation} Fingerprint`;
 }
 
 function formatFaceUnlock(security?: ProductSecurity): string {
@@ -63,40 +71,54 @@ function formatFaceUnlock(security?: ProductSecurity): string {
 
 function formatSensors(list?: string[]): string {
   if (!Array.isArray(list) || list.length === 0) return "";
+  const seen = new Set<string>();
   const normalized = list
     .map((item) => normalizeSensorName(item))
-    .filter(Boolean)
-    .sort((a, b) => a.localeCompare(b));
+    .filter((item) => {
+      const key = item.toLowerCase();
+      if (!item || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
   return safeArrayJoin(normalized, ", ");
 }
 
 function row(label: string, value: string) {
-  const isDashValue = value.trim() === "-";
+  if (!value.trim() || value.trim() === "-") return null;
   return (
-    <div className="grid grid-cols-[140px_16px_minmax(0,1fr)] items-center gap-3 border-b border-slate-100 px-3 py-2.5 last:border-b-0 sm:grid-cols-[180px_16px_minmax(0,1fr)]">
-      <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500">{label}</p>
-      <p className="text-sm font-semibold text-slate-500">-</p>
-      <p className="text-sm font-semibold text-slate-900">{isDashValue ? "NA" : value}</p>
+    <div className="grid grid-cols-[104px_8px_minmax(0,1fr)] items-center gap-1 border-b border-slate-100 px-2 py-2 last:border-b-0 sm:grid-cols-[180px_16px_minmax(0,1fr)] sm:gap-3 sm:px-3 sm:py-2.5">
+      <p className="text-[9px] font-normal uppercase tracking-[0.04em] text-slate-500 sm:text-[11px] sm:font-bold sm:tracking-wide">{label}</p>
+      <p className="relative -left-1 text-xs font-semibold text-slate-500 sm:left-0 sm:text-sm">-</p>
+      <p className="relative -left-1 min-w-0 whitespace-pre-line text-[11px] font-semibold text-slate-900 sm:left-0 sm:text-sm">{value}</p>
     </div>
   );
 }
 
-export default function SecurityAndSensorsSection({ security, sensors, network }: SecurityAndSensorsSectionProps) {
+export default function SecurityAndSensorsSection({ security, general, sensors, network }: SecurityAndSensorsSectionProps) {
   const fingerprint = formatFingerprint(security);
+  const fingerprintType = security?.fingerprint?.available === true
+    ? safeArrayJoin(security.fingerprint.type, ", ")
+    : "";
   const faceUnlock = formatFaceUnlock(security);
   const sensorsLine = formatSensors([
-    ...(sensors || []),
-    ...(network?.nfc ? ["NFC"] : []),
+    ...(sensors || []).filter((sensor) => !/\bnfc\b|near[-\s]?field communication/i.test(cleanValue(sensor))),
     ...(network?.infrared ? ["IR Blaster"] : []),
   ]);
+  const sarLines = [
+    typeof general?.headSarWkg === "number" && Number.isFinite(general.headSarWkg) && general.headSarWkg >= 0 ? `Head: ${general.headSarWkg} W/kg` : "",
+    typeof general?.bodySarWkg === "number" && Number.isFinite(general.bodySarWkg) && general.bodySarWkg >= 0 ? `Body: ${general.bodySarWkg} W/kg` : "",
+  ].filter(Boolean).join("\n");
 
   return (
-    <div className="rounded-xl border border-slate-200 bg-white">
-      {row("Fingerprint Sensor", fingerprint)}
+    <div className="empty:hidden rounded-xl border border-slate-200 bg-white">
+      {fingerprint ? row("Fingerprint", fingerprint) : null}
+      {fingerprintType ? row("Fingerprint Type", fingerprintType) : null}
       {row("Face Unlock", faceUnlock)}
       {security?.irisScanner === true ? row("Other Biometric Unlock", "Iris Scanner") : null}
+      {sarLines ? row("SAR Value", sarLines) : null}
+      {row("NFC Support", network?.nfc === true ? "Yes" : "No")}
+      {row("Sensor Support", sensorsLine || "-")}
       {Array.isArray(security?.vibrationMotors) && security.vibrationMotors.length > 0 ? row("Vibration Motor", safeArrayJoin(security.vibrationMotors, ", ")) : null}
-      {row("Sensors", sensorsLine || "-")}
     </div>
   );
 }

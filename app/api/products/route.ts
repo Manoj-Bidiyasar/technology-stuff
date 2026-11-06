@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createProduct, getPublishedProductBySlug, listAllProductsAdmin, searchProductSuggestions } from "@/lib/firestore/products";
 import type { Product } from "@/lib/types/content";
 import { requireAdminCapability } from "@/lib/auth/adminApi";
+import { getAdminViewerFromRequest } from "@/lib/auth/admin";
 
 export async function GET(request: NextRequest) {
   try {
@@ -65,8 +66,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "name and brand are required." }, { status: 400 });
     }
 
-    const id = await createProduct(body);
-    return NextResponse.json({ id }, { status: 201 });
+    const viewer = await getAdminViewerFromRequest(request);
+    const actor = viewer?.email || viewer?.uid || "Admin";
+    const id = await createProduct({ ...body, createdBy: actor, updatedBy: actor });
+    return NextResponse.json({ id, createdBy: actor, updatedBy: actor }, { status: 201 });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to create product.";
     return NextResponse.json({ error: message }, { status: 500 });

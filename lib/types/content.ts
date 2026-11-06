@@ -15,7 +15,7 @@ export type TimestampLike =
 
 export type ProductSpecs = {
   processor?: string;
-  chipsetScore?: number;
+  chipsetScore?: number | null;
   ram?: string;
   ramGb?: number;
   storage?: string;
@@ -77,6 +77,9 @@ export type ProductDisplayPanel = {
     coverage?: string | number;
   }>;
   dimming?: string[];
+  includeDimmingInOtherFeatures?: boolean;
+  includeAlwaysOnDisplayInOtherFeatures?: boolean;
+  includePalmRejectionInOtherFeatures?: boolean;
   alwaysOnDisplay?: string[];
   alwaysOnDisplayHz?: string | number;
   stylus?: {
@@ -90,12 +93,15 @@ export type ProductDisplayPanel = {
 };
 
 export type ProductDisplay = ProductDisplayPanel & {
+  hiddenFeatures?: string[];
+  quickSpecText?: string;
   formFactor?: "bar" | "bar_cover" | "flip_fold" | "book_fold" | "tri_fold" | string;
   primary?: ProductDisplayPanel;
   secondary?: ProductDisplayPanel;
 };
 
 export type ProductBattery = {
+  hiddenFeatures?: string[];
   capacity?: string | number;
   capacityTypical?: string | number;
   capacityRated?: string | number;
@@ -139,11 +145,11 @@ export type ProductBattery = {
 };
 
 export type ProductAntutu = {
-  total?: number;
-  cpu?: number;
-  gpu?: number;
-  memory?: number;
-  ux?: number;
+  total?: number | null;
+  cpu?: number | null;
+  gpu?: number | null;
+  memory?: number | null;
+  ux?: number | null;
 };
 
 export type ProductBenchmarks = {
@@ -162,11 +168,13 @@ export type ProductBenchmarks = {
 };
 
 export type ProductPerformance = {
+  hiddenFeatures?: string[];
   chipset?: string;
   additionalChips?: string[];
   additionalChipFeatures?: string[];
   fabrication?: string;
   noOfCores?: string;
+  architectureBits?: string;
   architecture?: string;
   cpu?: string[];
   cpuFrequency?: string;
@@ -175,8 +183,10 @@ export type ProductPerformance = {
   gpuFlops?: string;
   cameraIsp?: string;
   aiEngine?: string;
+  aiSpeed?: string;
   otherAiFeatures?: string[];
   coolingSystem?: string;
+  coolingAreaMm2?: number[];
   otherFeatures?: string[];
   antutu?: ProductAntutu;
   benchmarks?: ProductBenchmarks;
@@ -233,6 +243,8 @@ export type FrontCameraUnit = {
     pixelSize?: string;
     binnedResolution?: string;
     binnedPixelSize?: string;
+    binningSupported?: boolean;
+    binningDetails?: string;
     aperture?: string;
     lensType?: string;
     focalLength?: string;
@@ -246,6 +258,7 @@ export type FrontCameraUnit = {
 };
 
 export type ProductFrontCamera = {
+  hiddenFeatures?: string[];
   cameras?: FrontCameraUnit[];
   features?: string[];
   flash?: {
@@ -306,6 +319,8 @@ export type RearCameraUnit = {
     pixelSize?: string;
     binnedResolution?: string;
     binnedPixelSize?: string;
+    binningSupported?: boolean;
+    binningDetails?: string;
     focalLength?: string;
     fov?: string;
     lensType?: string;
@@ -319,6 +334,7 @@ export type RearCameraUnit = {
 };
 
 export type ProductRearCamera = {
+  hiddenFeatures?: string[];
   cameras?: RearCameraUnit[];
   cameraIsp?: string;
   cameraIspVisible?: boolean;
@@ -357,6 +373,7 @@ export type ProductRearCamera = {
 };
 
 export type ProductSecurity = {
+  hiddenFeatures?: string[];
   vibrationMotors?: string[];
   fingerprint?: {
     available?: boolean;
@@ -371,7 +388,9 @@ export type ProductSecurity = {
 };
 
 export type ProductNetwork = {
+  hiddenFeatures?: string[];
   supported?: string[];
+  fiveGBandCount?: number;
   otherFeatures?: string[];
   bands?: {
     "5G"?: {
@@ -412,6 +431,7 @@ export type ProductNetwork = {
 };
 
 export type ProductSoftware = {
+  hiddenFeatures?: string[];
   os?: {
     name?: string;
     version?: string;
@@ -424,6 +444,7 @@ export type ProductSoftware = {
 };
 
 export type ProductDesign = {
+  hiddenFeatures?: string[];
   type?: "normal" | "foldable" | string;
   formFactor?: "bar" | "bar_dual_display" | "flip_fold" | "book_fold" | "tri_fold" | string;
   hingeType?: "none" | "flip" | "book" | "tri" | string;
@@ -499,6 +520,7 @@ export type ProductGeneralVariant = {
 };
 
 export type ProductGeneral = {
+  hiddenFeatures?: string[];
   announceDate?: string;
   launchDate?: string;
   modelNumber?: string;
@@ -509,12 +531,15 @@ export type ProductGeneral = {
   variants?: ProductGeneralVariant[];
   multimedia?: string[];
   multimediaDetails?: {
+    hiddenFeatures?: string[];
     audioJack35mm?: boolean;
     typeCAudioJack?: boolean;
     lightningAudioJack?: boolean;
     features?: string[];
     fmRadio?: boolean;
     hiResAudio?: boolean;
+    hiResAudioWired?: boolean;
+    hiResAudioWireless?: boolean;
     hiResVideo?: boolean;
     dolbyAtmos?: boolean;
     dolbyVision?: boolean;
@@ -536,9 +561,11 @@ export type ProductCamera = {
 };
 
 export type MemoryStorage = {
+  hiddenFeatures?: string[];
   variantMode?: "same_both" | "same_ram_type" | "same_storage_type" | "different";
   commonRamType?: string | null;
   commonStorageType?: string | null;
+  showOnlyMaxRamStorageTypes?: boolean;
   ramChannel?: "single" | "dual" | "quad" | string;
   ramBitWidth?: number;
   totalRamBusWidthBits?: number;
@@ -581,6 +608,37 @@ export type ProductImageItem = {
   url: string;
 };
 
+export type ProductQuickSpecKey =
+  | "processor"
+  | "chipset-score"
+  | "display"
+  | "primary-display"
+  | "secondary-display"
+  | "refresh-rate"
+  | "ram-storage"
+  | "rear"
+  | "front"
+  | "battery"
+  | "security"
+  | "software"
+  | "updates";
+
+export const DEFAULT_PRODUCT_QUICK_SPECS: ProductQuickSpecKey[] = [
+  "processor",
+  "chipset-score",
+  "display",
+  "primary-display",
+  "secondary-display",
+  "refresh-rate",
+  "ram-storage",
+  "rear",
+  "front",
+  "battery",
+  "security",
+  "software",
+  "updates",
+];
+
 export type Product = {
   id?: string;
   deviceType?: "smartphone" | "tablet";
@@ -596,11 +654,21 @@ export type Product = {
   status: ProductStatus;
   scheduledAt?: TimestampLike;
   shortDescription?: string;
+  seo?: {
+    metaTitle?: string;
+    metaDescription?: string;
+    canonicalUrl?: string;
+    keywords?: string[];
+    newsKeywords?: string[];
+  };
   images: string[];
   imageItems?: ProductImageItem[];
   allColorImages?: string[];
   imageVariants?: Array<{ color: string; images: string[] }>;
   imageBackground?: string;
+  quickSpecs?: ProductQuickSpecKey[];
+  quickSpecsVersion?: number;
+  quickSpecOverrides?: Partial<Record<ProductQuickSpecKey, string>>;
   specs: ProductSpecs;
   performance?: ProductPerformance;
   camera?: ProductCamera;
@@ -608,6 +676,7 @@ export type Product = {
   rearCamera?: ProductRearCamera;
   security?: ProductSecurity;
   sensors?: string[];
+  sensorHiddenFeatures?: string[];
   network?: ProductNetwork;
   software?: ProductSoftware;
   design?: ProductDesign;
@@ -627,6 +696,8 @@ export type Product = {
   cons?: string[];
   tags?: string[];
   trending?: boolean;
+  createdBy?: string;
+  updatedBy?: string;
   createdAt?: TimestampLike;
   updatedAt?: TimestampLike;
 };

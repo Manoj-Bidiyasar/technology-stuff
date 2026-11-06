@@ -18,16 +18,21 @@ export default function BatterySummary({ battery }: BatterySummaryProps) {
   const capacityLine = capacityTypical && capacityRated
     ? `${capacityTypical} (Typical), ${capacityRated} (Rated)`
     : capacity || capacityRated;
-  const wiredText = source.wired?.supported
-    ? `${withUnit(source.wired?.maxPower, "W") || "Wired"}${source.wired?.protocol ? ` ${source.wired.protocol}` : ""} charging`
-    : "Wired charging info pending";
+  const maxPower = Number.parseFloat(String(source.wired?.maxPower ?? ""));
+  const inBoxPower = Number.parseFloat(String(source.chargerInBox?.power ?? ""));
+  const maxPowerText = withUnit(source.wired?.maxPower, "W");
+  const inBoxPowerText = withUnit(source.chargerInBox?.power, "W");
+  const chargingPowerText = source.wired?.supported
+    ? source.chargerInBox?.available && maxPower > inBoxPower && maxPowerText && inBoxPowerText
+      ? `${maxPowerText} charger support (${inBoxPowerText} in box)`
+      : `${maxPowerText || inBoxPowerText || "Wired"} charger support`
+    : source.chargerInBox?.available
+      ? `${inBoxPowerText || "Charger"} charger support`
+      : "Wired charging info pending";
 
   const items = [
     { icon: "??", text: capacityLine ? `${capacityLine} battery` : "Battery info pending" },
-    { icon: "?", text: wiredText },
-    source.chargerInBox?.available
-      ? { icon: "??", text: `${withUnit(source.chargerInBox?.power, "W") || "Charger"} ${source.chargerInBox?.protocol ? `${source.chargerInBox.protocol} ` : ""}charger in box` }
-      : null,
+    { icon: "?", text: chargingPowerText },
     source.wireless?.supported
       ? { icon: "??", text: `${withUnit(source.wireless?.maxPower, "W") || "Wireless"} wireless charging` }
       : null,

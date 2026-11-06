@@ -31,7 +31,7 @@ export function formatLaunchDate(value?: string): string {
   if (!date) return "";
   return date.toLocaleDateString("en-IN", {
     day: "2-digit",
-    month: "short",
+    month: "long",
     year: "numeric",
   });
 }

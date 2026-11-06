@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { deleteProduct, updateProduct } from "@/lib/firestore/products";
 import type { Product } from "@/lib/types/content";
 import { requireAdminCapability } from "@/lib/auth/adminApi";
+import { getAdminViewerFromRequest } from "@/lib/auth/admin";
 
 type ProductRouteProps = {
   params: Promise<{ id: string }>;
@@ -14,8 +15,10 @@ export async function PUT(request: NextRequest, { params }: ProductRouteProps) {
 
     const { id } = await params;
     const body = (await request.json()) as Partial<Product>;
-    const updatedId = await updateProduct(id, body);
-    return NextResponse.json({ ok: true, id: updatedId });
+    const viewer = await getAdminViewerFromRequest(request);
+    const actor = viewer?.email || viewer?.uid || "Admin";
+    const updatedId = await updateProduct(id, { ...body, updatedBy: actor });
+    return NextResponse.json({ ok: true, id: updatedId, updatedBy: actor });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to update product.";
     return NextResponse.json({ error: message }, { status: 500 });

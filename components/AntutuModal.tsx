@@ -3,11 +3,11 @@
 import { useEffect } from "react";
 
 type AntutuBreakdown = {
-  total?: number;
-  cpu?: number;
-  gpu?: number;
-  memory?: number;
-  ux?: number;
+  total?: number | null;
+  cpu?: number | null;
+  gpu?: number | null;
+  memory?: number | null;
+  ux?: number | null;
 };
 
 type AntutuModalProps = {
@@ -16,7 +16,7 @@ type AntutuModalProps = {
   antutu?: AntutuBreakdown;
 };
 
-function formatNumber(value?: number): string {
+function formatNumber(value?: number | null): string {
   if (!value || value <= 0) return "-";
   return Number(value).toLocaleString("en-IN");
 }

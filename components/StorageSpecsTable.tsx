@@ -1,8 +1,12 @@
 ﻿import type { MemoryStorage, MemoryVariant } from "@/lib/types/content";
 
+import type { ProductGeneral } from "@/lib/types/content";
+import { formatMemoryCapacity } from "@/lib/utils/display";
+
 type StorageSpecsTableProps = {
   memoryStorage?: MemoryStorage;
   variants?: MemoryVariant[];
+  general?: ProductGeneral;
 };
 
 function toNumber(value: string | undefined): number | null {
@@ -22,7 +26,7 @@ function formatStorageLimit(value: unknown): string {
   const normalized = raw.replace(/\s+/g, "").toUpperCase();
   const numeric = toNumber(raw);
 
-  if (normalized.endsWith("TB")) return raw.toUpperCase();
+  if (normalized.endsWith("TB")) return raw.replace(/\bup to\b/i, "Up to");
   if (normalized.endsWith("GB") && numeric && numeric >= 1024) {
     const tb = numeric / 1024;
     return `${Number.isInteger(tb) ? tb.toFixed(0) : tb.toFixed(1).replace(/\.0$/, "")}TB`;
@@ -32,13 +36,13 @@ function formatStorageLimit(value: unknown): string {
     return `${Number.isInteger(tb) ? tb.toFixed(0) : tb.toFixed(1).replace(/\.0$/, "")}TB`;
   }
   if (/^\d+(\.\d+)?$/.test(normalized) && numeric) return `${numeric}GB`;
-  return raw.toUpperCase();
+  return raw.replace(/\bup to\b/i, "Up to");
 }
 
 function formatVirtualRamDisplay(value: unknown): string {
   const raw = cleanValue(value);
   if (!raw) return "";
-  if (/up to/i.test(raw)) return raw;
+  if (/up to/i.test(raw)) return raw.replace(/\bup to\b/i, "Up to");
   const normalized = raw.replace(/\s+/g, "").toUpperCase();
   if (normalized.endsWith("GB")) return `Up to ${normalized}`;
   const numeric = toNumber(raw);
@@ -66,27 +70,37 @@ function getVariantDisplay(variants: MemoryVariant[]): string {
   return values.join(" • ");
 }
 
-function getMappedValue(
+function formatTypeCapacities(
   variants: MemoryVariant[],
-  valueKey: keyof MemoryVariant,
-  attachKey: keyof MemoryVariant
+  typeKey: "ramType" | "storageType",
+  capacityKey: "ram" | "storage",
+  onlyMax: boolean
 ): string {
-  if (!variants || variants.length === 0) return "";
+  const entries = variants.flatMap((variant) => {
+    const type = String(variant[typeKey] || "").trim().replace(/\s*\+\s*/g, " + ");
+    if (!type) return [];
+    const rawCapacity = String(variant[capacityKey] || "").trim();
+    const capacity = formatMemoryCapacity(rawCapacity);
+    const numeric = toNumber(rawCapacity);
+    const amount = numeric === null ? 0 : /tb/i.test(rawCapacity) ? numeric * 1024 : numeric;
+    return [{ type, capacity, amount }];
+  });
+  if (entries.length === 0) return "";
 
-  const values = variants.map((variant) => String(variant[valueKey] || "").trim()).filter(Boolean);
-  const unique = Array.from(new Set(values));
-  if (unique.length === 0) return "";
-  if (unique.length === 1) return unique[0];
+  const maxAmount = onlyMax ? Math.max(...entries.map((entry) => entry.amount)) : 0;
+  const groups = new Map<string, { type: string; capacities: string[] }>();
+  entries.forEach(({ type, capacity, amount }) => {
+    if (onlyMax && amount < maxAmount) return;
+    const key = type.toLocaleLowerCase();
+    const group = groups.get(key) || { type, capacities: [] };
+    if (capacity && !group.capacities.some((item) => item.toLocaleLowerCase() === capacity.toLocaleLowerCase())) group.capacities.push(capacity);
+    groups.set(key, group);
+  });
 
-  return variants
-    .map((variant) => {
-      const value = String(variant[valueKey] || "").trim();
-      const attach = String(variant[attachKey] || "").trim();
-      if (!value) return "";
-      return attach ? `${value} (${attach})` : value;
-    })
-    .filter(Boolean)
-    .join(", ");
+  return Array.from(groups.values()).map(({ type, capacities }) => {
+    if (onlyMax) return type;
+    return capacities.length ? `${type} (${capacities.join(", ")})` : type;
+  }).join(", ");
 }
 
 function getMaxValue(values: string[]): number {
@@ -128,13 +142,19 @@ function normalizeVariants(memoryStorage: MemoryStorage, variants: MemoryVariant
   }));
 }
 
-export default function StorageSpecsTable({ memoryStorage, variants }: StorageSpecsTableProps) {
+export default function StorageSpecsTable({ memoryStorage, variants, general }: StorageSpecsTableProps) {
   const safeMemory = memoryStorage || {};
   const safeVariants = normalizeVariants(safeMemory, Array.isArray(variants) ? variants : []);
 
   const ramAndStorage = getVariantDisplay(safeVariants);
-  const ramType = getMappedValue(safeVariants, "ramType", "ram");
-  const storageType = getMappedValue(safeVariants, "storageType", "storage");
+  const productVariants = (general?.variants || [])
+    .map((variant) => [formatMemoryCapacity(cleanValue(variant.ram)), formatMemoryCapacity(cleanValue(variant.storage))].filter(Boolean).join(" + "))
+    .filter(Boolean)
+    .join(" • ");
+  const variantDisplay = productVariants || ramAndStorage;
+  const onlyMaxTypes = safeMemory.showOnlyMaxRamStorageTypes !== false;
+  const ramType = formatTypeCapacities(safeVariants, "ramType", "ram", onlyMaxTypes);
+  const storageType = formatTypeCapacities(safeVariants, "storageType", "storage", onlyMaxTypes);
 
   const vramValues = safeVariants.map((variant) => variant.virtualRam || "").filter(Boolean);
   const maxVirtualRam = getMaxValue(vramValues);
@@ -145,18 +165,19 @@ export default function StorageSpecsTable({ memoryStorage, variants }: StorageSp
       : "";
 
   const expandable = safeMemory.expandableStorage?.supported;
+  const expandableLimit = formatStorageLimit(safeMemory.expandableStorage?.max);
   const expandableStorage = expandable
-    ? `Yes${safeMemory.expandableStorage?.max ? ` (up to ${formatStorageLimit(safeMemory.expandableStorage.max)})` : ""}`
+    ? `Yes${expandableLimit ? ` (${/^up to\b/i.test(expandableLimit) ? expandableLimit : `Up to ${expandableLimit}`})` : ""}`
     : "No";
 
+  const slotType = cleanValue(safeMemory.expandableStorage?.slotType).replace(/^\w/, (letter) => letter.toUpperCase());
+  const cardTypes = (safeMemory.expandableStorage?.types || []).map((item) => cleanValue(item)).filter(Boolean);
   const cardSlot = expandable
-    ? [cleanValue(safeMemory.expandableStorage?.slotType), ...(safeMemory.expandableStorage?.types || []).map((item) => cleanValue(item)).filter(Boolean)]
-        .filter(Boolean)
-        .join(", ")
+    ? `${[slotType, cardTypes.join(" / ")].filter(Boolean).join(" ")} Card Slot`.trim()
     : "";
 
   const rows: Array<[string, string]> = [
-    ["RAM & Storage", ramAndStorage],
+    ["Variants", variantDisplay],
     ["RAM Type", ramType],
     ["Storage Type", storageType],
     ["Virtual RAM (VRAM)", virtualRamDisplay],
@@ -166,15 +187,15 @@ export default function StorageSpecsTable({ memoryStorage, variants }: StorageSp
   ];
 
   return (
-    <div className="rounded-xl border border-slate-200 bg-white">
-      {rows.map(([label, value]) => (
+    <div className="empty:hidden rounded-xl border border-slate-200 bg-white">
+      {rows.filter(([, value]) => Boolean(String(value || "").trim()) && String(value).trim() !== "-").map(([label, value]) => (
         <div
           key={label}
-          className="grid grid-cols-[180px_16px_minmax(0,1fr)] items-center gap-3 border-b border-slate-100 px-3 py-2.5 last:border-b-0"
+          className="grid grid-cols-[104px_8px_minmax(0,1fr)] items-center gap-1 border-b border-slate-100 px-2 py-2 last:border-b-0 sm:grid-cols-[180px_16px_minmax(0,1fr)] sm:gap-3 sm:px-3 sm:py-2.5"
         >
-          <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500">{label}</p>
-          <p className="text-sm font-semibold text-slate-500">-</p>
-          <p className="text-sm font-semibold text-slate-900">{value || "NA"}</p>
+          <p className="text-[9px] font-normal uppercase tracking-[0.04em] text-slate-500 sm:text-[11px] sm:font-bold sm:tracking-wide">{label}</p>
+          <p className="relative -left-1 text-xs font-semibold text-slate-500 sm:left-0 sm:text-sm">-</p>
+          <p className="relative -left-1 text-[11px] font-semibold text-slate-900 sm:left-0 sm:text-sm">{value}</p>
         </div>
       ))}
     </div>

@@ -1,4 +1,4 @@
-﻿import type { ProductSoftware } from "@/lib/types/content";
+import type { ProductSoftware } from "@/lib/types/content";
 
 type SoftwareSectionProps = {
   software?: ProductSoftware;
@@ -22,32 +22,29 @@ function formatYears(value?: number): string {
   return `${value} Years`;
 }
 
-function formatOSAndUI(software?: ProductSoftware): string {
-  const os = formatOS(software?.os);
-  const ui = cleanValue(software?.ui);
-  if (os !== "-" && ui) return `${os}, ${ui}`;
-  return os;
-}
-
 function row(label: string, value: string) {
-  const isDashValue = value.trim() === "-";
+  if (!value.trim() || value.trim() === "-") return null;
   return (
-    <div className="grid grid-cols-[140px_16px_minmax(0,1fr)] items-center gap-3 border-b border-slate-100 px-3 py-2.5 last:border-b-0 sm:grid-cols-[180px_16px_minmax(0,1fr)]">
-      <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500">{label}</p>
-      <p className="text-sm font-semibold text-slate-500">-</p>
-      <p className="text-sm font-semibold text-slate-900">{isDashValue ? "NA" : value}</p>
+    <div className="grid grid-cols-[104px_8px_minmax(0,1fr)] items-center gap-1 border-b border-slate-100 px-2 py-2 last:border-b-0 sm:grid-cols-[180px_16px_minmax(0,1fr)] sm:gap-3 sm:px-3 sm:py-2.5">
+      <p className="text-[9px] font-normal uppercase tracking-[0.04em] text-slate-500 sm:text-[11px] sm:font-bold sm:tracking-wide">{label}</p>
+      <p className="relative -left-1 text-xs font-semibold text-slate-500 sm:left-0 sm:text-sm">-</p>
+      <p className="relative -left-1 min-w-0 text-[11px] font-semibold text-slate-900 sm:left-0 sm:text-sm">{value}</p>
     </div>
   );
 }
 
 export default function SoftwareSection({ software }: SoftwareSectionProps) {
-  const osAndUI = formatOSAndUI(software);
-  const osUpdates = formatYears(software?.updates?.os);
+  const osVersion = formatOS(software?.os);
+  const osName = cleanValue(software?.os?.name).toLowerCase();
+  const osVersionLabel = osName === "ios" ? "iOS Version" : osName === "android" ? "Android Version" : "";
+  const customUI = cleanValue(software?.ui) || "-";
+  const majorUpdates = formatYears(software?.updates?.os);
   const securityUpdates = formatYears(software?.updates?.security);
   return (
-    <div className="rounded-xl border border-slate-200 bg-white">
-      {row("Operating System", osAndUI)}
-      {row("OS Updates", osUpdates)}
+    <div className="empty:hidden rounded-xl border border-slate-200 bg-white">
+      {osVersionLabel ? row(osVersionLabel, osVersion) : null}
+      {row("Custom UI", customUI)}
+      {row("Major OS Updates", majorUpdates)}
       {row("Security Updates", securityUpdates)}
     </div>
   );

@@ -56,6 +56,10 @@ export type ProcessorDetail = {
   aiPerformanceTops?: number;
   aiPrecision?: string;
   aiFeatures?: string[];
+  coolingSystem?: string;
+  coolingAreaMm2?: number[];
+  additionalChips?: string[];
+  additionalChipFeatures?: string[];
   modem?: string;
   networkSupport?: string[];
   lteCat?: string;

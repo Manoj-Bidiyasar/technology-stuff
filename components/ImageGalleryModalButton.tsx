@@ -59,11 +59,34 @@ export default function ImageGalleryModalButton({ images, allColorImages = [], i
   const selectedVariant = selectedColor === null ? undefined : normalizedVariants.find((variant) => variant.color.trim().toLocaleLowerCase() === selectedColor.trim().toLocaleLowerCase());
   const selectedImages = selectedColor !== null
     ? selectedVariant?.images || generalImages
-    : [...overviewImages, ...generalImages];
+    : unified.length
+      ? unified.map((item) => item.url)
+      : [...overviewImages, ...generalImages];
   const normalized = selectedImages.length > 0
     ? selectedImages
     : ["https://placehold.co/900x600?text=No+Image"];
   const active = normalized[Math.min(activeIndex, normalized.length - 1)];
+
+  function moveImage(direction: -1 | 1) {
+    setActiveIndex((index) => (index + direction + normalized.length) % normalized.length);
+  }
+
+  useEffect(() => {
+    if (!open) return;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "ArrowLeft") {
+        event.preventDefault();
+        moveImage(-1);
+      } else if (event.key === "ArrowRight") {
+        event.preventDefault();
+        moveImage(1);
+      } else if (event.key === "Escape") {
+        setOpen(false);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [open, normalized.length]);
 
   return (
     <>
@@ -101,21 +124,16 @@ export default function ImageGalleryModalButton({ images, allColorImages = [], i
             {availableImageVariants.length > 0 ? (
               <div className="mb-3 flex flex-wrap items-center gap-2" aria-label="Choose phone color">
                 <span className="mr-1 text-sm font-semibold text-slate-700">Color:</span>
-                {overviewImages.length > 0 || selectedColor !== null ? (
-                  <button
-                    type="button"
-                    onClick={() => { setSelectedColor(null); setActiveIndex(0); announceProductImageColorSelection(null); }}
-                    aria-pressed={selectedColor === null}
-                    className={`rounded-full border px-3 py-1.5 text-sm font-medium ${selectedColor === null ? "border-blue-600 bg-blue-50 text-blue-800" : "border-slate-300 bg-white text-slate-700 hover:border-slate-400"}`}
-                  >
-                    All colors
-                  </button>
-                ) : null}
                 {availableImageVariants.map((variant, index) => (
                   <button
                     key={`${variant.color}-${index}`}
                     type="button"
-                    onClick={() => { setSelectedColor(variant.color); setActiveIndex(0); announceProductImageColorSelection(variant.color); }}
+                    onClick={() => {
+                      const nextColor = selectedColor?.trim().toLocaleLowerCase() === variant.color.trim().toLocaleLowerCase() ? null : variant.color;
+                      setSelectedColor(nextColor);
+                      setActiveIndex(0);
+                      announceProductImageColorSelection(nextColor);
+                    }}
                     aria-pressed={selectedColor?.trim().toLocaleLowerCase() === variant.color.trim().toLocaleLowerCase()}
                     className={`rounded-full border px-3 py-1.5 text-sm font-medium ${selectedColor?.trim().toLocaleLowerCase() === variant.color.trim().toLocaleLowerCase() ? "border-blue-600 bg-blue-50 text-blue-800" : "border-slate-300 bg-white text-slate-700 hover:border-slate-400"}`}
                   >
@@ -127,15 +145,23 @@ export default function ImageGalleryModalButton({ images, allColorImages = [], i
 
             <div style={{ backgroundColor: background === "transparent" ? "transparent" : background }} className="relative h-[44vh] min-h-[260px] overflow-hidden rounded-xl border border-slate-200">
               <Image src={active} alt={name} fill className="object-contain" unoptimized />
+              {normalized.length > 1 ? <>
+                <button type="button" onClick={() => moveImage(-1)} aria-label="Previous image" title="Previous image (←)" className="absolute left-3 top-1/2 z-10 grid h-10 w-10 -translate-y-1/2 place-items-center rounded-full border border-white/70 bg-white/90 text-slate-800 shadow hover:bg-white">
+                  <svg viewBox="0 0 24 24" aria-hidden="true" className="h-5 w-5" fill="none"><path d="m15 18-6-6 6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                </button>
+                <button type="button" onClick={() => moveImage(1)} aria-label="Next image" title="Next image (→)" className="absolute right-3 top-1/2 z-10 grid h-10 w-10 -translate-y-1/2 place-items-center rounded-full border border-white/70 bg-white/90 text-slate-800 shadow hover:bg-white">
+                  <svg viewBox="0 0 24 24" aria-hidden="true" className="h-5 w-5" fill="none"><path d="m9 18 6-6-6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                </button>
+              </> : null}
             </div>
 
-            <div className="mt-3 grid grid-cols-4 gap-2 sm:grid-cols-6 md:grid-cols-8">
+            <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
               {normalized.map((image, index) => (
                 <button
                   key={`${image}-${index}`}
                   type="button"
                   onClick={() => setActiveIndex(index)}
-                  className={`relative h-16 overflow-hidden rounded-lg border ${
+                  className={`relative h-16 w-16 shrink-0 overflow-hidden rounded-lg border ${
                     index === activeIndex ? "border-blue-500" : "border-slate-200"
                   }`}
                   aria-label={`Show gallery image ${index + 1}`}
